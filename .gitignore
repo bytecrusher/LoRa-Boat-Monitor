@@ -3,3 +3,12 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+data/temp/edit.htm.gz
+data/temp/favicon.ico
+data/temp/graphs.js.gz
+data/temp/index.htm
+src/moved_to_fs/devinfo_html.h
+src/moved_to_fs/error_html.h
+src/moved_to_fs/icon_html.h
+src/moved_to_fs/js_html.h
+src/moved_to_fs/main_html.h

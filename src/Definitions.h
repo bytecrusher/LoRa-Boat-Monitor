@@ -33,7 +33,7 @@ byte rpayload[200];                 // Received LoRa payload over downlink (arra
 
 // Measuring values
 long starttime0 = millis();         // Timer0 value for measuring loop
-long starttime1 = millis();         // Timer1 value for measuring loop
+unsigned long starttime1 = millis();         // Timer1 value for measuring loop
 long starttime2 = millis();         // Timer2 value for measuring loop
 float fieldstrength;                // WLAN field strength
 float quality;                      // WLAN quality

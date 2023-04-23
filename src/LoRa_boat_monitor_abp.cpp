@@ -57,13 +57,14 @@
 #include <DallasTemperature.h>  // DS18B20 lib
 #include <StateMachine.h>
 
-#include <ESP32_FTPClient.h>
 #include "octocat.h"
 
 #include "driver/rtc_io.h"
 #include "FS.h"
 #include <LittleFS.h>
 #include <time.h>
+
+#include "func_ftpclient.h"
 
 #include "Configuration.h"      // Configuration
 
@@ -80,10 +81,10 @@ configData actconf;             // Actual configuration, Global variable
 #include "task.h"               // Task for LoRa code
 #include "filesystem.h"         // Function for filesystem
 
-#include "icon_html.h"          // Favorit icon
+//#include "icon_html.h"          // Favorit icon
 #include "css_html.h"           // CCS cascading style sheets
-#include "js_html.h"            // JavaScript functions
-#include "main_html.h"          // Main webpage
+//#include "js_html.h"            // JavaScript functions
+//#include "main_html.h"          // Main webpage
 #include "sensorv_html.h"       // Sensor Values webpage
 #include "lora_html.h"          // LoRa Info webpage
 #include "settings_html.h"      // Settings webpage
@@ -92,8 +93,8 @@ configData actconf;             // Actual configuration, Global variable
 #include "MD5_html.h"           // JavaScript crypt password with MD5
 #include "fwupdate.h"           // Webpage for firmware update
 #include "restart_html.h"       // Reset info webpage
-#include "devinfo_html.h"       // Device info webpage
-#include "error_html.h"         // Error 404 webpage
+//#include "devinfo_html.h"       // Device info webpage
+//#include "error_html.h"         // Error 404 webpage
 
 // Declarations
 int value;                      // Value from first byte in EEPROM
@@ -128,15 +129,8 @@ long LoraSendDurationSeconds = 0;
 
 hw_timer_t *My_timer = NULL;
 
-char ftp_server[] = "192.168.178.136";
-char ftp_user[]   = "ftptest";
-char ftp_pass[]   = "zydxeM-vyztop-5bijny";
-
 File root;
 bool opened = false;
-
-// you can pass a FTP timeout and debbug mode on the last 2 arguments
-ESP32_FTPClient ftp (ftp_server,ftp_user,ftp_pass, 5000, 2);
 
 void IRAM_ATTR onTimer(){
   //digitalWrite(LED, !digitalRead(LED));
@@ -474,8 +468,8 @@ void state1(){
     }
   }
 
-  readValues();
-  delay(20);
+  //readValues();
+  //delay(20);
 
   if (String(actconf.loraStandbyMode) == "Always") {
     static unsigned long lastPrintTime = 0;
@@ -497,12 +491,12 @@ void state1(){
     }*/
   }
   httpServer.handleClient();   // HTTP Server-handler for HTTP update server
+  delay(20);
 
   VEdirectSend();
-
   // Read measuring data and display on OLED all 1s
   if(millis() > starttime1 + 1000){
-    starttime1 = millis();        // Read actual time
+    starttime1 = millis();        // Read actual time	
 
     // BME280 measuerement
     if (String(actconf.envSensor) == "BME280") {
@@ -511,16 +505,15 @@ void state1(){
     readValues();
     writeDisplay();
   }
-
   VEdirectRead();
 
   // TCP-Server for NMEA0183
-  WiFiClient client = server.available();// Check if a client is connected
+  /*WiFiClient client = server.available();// Check if a client is connected
   int i = 0;
 
   // While TCP client is connected or Serial Mode is active
   while ((client.connected() && !client.available()) || (int(actconf.serverMode) == 1)) {
-
+    Serial.println(F("While client connected."));
     httpServer.handleClient();      // HTTP Server-handler for HTTP update server
 
     if ((i == 0) && ((int(actconf.serverMode) == 0) || (int(actconf.serverMode) == 4))) {
@@ -561,7 +554,7 @@ void state1(){
       }
       flag1 = false;                        // Reset the send flag
     }
-  }
+  }*/
 
   loopcounter++;
 }
@@ -903,119 +896,8 @@ void setup() {
     //Serial.println( "Test complete" );
     //-------------------------------
 
-    //--------------------------------
-  ftp.OpenConnection();
-
-  // Get directory content
-  ftp.InitFile("Type A");
-  ftp.ChangeWorkDir("/home/");
-
-  // Create a new file to use as the download example below:
-  //ftp.InitFile("Type A");
-  //ftp.NewFile("helloworld.txt");
-  //ftp.Write("Hi, I'm a new file");
-  //ftp.CloseFile();
-
-  //Download the text file or read it
-  String response = "";
-  // Get the file size
-  const char * fileName = "helloworld.txt";
-  size_t       fileSize = 0;
-  String       list[128];
-
-  ftp.InitFile("Type A");
-  ftp.ContentList("", list);
-  for( uint8_t i = 0; i < sizeof(list); i++)
-  {
-    uint8_t indexSize = 0;
-    uint8_t indexMod  = 0;
-
-    if(list[i].length() > 0)
-    {
-      list[i].toLowerCase();
-      
-      if( list[i].indexOf(fileName) > -1 )
-      {
-        indexSize = list[i].indexOf("size") + 5;
-        indexMod  = list[i].indexOf("modify") - 1;
-
-        fileSize = list[i].substring(indexSize, indexMod).toInt();
-      }
-
-      // Print the directory details
-      Serial.println(list[i]);
-    }
-    else
-      break;
-  }
-
-  //ftp.InitFile("Type A");
-  //ftp.DownloadString("helloworld.txt", response);
-  //ftp.DownloadFile("helloworld.txt", response.buf, response.currentSize);
-
-  //Dynammically alocate buffer
-  unsigned char * downloaded_file = (unsigned char *) malloc(fileSize);
-  ftp.InitFile("Type I");
-  ftp.DownloadFile(fileName, downloaded_file, fileSize, false);
-  ftp.InitFile("Type I");
-  ftp.DownloadString(fileName, response);
-  Serial.println("The file content is: " + response);
-  Serial.println("The file is downloaded.");
-  //uint8_t slidePressure = (uint8_t)atoi(response);
-  
-  if(opened == false){
-      opened = true;
-      root = LittleFS.open((String("/") + String("helloworld.txt") ).c_str(), FILE_WRITE);
-      if(!root){
-        Serial.println("- failed to open file for writing");
-        return;
-      }
-    } 
-    //root.write(response);
-    //if(upload.status == UPLOAD_FILE_WRITE){
-      if(root.write(downloaded_file, fileSize) != fileSize){
-        Serial.println("- failed to write");
-        return;
-      }
-      root.close();
-    //} else if(upload.status == UPLOAD_FILE_END){
-      //root.close();
-      //Serial.println("UPLOAD_FILE_END");
-      //opened = false;
-    //}
-
-  /*String list[128];
-  //ftp.ChangeWorkDir("/home/");
-  ftp.InitFile("Type A");
-  ftp.ContentList("", list);
-  Serial.println("\nDirectory info: ");
-  for(int i = 0; i < sizeof(list); i++)
-  {
-    if(list[i].length() > 0)
-      Serial.println(list[i]);
-    else
-      break;
-  }*/
-
-  // Make a new directory
-  //ftp.InitFile("Type A");
-  //ftp.MakeDir("my_new_dir");
-
-  // Create the new file and send the image
-  //ftp.ChangeWorkDir("my_new_dir");
-  //ftp.InitFile("Type I");
-  //ftp.NewFile("octocat.jpg");
-  //ftp.WriteData( octocat_pic, sizeof(octocat_pic) );
-  //ftp.CloseFile();
-
-  // Create the file new and write a string into it
-  //ftp.InitFile("Type A");
-  //ftp.NewFile("hello_world.txt");
-  //ftp.Write("Hello World");
-  //ftp.CloseFile();
-
-  ftp.CloseConnection();
-    //--------------------------------
+  //DownloadFilesFromFtp();
+    
 }
 
 void loop() {

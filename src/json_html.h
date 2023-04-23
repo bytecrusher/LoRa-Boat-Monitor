@@ -192,6 +192,10 @@ String JSON()
 
     content +=F( "\"envSensor\": \"");
     content += String(actconf.envSensor);
+    content +=F( "\",");
+
+    content +=F( "\"standbyMode\": \"");
+    content += String(actconf.standbyMode);
     content +=F( "\"");
     
     content +=F( "},");
@@ -305,6 +309,13 @@ String JSON()
     content +=F( "\"EnvSensor\": {");
     content +=F( "\"Value\": \"");
     content += String(actconf.envSensor);
+    content +=F( "\",");
+    content +=F( "\"Unit\": \"\"");
+    content +=F( "},");
+
+    content +=F( "\"standbyMode\": {");
+    content +=F( "\"Value\": \"");
+    content += String(actconf.standbyMode);
     content +=F( "\",");
     content +=F( "\"Unit\": \"\"");
     content +=F( "},");

@@ -14,7 +14,8 @@ String serverIndex = "<script src='https://ajax.googleapis.com/ajax/libs/jquery/
     "<input type='submit' value='Upload'>"
 "</form>"
 "<div id='prg'>progress: 0%</div>"
-"<br><br><input type='submit' value='Format FS' onclick='myFunction()'>"
+"<input type='submit' style='margin: 20px' value='Format FS' onclick='FormatFS()'>"
+"<input type='submit' style='margin: 20px' value='Update Files' onclick='UpdateFiles()'>"
 "<script>"
 "$('form').submit(function(e){"
     "e.preventDefault();"
@@ -43,7 +44,7 @@ String serverIndex = "<script src='https://ajax.googleapis.com/ajax/libs/jquery/
             "}"
           "});"
 "});"
-"function myFunction(){"
+"function FormatFS(){"
       "var form = $('#upload_form')[0];"
       "var data = new FormData(form);"
       " $.ajax({"
@@ -69,7 +70,34 @@ String serverIndex = "<script src='https://ajax.googleapis.com/ajax/libs/jquery/
             "}"
           "});"
 "};"
-"</script>";
+"function UpdateFiles(){"
+      "var form = $('#upload_form')[0];"
+      "var data = new FormData(form);"
+      " $.ajax({"
+            "url: '/updatefiles',"
+            "type: 'POST',"               
+            "data: data,"
+            "contentType: false,"                  
+            "processData:false,"  
+            "xhr: function() {"
+                "var xhr = new window.XMLHttpRequest();"
+                "xhr.upload.addEventListener('progress', function(evt) {"
+                    "if (evt.lengthComputable) {"
+                        "var per = evt.loaded / evt.total;"
+                        "$('#prg').html('progress: ' + Math.round(per*100) + '%');"
+                    "}"
+               "}, false);"
+               "return xhr;"
+            "},"                                
+            "success:function(d, s) {"    
+                "console.log('success!')"
+           "},"
+            "error: function (a, b, c) {"
+            "}"
+          "});"
+"};"
+"</script>"
+"<form action='/'><button type='submit'>Back</button></form>";
 
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
     Serial.printf("Listing directory: %s\r\n", dirname);
@@ -143,6 +171,25 @@ void readFile(fs::FS &fs, const char * path){
         Serial.write(file.read());
     }
     file.close();
+}
+
+String readFile2(fs::FS &fs, const char * path){
+    //Serial.printf("Reading file: %s\r\n", path);
+    String filecontent = "";
+    File file = fs.open(path);
+    if(!file || file.isDirectory()){
+        Serial.println("- failed to open file for reading");
+        return "- failed to open file for reading";
+    }
+
+    Serial.println("- read from file (readfile2):");
+    while(file.available()){
+        //filecontent = file.read();
+        filecontent+=String((char)file.read());
+        //Serial.write(file.read());
+    }
+    file.close();
+    return filecontent;
 }
 
 void writeFile(fs::FS &fs, const char * path, const char * message){
@@ -337,6 +384,7 @@ String printDirectory(fs::FS &fs, int numTabs) {
 
 String handleRoot(fs::FS &fs, const char * dirname, uint8_t levels){
     String response = "";
+    response += "<link rel='stylesheet' type='text/css' href='/css'>";
     response += String("<style>") +
                     String("table {") +
                     String("font-family: arial, sans-serif;") +
@@ -349,7 +397,7 @@ String handleRoot(fs::FS &fs, const char * dirname, uint8_t levels){
                     String("padding: 8px;") +
                     String("}") +
                     String("tr:nth-child(even) {") +
-                    String("background-color: #dddddd;") +
+                    String("/*background-color: #dddddd;*/") +
                     String("}") +
                 String("</style>");
     Serial.printf("Listing directory: %s\r\n", dirname);
@@ -415,7 +463,6 @@ String handleRoot(fs::FS &fs, const char * dirname, uint8_t levels){
         file = root.openNextFile();
     }
     response += "</table>";
-    //return String("List files:</br>") + response + String("</br></br> Upload file:") + serverIndex;
     return response + String("</br></br> Upload file:") + serverIndex;
 }
 
