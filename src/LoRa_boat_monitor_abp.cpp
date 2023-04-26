@@ -42,6 +42,7 @@
 #include <Update.h>             // Web Update server
 #include <MD5Builder.h>         // MD5 lib
 #include "driver/adc.h"
+#include <ArduinoJson.h>
 
 #include <U8x8lib.h>            // OLED Lib
 #include <lmic.h>               // LoRa Lib
@@ -57,14 +58,13 @@
 #include <DallasTemperature.h>  // DS18B20 lib
 #include <StateMachine.h>
 
-#include "octocat.h"
-
 #include "driver/rtc_io.h"
 #include "FS.h"
 #include <LittleFS.h>
 #include <time.h>
 
 #include "func_ftpclient.h"
+#include "func_webclient.h"
 
 #include "Configuration.h"      // Configuration
 
@@ -81,21 +81,6 @@ configData actconf;             // Actual configuration, Global variable
 #include "task.h"               // Task for LoRa code
 #include "filesystem.h"         // Function for filesystem
 
-//#include "icon_html.h"          // Favorit icon
-#include "css_html.h"           // CCS cascading style sheets
-//#include "js_html.h"            // JavaScript functions
-//#include "main_html.h"          // Main webpage
-#include "sensorv_html.h"       // Sensor Values webpage
-#include "lora_html.h"          // LoRa Info webpage
-#include "settings_html.h"      // Settings webpage
-#include "firmware_html.h"      // Firmware update webpage
-#include "json_html.h"          // JSON webpage
-#include "MD5_html.h"           // JavaScript crypt password with MD5
-#include "fwupdate.h"           // Webpage for firmware update
-#include "restart_html.h"       // Reset info webpage
-//#include "devinfo_html.h"       // Device info webpage
-//#include "error_html.h"         // Error 404 webpage
-
 // Declarations
 int value;                      // Value from first byte in EEPROM
 int empty;                      // If EEPROM empty without configutation then set to 1 otherwise 0
@@ -108,6 +93,12 @@ TaskHandle_t Task1;             // Declare task for LoRa code
 WebServer httpServer(actconf.httpport);   // Port for HTTP server
 MDNSResponder mdns;                       // Activate DNS responder
 WiFiServer server(actconf.dataport);      // Declare WiFi NMEA server port
+
+//*******************
+//char destinationserver[] = "derguntmar.de";    // name address for Google (using DNS)
+//const char* server = "www.google.com"; // This should not be changed
+//WiFiClient client;
+//*******************
 
 Ticker Timer1;                  // Declare Timer for GPS data reading
 Ticker Timer2;                  // Declare Timer for relay ontime

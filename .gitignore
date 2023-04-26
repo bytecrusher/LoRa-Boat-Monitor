@@ -12,3 +12,4 @@ src/moved_to_fs/error_html.h
 src/moved_to_fs/icon_html.h
 src/moved_to_fs/js_html.h
 src/moved_to_fs/main_html.h
+.DS_Store

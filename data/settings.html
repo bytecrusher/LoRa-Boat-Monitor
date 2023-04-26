@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Settings %devname%</title>
+    <link rel='stylesheet' type='text/css' href='/css'>
+    <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
+    <meta name=viewport content='width=device-width, initial-scale=1'>
+    <style type='text/css'>
+        select {
+            width: 150px;
+        }
+
+        input {
+            width: 145px;
+        }
+    </style>
+    <script>
+        function setSelections() {
+            document.SetForm.usepassword.selectedIndex = %crypt%;
+
+            document.SetForm.isize.selectedIndex = %instrumentSize%;
+
+            document.SetForm.timeout.selectedIndex = %timeout%;
+            document.SetForm.apchannel.selectedIndex = %apchannel%;
+            document.SetForm.servermode.selectedIndex = %serverMode%;
+            document.SetForm.mdnsservice.selectedIndex = %mDNS%;
+            // LoRa Settings
+            //**************
+            document.SetForm.lorafrequency.selectedIndex = %lorafrequency%;
+            document.SetForm.lchannel.selectedIndex = %lchannel%;
+            document.SetForm.spreadf.selectedIndex = %spreadf%;
+            document.SetForm.dynsf.selectedIndex = %dynsf%;
+            document.SetForm.relay.selectedIndex = %relay%;
+            // Devive Settings
+            //****************
+            document.SetForm.debugmode.selectedIndex = %debug%;
+            document.SetForm.serspeed.selectedIndex = %serspeed%;
+            document.SetForm.deviceid.selectedIndex = %deviceID%;
+            document.SetForm.sendlora.selectedIndex = %sendlora%;
+            document.SetForm.senddata.selectedIndex = %senddata%;
+            document.SetForm.vaverage.selectedIndex = %vaverage%;
+            document.SetForm.t1average.selectedIndex = %t1average%;
+            document.SetForm.t2average.selectedIndex = %t2average%;
+            document.SetForm.tstype.selectedIndex = %tempSensorType%;
+            document.SetForm.tempunit.selectedIndex = %tempUnit%;
+            document.SetForm.envSensor.selectedIndex = %envSensor%;
+            document.SetForm.standbyMode.selectedIndex = %standbyMode%;
+            document.SetForm.loraStandbyMode.selectedIndex = %loraStandbyMode%;
+        }
+
+        function check_devaddr(iname) {
+            var valuestring = "";
+            if (iname == "devaddr") {
+                valuestring = document.SetForm.devaddr.value;
+            }
+            var reguexp = /[^A-Z0-9]/;
+            if (reguexp.exec(valuestring) || valuestring.length !== 8) {
+                document.getElementById('sub').disabled = true;
+                alert('Error!\\nUse only A-Z, 0-9, \\nAddress Length not 8');
+            }
+            else {
+                document.getElementById('sub').disabled = false;
+            }
+        }
+
+        function check_key(iname) {
+            var valuestring = "";
+            if (iname == "nskey") { valuestring = document.SetForm.nskey.value; }
+            if (iname == "appkey") { valuestring = document.SetForm.appkey.value; }
+            var reguexp = /[^A-Z0-9]/;
+            console.log(valuestring.length);
+            if (reguexp.exec(valuestring) || valuestring.length !== 32) {
+                document.getElementById('sub').disabled = true;
+                alert('Error!\\nUse only A-Z, 0-9, \\nKey Length not 32');
+            }
+            else {
+                document.getElementById('sub').disabled = false;
+            }
+        }
+
+        function check_ssid(iname) {
+            var valuestring = "";
+            if (iname == "cssid") { valuestring = document.SetForm.cssid.value; }
+            if (iname == "sssid") { valuestring = document.SetForm.sssid.value; }
+            var reguexp = /[^A-z0-9_-]/;
+            if (reguexp.exec(valuestring) || valuestring.length < 1 || valuestring.length > 20) {
+                document.getElementById('sub').disabled = true;
+                alert('Error!\\nUse only a-z, A-Z, 0-9, _-\\nSSID Length 1-20');
+            }
+            else {
+                document.getElementById('sub').disabled = false;
+            }
+        }
+
+        function check_tinterval(iname) {
+            var valuestring = "";
+            if (iname == "tinterval") { valuestring = document.SetForm.tinterval.value; }
+            var reguexp = /[^0-9]/;
+            if (reguexp.exec(valuestring) || valuestring < 1 || valuestring > 255) {
+                document.getElementById('sub').disabled = true;
+                alert('Error!\\nUse only 0-9, \\nValues 1...255');
+            }
+            else {
+                document.getElementById('sub').disabled = false;
+            }
+        }
+
+        function check_passwd(iname) {
+            var valuestring = "";
+            if (iname == "pagepasswd") { valuestring = document.SetForm.sidepasswd.value; }
+            if (iname == "cpasswd") { valuestring = document.SetForm.cpasswd.value; }
+            if (iname == "spasswd") { valuestring = document.SetForm.spasswd.value; }
+            var reguexp = /[^A-z0-9\-]/;
+            if (reguexp.exec(valuestring) || valuestring.length < 8 || valuestring.length > 20) {
+                document.getElementById('sub').disabled = true;
+                alert('Error!\\nUse only a-z, A-Z, 0-9, ' - '\\nPassword Length 8-20');
+            }
+            else {
+                document.getElementById('sub').disabled = false;
+            }
+        }
+
+    </script>
+</head>
+
+<body onload='setSelections();'>
+    <h2>%devname%</h2>
+    %crights%, %fversion%, CQ: %quality% %
+    <hr align='left'>
+
+    <form id='form1' name='SetForm' method='get' action='settings'>
+        <table>
+
+            <tr>
+                <td>
+                    <h3>Password Settings</h3>
+                </td>
+                <td></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Use Page Password</td>
+                <td>
+                    <select name='usepassword' size='1'>
+                        <option value='0'>Off</option>
+                        <option value='1'>On</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Page Password</td>
+                <td><input type='text' required name='pagepasswd' size='20' value='%password%' maxlength='20'
+                        onchange='check_passwd("pagepasswd")'></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>
+                    <h3>Display Settings</h3>
+                </td>
+                <td></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Instrument Size</td>
+                <td>
+                    <select name='isize' size='1'>
+                        <option value='200'>200x200 pix</option>
+                        <option value='250'>250x250 pix</option>
+                        <option value='300'>300x300 pix</option>
+                        <option value='350'>350x350 pix</option>
+                        <option value='400'>400x400 pix</option>
+                        <option value='450'>450x450 pix</option>
+                        <option value='500'>500x500 pix</option>
+                        <option value='550'>550x550 pix</option>
+                        <option value='600'>600x600 pix</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>
+                    <h3>Network Settings</h3>
+                </td>
+                <td></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>WLAN Client SSID</td>
+                <td><input type='text' required name='cssid' size='20' value='%cssid%' maxlength='20'
+                        onchange='check_ssid("cssid")'></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>WLAN Client Password</td>
+                <td><input type='text' required name='cpasswd' size='20' value='%cpassword%' maxlength='20'
+                        onchange='check_passwd("cpasswd")'></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Connection Timeout</td>
+                <td>
+                    <select name='timeout' size='1'>
+                        <option value='30'>30s</option>
+                        <option value='60'>1 min</option>
+                        <option value='90'>1.5 min</option>
+                        <option value='120'>2 min</option>
+                        <option value='150'>2.5 min</option>
+                        <option value='180'>3 min</option>
+                        <option value='210'>3.5 min</option>
+                        <option value='240'>4 min</option>
+                        <option value='270'>4.5 min</option>
+                        <option value='300'>5 min</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>WLAN Server SSID</td>
+                <td><input type='text' required name='sssid' size='20' value='%sssid%' maxlength='20'
+                        onchange='check_ssid("sssid")'></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>WLAN Server Password</td>
+                <td><input type='text' required name='spasswd' size='20' value='%spassword%' maxlength='20'
+                        onchange='check_passwd("spasswd")'></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>AP Channel</td>
+                <td>
+                    <select name='apchannel' size='1'>
+                        <option value='1'>1</option>
+                        <option value='2'>2</option>
+                        <option value='3'>3</option>
+                        <option value='4'>4</option>
+                        <option value='5'>5</option>
+                        <option value='6'>6</option>
+                        <option value='7'>7</option>
+                        <option value='8'>8</option>
+                        <option value='9'>9</option>
+                        <option value='10'>10</option>
+                        <option value='11'>11</option>
+                        <option value='12'>12</option>
+                        <option value='13'>13</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Server Mode</td>
+                <td>
+                    <select name='servermode' size='1'>
+                        <option value='0'>HTTP (JSON, NMEA)</option>
+                        <option value='1'>NMEA Serial</option>
+                        <option value='2'>MQTT</option>
+                        <option value='3'>Diagnostic</option>
+                        <option value='4'>Demo Mode</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>mDNS Service</td>
+                <td>
+                    <select name='mdnsservice' size='1'>
+                        <option value='0'>Off</option>
+                        <option value='1'>On</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>
+                    <h3>LoRa Settings (ABP)</h3>
+                </td>
+                <td></td>
+                <td></td>
+            </tr>
+
+            /*
+            // Target platform as C library
+            typedef uint8_t bit_t;
+            typedef uint8_t u1_t;
+            typedef int8_t s1_t;
+            typedef uint16_t u2_t;
+            typedef int16_t s2_t;
+            typedef uint32_t u4_t;
+            typedef int32_t s4_t;
+            typedef unsigned int uint;
+            typedef const char* str_t;
+            */
+
+            <tr>
+                <td>Device Address</td>
+                <td><input type='text' required name='devaddr' size='20' value='%devaddr%' maxlength='20'
+                        onchange='check_devaddr("devaddr")'></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Network Session Key</td>
+                <td><input type='text' required name='nskey' size='40' value='%nskey%' maxlength='40'
+                        onchange='check_key("nskey")'></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Application Key</td>
+                <td><input type='text' required name='appkey' size='40' value='%appkey%' maxlength='40'
+                        onchange='check_key("appkey")'></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Frequency Region</td>
+                <td>
+                    <select name='lorafrequency' size='1'>
+                        <option value='EU868'>EU868
+                        <option value='US915'>US915
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>LoRa Channel</td>
+                <td>
+                    <select name='lchannel' size='1'>
+                        <option value='0'>0</option>
+                        <option value='1'>1</option>
+                        <option value='2'>2</option>
+                        <option value='3'>3</option>
+                        <option value='4'>4</option>
+                        <option value='5'>5</option>
+                        <option value='6'>6</option>
+                        <option value='7'>7</option>
+                        <option value='8'>0...7 dynamic</option>
+                        <option value='9'>0...3 dynamic</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Spreading Factor</td>
+                <td>
+                    <select name='spreadf' size='1'>
+                        <option value='7'>7</option>
+                        <option value='8'>8</option>
+                        <option value='9'>9</option>
+                        <option value='10'>10</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Dynamic SF</td>
+                <td>
+                    <select name='dynsf' size='1'>
+                        <option value='0'>Off</option>
+                        <option value='1'>On</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>TX Interval</td>
+                <td><input type='text' required name='tinterval' size='20' value='%tinterval%' maxlength='20'
+                        onchange='check_tinterval("tinterval")'></td>
+                <td>[x30s]</td>
+            </tr>
+
+            <tr>
+                <td>Relay</td>
+                <td>
+                    <select name='relay' size='1'>
+                        <option value='0'>Off</option>
+                        <option value='1'>On</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>
+                    <h3>Device Settings</h3>
+                </td>
+                <td></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Serial Debug Mode</td>
+                <td>
+                    <select name='debugmode' size='1'>
+                        <option value='0'>Off</option>
+                        <option value='1'>Errors</option>
+                        <option value='2'>Errors + Warnings</option>
+                        <option value='3'>Errors + Warnings + Messages</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Serial Speed</td>
+                <td>
+                    <select name='serspeed' size='1'>
+                        <option value='300'>300 Bd</option>
+                        <option value='1200'>1200 Bd</option>
+                        <option value='2400'>2400 Bd</option>
+                        <option value='4800'>4800 Bd</option>
+                        <option value='9600'>9600 Bd</option>
+                        <option value='19200'>19200 Bd</option>
+                        <option value='38400'>38400 Bd</option>
+                        <option value='57600'>57600 Bd</option>
+                        <option value='74880'>74880 Bd</option>
+                        <option value='115200'>115200 Bd</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Device ID</td>
+                <td>
+                    <select name='deviceid' size='1'>
+                        <option value='0'>0</option>
+                        <option value='1'>1</option>
+                        <option value='2'>2</option>
+                        <option value='3'>3</option>
+                        <option value='4'>4</option>
+                        <option value='5'>5</option>
+                        <option value='6'>6</option>
+                        <option value='7'>7</option>
+                        <option value='8'>8</option>
+                        <option value='9'>9</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Device Type</td>
+                <td>
+                    <select name='devicetype' size='1'>
+                        <option value='LoRa1000'>LoRa1000</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Send LoRa</td>
+                <td>
+                    <select name='sendlora' size='1'>
+                        <option value='0'>Off</option>
+                        <option value='1'>On</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Send NMEA0183</td>
+                <td>
+                    <select name='senddata' size='1'>
+                        <option value='0'>Off</option>
+                        <option value='1'>On</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Average Voltage</td>
+                <td>
+                    <select name='vaverage' size='1'>
+                        <option value='1'>1</option>
+                        <option value='2'>2</option>
+                        <option value='3'>3</option>
+                        <option value='4'>4</option>
+                        <option value='5'>5</option>
+                        <option value='6'>6</option>
+                        <option value='7'>7</option>
+                        <option value='8'>8</option>
+                        <option value='9'>9</option>
+                        <option value='10'>10</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Average Tank1</td>
+                <td>
+                    <select name='t1average' size='1'>
+                        <option value='1'>1</option>
+                        <option value='2'>2</option>
+                        <option value='3'>3</option>
+                        <option value='4'>4</option>
+                        <option value='5'>5</option>
+                        <option value='6'>6</option>
+                        <option value='7'>7</option>
+                        <option value='8'>8</option>
+                        <option value='9'>9</option>
+                        <option value='10'>10</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Average Tank2</td>
+                <td>
+                    <select name='t2average' size='1'>
+                        <option value='1'>1</option>
+                        <option value='2'>2</option>
+                        <option value='3'>3</option>
+                        <option value='4'>4</option>
+                        <option value='5'>5</option>
+                        <option value='6'>6</option>
+                        <option value='7'>7</option>
+                        <option value='8'>8</option>
+                        <option value='9'>9</option>
+                        <option value='10'>10</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Temp Sensor Type</td>
+                <td>
+                    <select name='tstype' size='1'>
+                        <option value='Off'>Off</option>
+                        <option value='DS18B20'>DS18B20</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Temp Unit</td>
+                <td>
+                    <select name='tempunit' size='1'>
+                        <option value='C'>&deg;C</option>
+                        <option value='F'>&deg;F</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Env Sensor Type</td>
+                <td>
+                    <select name='envSensor' size='1'>
+                        <option value='Off'>Off</option>
+                        <option value='BME280'>BME280</option>
+                        <option value='VEdirect-Read'>VEdirect-Read</option>
+                        <option value='VEdirect-Send'>VEdirect-Send</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>
+                    <h3>Standby Mode Settings</h3>
+                </td>
+                <td></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Activate Standby Mode (Alarm Input X1-3)</td>
+                <td>
+                    <select name='standbyMode' size='1'>
+                        <option value='Off'>Off</option>
+                        <option value='On'>On</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Lora only in Standy?</td>
+                <td>
+                    <select name='loraStandbyMode' size='1'>
+                        <option value='Standby'>Standby</option>
+                        <option value='Always'>Always (currently not working)</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>
+                    <h3>Calibration Settings</h3>
+                </td>
+                <td></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Voltage A2</td>
+                <td><input type='text' required name='a2vslope' size='20' value='%a2vslope%' maxlength='20'></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Voltage A1</td>
+                <td><input type='text' required name='a1vslope' size='20' value='%a1vslope%' maxlength='20'></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Volatge Offset</td>
+                <td><input type='text' required name='voffset' size='20' value='%voffset%' maxlength='20'></td>
+                <td>[V]</td>
+            </tr>
+
+            <tr>
+                <td>Tank1 A2</td>
+                <td><input type='text' required name='a2t1slope' size='20' value='%a2t1slope%' maxlength='20'></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Tank1 A1</td>
+                <td><input type='text' required name='a1t1slope' size='20' value='%a1t1slope%' maxlength='20'></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Tank1 Offset</td>
+                <td><input type='text' required name='t1offset' size='20' value='%t1offset%' maxlength='20'></td>
+                <td>[l]</td>
+            </tr>
+
+            <tr>
+                <td>Tank2 A2</td>
+                <td><input type='text' required name='a2t2slope' size='20' value='%a2t2slope%' maxlength='20'></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Tank2 A1</td>
+                <td><input type='text' required name='a1t2slope' size='20' value='%a1t2slope%' maxlength='20'></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Tank2 Offset</td>
+                <td><input type='text' required name='t2offset' size='20' value='%t2offset%' maxlength='20'></td>
+                <td>[l]</td>
+            </tr>
+
+            <tr>
+                <td><br><button id='sub' type='submit'>Save</button></td>
+                <td></td>
+                <td></td>
+            </tr>
+        </table>
+        <input type='hidden' required name='password' size='20' value='%userpassword%' maxlength='20'>
+    </form>
+    <br>
+    <hr align='left'>
+    <br>
+    <!--form id='form2' action='http://192.168.4.1/settings'>
+  
+<input hidden type='text' name='itype' value='simple'>  
+<input hidden type='text' name='isize' value='200'>  
+<input hidden type='text' name='cssid' value='MyBoat'>
+<input hidden type='text' name='cpasswd' value='S6587rr94P'>
+<input hidden type='text' name='sssid' value='NoWa'>
+<input hidden type='text' name='spasswd' value='12345678'>
+<input hidden type='text' name='servermode' value='0'>
+<input hidden type='text' name='debugmode' value='3'>
+<input hidden type='text' name='serspeed' value='115200'>
+<input hidden type='text' name='sensorid' value='0'>
+<input hidden type='text' name='wstype' value='NoWa1000'>
+<input hidden type='text' name='sendwsdata' value='1'>
+<input hidden type='text' name='windtype' value='R'>
+<input hidden type='text' name='average' value='1'>
+<input hidden type='text' name='speedunit' value='kn'>
+<input hidden type='text' name='dwsensor' value='1'>
+<input hidden type='text' name='dwrange' value='50'>
+<input hidden type='text' name='tstype' value='Off'>
+<input hidden type='text' name='sendtsd' value='0'>
+<input hidden type='text' name='tempunit' value='C'>
+    
+<button type='submit'>Set Defaults</button></form-->
+    <br>
+    <form id='form3' action='/'><button type='submit'>Back</button></form>
+    <br><br>
+</body>
+
+</html>

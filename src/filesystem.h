@@ -357,7 +357,7 @@ void testFileIO(fs::FS &fs, const char * path){
 }
 
 //String printDirectory(File dir, int numTabs) {
-String printDirectory(fs::FS &fs, int numTabs) {
+/*String printDirectory(fs::FS &fs, int numTabs) {
   String response = "";
   String dirname = "/";
   File dir = fs.open(dirname);
@@ -380,11 +380,18 @@ String printDirectory(fs::FS &fs, int numTabs) {
      entry.close();
    }
    return String("List files:</br>") + response + String("</br></br> Upload file:") + serverIndex;
-}
+}*/
 
 String handleRoot(fs::FS &fs, const char * dirname, uint8_t levels){
-    String response = "";
-    response += "<link rel='stylesheet' type='text/css' href='/css'>";
+    String response = String("<!DOCTYPE html>") +
+String("<html>") +
+  String("<head>") +
+    String("<title>LoRa Boat Monitor</title>") +
+    String("<link rel='stylesheet' type='text/css' href='/css'>") +
+    String("<meta http-equiv='content-type' content='text/html; charset=UTF-8'>") +
+    String("<meta name=viewport content='width=device-width, initial-scale=1'>");
+  
+    //response += "<link rel='stylesheet' type='text/css' href='/css'>";
     response += String("<style>") +
                     String("table {") +
                     String("font-family: arial, sans-serif;") +
@@ -400,6 +407,7 @@ String handleRoot(fs::FS &fs, const char * dirname, uint8_t levels){
                     String("/*background-color: #dddddd;*/") +
                     String("}") +
                 String("</style>");
+    response += String("</head><body>");
     Serial.printf("Listing directory: %s\r\n", dirname);
     response += "Listing directory: ";
     response += dirname;
@@ -463,7 +471,7 @@ String handleRoot(fs::FS &fs, const char * dirname, uint8_t levels){
         file = root.openNextFile();
     }
     response += "</table>";
-    return response + String("</br></br> Upload file:") + serverIndex;
+    return response + String("</br></br> Upload file:") + serverIndex + "</body></html>";
 }
 
 uint32_t startTime;
