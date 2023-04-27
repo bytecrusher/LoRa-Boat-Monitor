@@ -8,15 +8,61 @@
    
 #define FORMAT_LITTLEFS_IF_FAILED true
 
-String serverIndex = "<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
-"<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>"
-    "<input type='file' name='upload'>"
-    "<input type='submit' value='Upload'>"
+String serverIndex = String("<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>") +
+String("<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>") +
+    String("<input type='file' name='upload'>") +
+    String("<input type='submit' value='Upload'>") +
 "</form>"
 "<div id='prg'>progress: 0%</div>"
 "<input type='submit' style='margin: 20px' value='Format FS' onclick='FormatFS()'>"
 "<input type='submit' style='margin: 20px' value='Update Files' onclick='UpdateFiles()'>"
+"<div id='status'>Status: </div>"
 "<script>"
+    "var myVar;"
+    "var meinIntervall = null;"
+    "const Http = new XMLHttpRequest();"
+        "document.addEventListener('DOMContentLoaded', function() {"
+        "setTimeout(function() {"
+            //"//document.querySelector('body').classList.add('loaded');"
+            "showPage();"
+        "}, 10)"
+        "});"
+
+        "function showPage() {"
+            "document.getElementById('loader').style.display = 'none';"
+            "document.getElementById('myDiv').style.display = 'block';"
+        "}"
+
+        "function startInterval() {"
+            "meinIntervall = setInterval(function() { "
+                "meineFunktion(); "
+            "}, 500);"
+        "}"
+
+        "function meineFunktion() { "
+            " $.ajax({"
+            "url: '/updatefilesstatus',"
+            "type: 'GET',"               
+            "success:function(result) {"    
+                "if (result == 0) {"
+                    "clearInterval(meinIntervall);"
+                    "document.getElementById('loader').style.display = 'none';"
+                    "document.getElementById('myDiv').style.display = 'block';"
+                    "console.log('response = 0');"
+                "} else if (result == 1) {"
+                    "document.getElementById('loader').style.display = 'block';"
+                    "document.getElementById('myDiv').style.display = 'none';"
+                    "console.log('response = 1');"
+                "}"
+           "},"
+            "error: function (a, b, c) {"
+                "$('#status').html('Status: Error while updatefilesstatus GET.');"
+                "document.getElementById('loader').style.display = 'none';"
+                "document.getElementById('myDiv').style.display = 'block';"
+            "}"
+          "});"
+        "} "
+
 "$('form').submit(function(e){"
     "e.preventDefault();"
       "var form = $('#upload_form')[0];"
@@ -29,6 +75,8 @@ String serverIndex = "<script src='https://ajax.googleapis.com/ajax/libs/jquery/
             "processData:false,"  
             "xhr: function() {"
                 "var xhr = new window.XMLHttpRequest();"
+                "document.getElementById('loader').style.display = 'block';"
+                "document.getElementById('myDiv').style.display = 'none';"
                 "xhr.upload.addEventListener('progress', function(evt) {"
                     "if (evt.lengthComputable) {"
                         "var per = evt.loaded / evt.total;"
@@ -38,9 +86,14 @@ String serverIndex = "<script src='https://ajax.googleapis.com/ajax/libs/jquery/
                "return xhr;"
             "},"                                
             "success:function(d, s) {"    
-                "console.log('success!')"
+                "console.log('successully uploaded File!');"
+                "document.getElementById('loader').style.display = 'none';"
+                "document.getElementById('myDiv').style.display = 'block';"
            "},"
             "error: function (a, b, c) {"
+                "$('#status').html('Status: Error while Uploading File.');"
+                "document.getElementById('loader').style.display = 'none';"
+                "document.getElementById('myDiv').style.display = 'block';"
             "}"
           "});"
 "});"
@@ -55,6 +108,8 @@ String serverIndex = "<script src='https://ajax.googleapis.com/ajax/libs/jquery/
             "processData:false,"  
             "xhr: function() {"
                 "var xhr = new window.XMLHttpRequest();"
+                "document.getElementById('loader').style.display = 'block';"
+                "document.getElementById('myDiv').style.display = 'none';"
                 "xhr.upload.addEventListener('progress', function(evt) {"
                     "if (evt.lengthComputable) {"
                         "var per = evt.loaded / evt.total;"
@@ -64,9 +119,15 @@ String serverIndex = "<script src='https://ajax.googleapis.com/ajax/libs/jquery/
                "return xhr;"
             "},"                                
             "success:function(d, s) {"    
-                "console.log('success!')"
+                "console.log('success!');"
+                "$('#status').html('Status: Formating Filesystem successfull.');"
+                "document.getElementById('loader').style.display = 'none';"
+                "document.getElementById('myDiv').style.display = 'block';"
            "},"
             "error: function (a, b, c) {"
+                "$('#status').html('Status: Error while formating Filesystem.');"
+                "document.getElementById('loader').style.display = 'none';"
+                "document.getElementById('myDiv').style.display = 'block';"
             "}"
           "});"
 "};"
@@ -81,6 +142,9 @@ String serverIndex = "<script src='https://ajax.googleapis.com/ajax/libs/jquery/
             "processData:false,"  
             "xhr: function() {"
                 "var xhr = new window.XMLHttpRequest();"
+                "document.getElementById('loader').style.display = 'block';"
+                "document.getElementById('myDiv').style.display = 'none';"
+                "startInterval();"
                 "xhr.upload.addEventListener('progress', function(evt) {"
                     "if (evt.lengthComputable) {"
                         "var per = evt.loaded / evt.total;"
@@ -90,9 +154,14 @@ String serverIndex = "<script src='https://ajax.googleapis.com/ajax/libs/jquery/
                "return xhr;"
             "},"                                
             "success:function(d, s) {"    
-                "console.log('success!')"
+                "console.log('successully send POST to updatefiles!');"
+                //"document.getElementById('loader').style.display = 'none';"
+                //"document.getElementById('myDiv').style.display = 'block';"
            "},"
             "error: function (a, b, c) {"
+                "$('#status').html('Status: Error while Downlaoding Files from server.');"
+                "document.getElementById('loader').style.display = 'none';"
+                "document.getElementById('myDiv').style.display = 'block';"
             "}"
           "});"
 "};"
@@ -182,7 +251,8 @@ String readFile2(fs::FS &fs, const char * path){
         return "- failed to open file for reading";
     }
 
-    Serial.println("- read from file (readfile2):");
+    Serial.print("- read from file (readfile2): ");
+    Serial.println(path);
     while(file.available()){
         //filecontent = file.read();
         filecontent+=String((char)file.read());
@@ -384,8 +454,8 @@ void testFileIO(fs::FS &fs, const char * path){
 
 String handleRoot(fs::FS &fs, const char * dirname, uint8_t levels){
     String response = String("<!DOCTYPE html>") +
-String("<html>") +
-  String("<head>") +
+    String("<html>") +
+    String("<head>") +
     String("<title>LoRa Boat Monitor</title>") +
     String("<link rel='stylesheet' type='text/css' href='/css'>") +
     String("<meta http-equiv='content-type' content='text/html; charset=UTF-8'>") +
@@ -401,17 +471,78 @@ String("<html>") +
                     String("td, th {") +
                     String("border: 1px solid #dddddd;") +
                     String("text-align: left;") +
-                    String("padding: 8px;") +
+                    //String("padding: 8px;") +
                     String("}") +
                     String("tr:nth-child(even) {") +
                     String("/*background-color: #dddddd;*/") +
                     String("}") +
+
+                    String("/* Center the loader */") +
+String("#loader {") +
+    String("position: absolute;") +
+    String("left: 50%;") +
+    String("top: 50%;") +
+    String("z-index: 1;") +
+    String("width: 120px;") +
+    String("height: 120px;") +
+    String("margin: -76px 0 0 -76px;") +
+    String("border: 16px solid #f3f3f3;") +
+    String("border-radius: 50%;") +
+    String("border-top: 16px solid #3498db;") +
+    String("-webkit-animation: spin 2s linear infinite;") +
+    String("animation: spin 2s linear infinite;") +
+  String("}") +
+  
+  String("@-webkit-keyframes spin {") +
+    String("0% { -webkit-transform: rotate(0deg); }") +
+    String("100% { -webkit-transform: rotate(360deg); }") +
+  String("}") +
+  
+  String("@keyframes spin {") +
+    String("0% { transform: rotate(0deg); }") +
+    String("100% { transform: rotate(360deg); }") +
+  String("}") +
+  
+  String("/* Add animation to 'page content' */") +
+  String(".animate-bottom {") +
+    String("position: relative;") +
+    String("-webkit-animation-name: animatebottom;") +
+    String("-webkit-animation-duration: 1s;") +
+    String("animation-name: animatebottom;") +
+    String("animation-duration: 1s") +
+  String("}") +
+  
+  String("@-webkit-keyframes animatebottom {") +
+    String("from { bottom:-100px; opacity:0 } ") +
+    String("to { bottom:0px; opacity:1 }") +
+  String("}") +
+  
+  String("@keyframes animatebottom { ") +
+    String("from{ bottom:-100px; opacity:0 } ") +
+    String("to{ bottom:0; opacity:1 }") +
+  String("}") +
+  
+  String("#myDiv {") +
+    String("display: none;") +
+    String("/*text-align: center;*/") +
+  String("}") +
                 String("</style>");
     response += String("</head><body>");
-    Serial.printf("Listing directory: %s\r\n", dirname);
+
+    response += String("<h2>LoRa Boat Monitor</h2>");
+    response += String(String(actconf.crights) + ", " + String(actconf.fversion) + ", CQ: " + String(wlanquality()) + "<data id='quality'></data> %");
+    response += String("<hr align='left'>");
+    response += String("<h3>");
+    response += String("<blink>");
+    response += String("<data id='info'></data>");
+    response += String("</blink>");
+    response += String("</h3>");
+    response += String("<div id='loader'></div>");
+    response += String("<div style='display:none;' id='myDiv' class='animate-bottom'>");
+    //Serial.printf("Listing directory: %s\r\n", dirname);
     response += "Listing directory: ";
     response += dirname;
-    response += "<br>";
+    response += "<br><br>";
     response += "<table><tr>";
     response += "<th>Type</th><th>Name</th><th>Size</th><th>LAST WRITE</th></tr>";
     

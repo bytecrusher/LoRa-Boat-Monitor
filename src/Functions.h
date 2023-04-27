@@ -191,10 +191,12 @@ boolean toBoolean(String settingValue) {
 
 // Convert string to char
 char* toChar(String command){
-    if(command.length()!=0){
-        char *p = const_cast<char*>(command.c_str());
-        return p;
-    }
+  if(command.length()!=0){
+    char *p = const_cast<char*>(command.c_str());
+    return p;
+  }
+  char* ch = new char[strlen("null") + 1];
+  return ch;
 }
 
 // Convert Hex to Int

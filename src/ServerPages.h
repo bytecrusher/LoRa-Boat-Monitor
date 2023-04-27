@@ -1,14 +1,48 @@
 // Server pages
 // Insert this library after server definition
 
-httpServer.on("/", []() {
+/*httpServer.on("/update", HTTP_GET, [] (AsyncWebServerRequest *request) {
+  String inputMessage1;
+  String inputMessage2;
+  // GET input1 value on <ESP_IP>/update?output=<inputMessage1>&state=<inputMessage2>
+  if (request->hasParam(PARAM_INPUT_1) && request->hasParam(PARAM_INPUT_2)) {
+    inputMessage1 = request->getParam(PARAM_INPUT_1)->value();
+    inputMessage2 = request->getParam(PARAM_INPUT_2)->value();
+    digitalWrite(inputMessage1.toInt(), inputMessage2.toInt());
+  }
+  else {
+    inputMessage1 = "No message sent";
+    inputMessage2 = "No message sent";
+  }
+  Serial.print("GPIO: ");
+  Serial.print(inputMessage1);
+  Serial.print(" - Set to: ");
+  Serial.println(inputMessage2);
+  request->send(200, "text/plain", "OK");
+});*/
+
+// Route for root / web page
+  /*server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/html", index_html, processor);
+  });*/
+
+  // Route for root index.html
+  //httpServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+  //  request->send(LittleFS, "/main.html", "text/html");
+  //});
+
+httpServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+//httpServer.on("/2", []() {
   // Read all received get arguments and save in a array
-  int num = httpServer.args();
+  //int num = httpServer.args();
+  int num = request->args();
   String vname[num];
   String value[num];
   for (int i = 0; i < num; i++) {
-    vname[i] = httpServer.argName(i);
-    value[i] = httpServer.arg(i);
+    //vname[i] = httpServer.argName(i);
+    vname[i] = request->argName(i);
+    //value[i] = httpServer.arg(i);
+    value[i] = request->arg(i);
     // Check the return value from Restart web page
     if(vname[i] == "restart" &&  value[i] == "1"){
       resetESP = 1;
@@ -25,8 +59,10 @@ httpServer.on("/", []() {
   if (content == "- failed to open file for reading"){
     content += handleRoot(LittleFS, "/", 0);
   }
-  httpServer.sendHeader("Cache-Control", "no-cache");
-  httpServer.send(200, "text/html", content);
+  //httpServer.sendHeader("Cache-Control", "no-cache");
+  //httpServer.send(200, "text/html", content);
+  //request->send(LittleFS, "/main.html", "text/html");
+  request->send(200, "text/html", content);
 
   // Restart routine
   if(resetESP == 1){
@@ -34,20 +70,23 @@ httpServer.on("/", []() {
     resetESP = 0;
     // Restart the ESP32
     ESP.restart();
-  }   
+  }
 });
 
-httpServer.on("/test.html", []() {
+/*httpServer.on("/test.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+//httpServer.on("/test.html", []() {
   Serial.print(ESP.getFreeHeap());
   Serial.print(ESP.getMaxAllocHeap());
   String content = readFile2(LittleFS, "/test.html");
-  httpServer.sendHeader("Cache-Control", "no-cache");
-  httpServer.send(200, "text/html", content);
+  //httpServer.sendHeader("Cache-Control", "no-cache");
+  //httpServer.send(200, "text/html", content);
+  request->send(200, "text/html", content);
   Serial.print(ESP.getFreeHeap());
   Serial.print(ESP.getMaxAllocHeap());
-});
+});*/
 
-httpServer.on("/sensorv", []() {
+httpServer.on("/sensorv", HTTP_GET, [](AsyncWebServerRequest *request) {
+//httpServer.on("/sensorv", []() {
   // Send page
   //String content = Sensorv();
   String content = readFile2(LittleFS, "/sensorv.html");
@@ -125,11 +164,13 @@ httpServer.on("/sensorv", []() {
   }
   content.replace("%envSensorString%", String(envSensorString));
 
-  httpServer.sendHeader("Cache-Control", "max-age=600");
-  httpServer.send(200, "text/html", content);  
+  //httpServer.sendHeader("Cache-Control", "max-age=600");
+  //httpServer.send(200, "text/html", content);
+  request->send(200, "text/html", content);
 });
 
-httpServer.on("/lora", []() {
+httpServer.on("/lora", HTTP_GET, [](AsyncWebServerRequest *request) {
+//httpServer.on("/lora", []() {
   // Send page
   //String content = Lora();
   String content = readFile2(LittleFS, "/lora.html");
@@ -137,18 +178,23 @@ httpServer.on("/lora", []() {
   content.replace("%devname%", String(actconf.devname));
   content.replace("%crights%", String(actconf.crights));
   content.replace("%fversion%", String(actconf.fversion));
-  httpServer.sendHeader("Cache-Control", "max-age=600");
-  httpServer.send(200, "text/html", content);  
+  //httpServer.sendHeader("Cache-Control", "max-age=600");
+  //httpServer.send(200, "text/html", content);
+  request->send(200, "text/html", content);
 });
 
-httpServer.on("/settings", []() {
+httpServer.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
+//httpServer.on("/settings", []() {
   // Read all received get arguments and save in a array
-  int num = httpServer.args();
+  //int num = httpServer.args();
+  int num = request->args();
   String vname[num];
   String value[num];
   for (int i = 0; i < num; i++) {
-    vname[i] = httpServer.argName(i);
-    value[i] = httpServer.arg(i);  
+    //vname[i] = httpServer.argName(i);
+    //value[i] = httpServer.arg(i);  
+    vname[i] = request->argName(i);
+    value[i] = request->arg(i);  
   } 
   // Send page
   //String content = Settings(num, vname, value);
@@ -487,20 +533,24 @@ httpServer.on("/settings", []() {
     content.replace("%envSensor%", String(getindex(envSensor, String(actconf.envSensor))));
     content.replace("%standbyMode%", String(getindex(standbyMode, String(actconf.standbyMode))));
     content.replace("%loraStandbyMode%", String(getindex(loraStandbyMode, String(actconf.loraStandbyMode))));
- }
-
-  httpServer.sendHeader("Cache-Control", "no-cache");
-  httpServer.send(200, "text/html", content);  
+  }
+  //httpServer.sendHeader("Cache-Control", "no-cache");
+  //httpServer.send(200, "text/html", content);
+  request->send(200, "text/html", content);
 });
 
-httpServer.on("/restart", []() {
+httpServer.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
+//httpServer.on("/restart", []() {
   // Read all received get arguments and save in a array
-  int num = httpServer.args();
+  //int num = httpServer.args();
+  int num = request->args();
   String vname[num];
   String value[num];
   for (int i = 0; i < num; i++) {
-    vname[i] = httpServer.argName(i);
-    value[i] = httpServer.arg(i);  
+    //vname[i] = httpServer.argName(i);
+    //value[i] = httpServer.arg(i);
+    vname[i] = request->argName(i);
+    value[i] = request->arg(i);
   } 
 
   // Send page
@@ -532,18 +582,23 @@ httpServer.on("/restart", []() {
     content.replace("%quality%", String(wlanquality()));
  }
 
-  httpServer.sendHeader("Cache-Control", "no-cache");
-  httpServer.send(200, "text/html", content);
+  //httpServer.sendHeader("Cache-Control", "no-cache");
+  //httpServer.send(200, "text/html", content);
+  request->send(200, "text/html", content);
 });
 
-httpServer.on("/firmware", []() {
+httpServer.on("/firmware", HTTP_GET, [](AsyncWebServerRequest *request) {
+//httpServer.on("/firmware", []() {
   // Read all received get arguments and save in a array
-  int num = httpServer.args();
+  //int num = httpServer.args();
+  int num = request->args();
   String vname[num];
   String value[num];
   for (int i = 0; i < num; i++) {
-    vname[i] = httpServer.argName(i);
-    value[i] = httpServer.arg(i);  
+    //vname[i] = httpServer.argName(i);
+    //value[i] = httpServer.arg(i);  
+    vname[i] = request->argName(i);
+    value[i] = request->arg(i);  
   } 
 
   String hash = "";
@@ -576,11 +631,13 @@ httpServer.on("/firmware", []() {
     content.replace("%chipId%", String(chipId));
     content.replace("%getCpuFreqMHz%", String(String(ESP.getCpuFreqMHz())));
   }
-  httpServer.sendHeader("Cache-Control", "no-cache");
-  httpServer.send(200, "text/html", content);
+  //httpServer.sendHeader("Cache-Control", "no-cache");
+  //httpServer.send(200, "text/html", content);
+  request->send(200, "text/html", content);
 });
 
-httpServer.on("/devinfo", []() {
+httpServer.on("/devinfo", HTTP_GET, [](AsyncWebServerRequest *request) {
+//httpServer.on("/devinfo", []() {
   String content = readFile2(LittleFS, "/devinfo.html");
   content.replace("%devname%", String(actconf.devname));
   content.replace("%crights%", String(actconf.crights));
@@ -634,17 +691,21 @@ httpServer.on("/devinfo", []() {
  }
   content.replace("%envSensorBME280%", envSensorBME280);
   
-  httpServer.sendHeader("Cache-Control", "no-cache");
-  httpServer.send(200, "text/html", content);
+  //httpServer.sendHeader("Cache-Control", "no-cache");
+  //httpServer.send(200, "text/html", content);
+  request->send(200, "text/html", content);
 });
 
-httpServer.on("/favicon.ico", []() {
+httpServer.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request) {
+//httpServer.on("/favicon.ico", []() {
   String content = readFile2(LittleFS, "/favicon.ico");
-  httpServer.sendHeader("Cache-Control", "max-age=600");
-  httpServer.send(200, "image/svg+xml", content);
+  //httpServer.sendHeader("Cache-Control", "max-age=600");
+  //httpServer.send(200, "image/svg+xml", content);
+  request->send(200, "image/svg+xml", content);
 });
 
-httpServer.on("/css", []() {
+httpServer.on("/css", HTTP_GET, [](AsyncWebServerRequest *request) {
+//httpServer.on("/css", []() {
   String content = "";
    // Style activation
   switch (style) {
@@ -664,20 +725,24 @@ httpServer.on("/css", []() {
     // Day style white
     content = readFile2(LittleFS, "/css_white.css");
   }
-   httpServer.sendHeader("Cache-Control", "max-age=1");
-  httpServer.send(200, "text/css", content);
+  //httpServer.sendHeader("Cache-Control", "max-age=1");
+  //httpServer.send(200, "text/css", content);
+  request->send(200, "text/css", content);
 });
 
-httpServer.on("/js", []() {
+httpServer.on("/js", HTTP_GET, [](AsyncWebServerRequest *request) {
+//httpServer.on("/js", []() {
   String content = readFile2(LittleFS, "/js.js");
-  httpServer.sendHeader("Cache-Control", "max-age=600");
-  httpServer.send(200, "text/javascript", content);
+  //httpServer.sendHeader("Cache-Control", "max-age=600");
+  //httpServer.send(200, "text/javascript", content);
+  request->send(200, "text/javascript", content);
 });
 
-httpServer.on("/json", []() {
-  unsigned long previousMillis = 0;
-  unsigned long elapsedMillis = 0;
-  previousMillis = millis();
+httpServer.on("/json", HTTP_GET, [](AsyncWebServerRequest *request) {
+//httpServer.on("/json", []() {
+  //unsigned long previousMillis = 0;
+  //unsigned long elapsedMillis = 0;
+  //previousMillis = millis();
  
   DynamicJsonDocument json_Device(8048);
   json_Device["Device"]["Type"] = String(actconf.devname);
@@ -791,7 +856,6 @@ httpServer.on("/json", []() {
   json_Device["Device"]["MeasuringValues"]["standbyMode"]["Value"] = String(actconf.standbyMode);
   json_Device["Device"]["MeasuringValues"]["standbyMode"]["Unit"] = "";
 
-
   json_Device["Device"]["MeasuringValues"]["loraStandbyMode"]["Value"] = String(actconf.loraStandbyMode);
   json_Device["Device"]["MeasuringValues"]["loraStandbyMode"]["Unit"] = "";
 
@@ -850,16 +914,18 @@ httpServer.on("/json", []() {
   String stringjsondata = "";
   serializeJson(json_Device, stringjsondata);
 
-  httpServer.sendHeader("Access-Control-Allow-Origin", "*"); // Needs new browser for CORS (Cross Origin Resource Sharing)
-  httpServer.sendHeader("Cache-Control", "no-cache");
-  httpServer.send(200, "application/json", stringjsondata);
+  //httpServer.sendHeader("Access-Control-Allow-Origin", "*"); // Needs new browser for CORS (Cross Origin Resource Sharing)
+  //httpServer.sendHeader("Cache-Control", "no-cache");
+  //httpServer.send(200, "application/json", stringjsondata);
+  request->send(200, "application/json", stringjsondata);
 
-  elapsedMillis = millis() - previousMillis;
-  Serial.print("Wert Stoppuhr: ");
-  Serial.println(elapsedMillis);
+  //elapsedMillis = millis() - previousMillis;
+  //Serial.print("Wert Stoppuhr: ");
+  //Serial.println(elapsedMillis);
 });
 
-httpServer.on("/json_old", []() {
+httpServer.on("/json_old", HTTP_GET, [](AsyncWebServerRequest *request) {
+//httpServer.on("/json_old", []() {
   unsigned long previousMillis = 0;
   unsigned long elapsedMillis = 0;
   previousMillis = millis();
@@ -940,9 +1006,10 @@ httpServer.on("/json_old", []() {
     String sunsetstr = "" + String(zhour) + ":" + String(zminute) + ":" + String(zsecond) + "";
     content.replace("%sunsetstr%", sunsetstr);
 
-  httpServer.sendHeader("Access-Control-Allow-Origin", "*"); // Needs new browser for CORS (Cross Origin Resource Sharing)
-  httpServer.sendHeader("Cache-Control", "no-cache");
-  httpServer.send(200, "application/json", content);
+  //httpServer.sendHeader("Access-Control-Allow-Origin", "*"); // Needs new browser for CORS (Cross Origin Resource Sharing)
+  //httpServer.sendHeader("Cache-Control", "no-cache");
+  //httpServer.send(200, "application/json", content);
+  request->send(200, "application/json", content);
 
   elapsedMillis = millis() - previousMillis;
   Serial.print("Wert Stoppuhr: ");
@@ -950,17 +1017,32 @@ httpServer.on("/json_old", []() {
 });
 
 // Use no cash because the js was permanently modifyed (transaction ID)
-httpServer.on("/MD5", []() {
+httpServer.on("/MD5", HTTP_GET, [](AsyncWebServerRequest *request) {
+//httpServer.on("/MD5", []() {
   String content = readFile2(LittleFS, "/md5.js");
   content.replace("%transactionID%", String(transactionID));
-  httpServer.sendHeader("Cache-Control", "no-cache");
-  httpServer.send(200, "text/javascript", content);
+  //httpServer.sendHeader("Cache-Control", "no-cache");
+  //httpServer.send(200, "text/javascript", content);
+  request->send(200, "text/javascript", content);
+});
+
+// Use no cash because the js was permanently modifyed (transaction ID)
+//httpServer.on("/filesystem2", HTTP_POST, [](AsyncWebServerRequest *request) {
+  httpServer.on("/filesystem", HTTP_GET, [](AsyncWebServerRequest *request) {
+  Serial.print("http request");
+//httpServer.on("/filesystem", []() {
+  String content = handleRoot(LittleFS, "/", 0);
+  //httpServer.sendHeader("Cache-Control", "no-cache");
+  //httpServer.send(200, "text/html", content);
+  request->send(200, "text/html", content);
 });
 
 // Firmware update
-httpServer.on("/update", HTTP_POST, []() {
-  httpServer.sendHeader("Connection", "close");
-  httpServer.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+/*httpServer.on("/update", HTTP_POST, [](AsyncWebServerRequest *request) {
+//httpServer.on("/update", HTTP_POST, []() {
+  //httpServer.sendHeader("Connection", "close");
+  //httpServer.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+  request->send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK"));
   ESP.restart();
 }, []() {
 // Update routine
@@ -972,7 +1054,7 @@ httpServer.on("/update", HTTP_POST, []() {
       }
     } else if (upload.status == UPLOAD_FILE_WRITE) {
       /* flashing firmware to ESP*/
-      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+/*      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
         Update.printError(Serial);
       }
     } else if (upload.status == UPLOAD_FILE_END) {
@@ -982,10 +1064,16 @@ httpServer.on("/update", HTTP_POST, []() {
         Update.printError(Serial);
       }
     } 
-});
+});*/
+
+// run handleUpload function when any file is uploaded
+  /*server->on("/upload", HTTP_POST, [](AsyncWebServerRequest *request) {
+        request->send(200);
+      }, handleUpload);*/
 
   /*handling uploading file */
-  httpServer.on("/upload", HTTP_POST, [](){
+  /*httpServer.on("/upload", HTTP_POST, [](AsyncWebServerRequest *request) {
+  //httpServer.on("/upload", HTTP_POST, [](){
     httpServer.sendHeader("Connection", "close");
   },[](){  
     HTTPUpload& upload = httpServer.upload();
@@ -1007,33 +1095,43 @@ httpServer.on("/update", HTTP_POST, []() {
       Serial.println("UPLOAD_FILE_END");
       opened = false;
     }
-  });
+  });*/
 
-httpServer.onNotFound([]() {
+httpServer.on("/formatfs", HTTP_POST, [](AsyncWebServerRequest *request) {
+//httpServer.on("/formatfs", []() {
+  formatfs(LittleFS);
+  //httpServer.sendHeader("Cache-Control", "no-cache");
+  //httpServer.send(200, "text/html", "done");
+  request->send(200, "text/html", "done");
+});
+
+httpServer.on("/updatefiles", HTTP_POST, [](AsyncWebServerRequest *request) {
+//httpServer.on("/updatefiles", []() {
+  //DownloadFilesFromFtp(actconf.fversion);
+  //DownloadFilesFromWeb(actconf.fversion);
+  runDownloadingFiles = true;
+  //httpServer.sendHeader("Cache-Control", "no-cache");
+  //httpServer.send(200, "text/html", "done");
+  request->send(200, "text/html", "done");
+});
+
+httpServer.on("/updatefilesstatus", HTTP_GET, [](AsyncWebServerRequest *request) {
+//httpServer.on("/updatefiles", []() {
+  //DownloadFilesFromFtp(actconf.fversion);
+  //DownloadFilesFromWeb(actconf.fversion);
+  String test = (String)runDownloadingFiles;
+  //httpServer.sendHeader("Cache-Control", "no-cache");
+  //httpServer.send(200, "text/html", "done");
+  request->send(200, "text/html", test);
+});
+
+httpServer.onNotFound([](AsyncWebServerRequest *request){
   String content = readFile2(LittleFS, "/error.html");
   content.replace("%devname%", String(actconf.devname));
   content.replace("%crights%", String(actconf.crights));
   content.replace("%fversion%", String(actconf.fversion));
   content.replace("%wlanquality%", String(wlanquality()));
-  httpServer.send(404, "text/html", content);
-});
-
-// Use no cash because the js was permanently modifyed (transaction ID)
-httpServer.on("/filesystem", []() {
-  String content = handleRoot(LittleFS, "/", 0);
-  httpServer.sendHeader("Cache-Control", "no-cache");
-  httpServer.send(200, "text/html", content);
-});
-
-httpServer.on("/formatfs", []() {
-  formatfs(LittleFS);
-  httpServer.sendHeader("Cache-Control", "no-cache");
-  httpServer.send(200, "text/html", "done");
-});
-
-httpServer.on("/updatefiles", []() {
-  //DownloadFilesFromFtp(actconf.fversion);
-  DownloadFilesFromWeb(actconf.fversion);
-  httpServer.sendHeader("Cache-Control", "no-cache");
-  httpServer.send(200, "text/html", "done");
+  //httpServer.send(404, "text/html", content);
+  request->send(404, "text/html", content);
+  //request->send(404, "text/plain", "The content you are looking for was not found.");
 });

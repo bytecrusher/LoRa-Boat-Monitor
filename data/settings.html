@@ -16,7 +16,16 @@
         }
     </style>
     <script>
+        var myVar;
+        document.addEventListener("DOMContentLoaded", function() {
+        setTimeout(function() {
+            //document.querySelector("body").classList.add("loaded");
+            showPage();
+        }, 10)
+        });
+
         function setSelections() {
+            //myVar = setTimeout(showPage, 3000);
             document.SetForm.usepassword.selectedIndex = %crypt%;
 
             document.SetForm.isize.selectedIndex = %instrumentSize%;
@@ -47,6 +56,11 @@
             document.SetForm.envSensor.selectedIndex = %envSensor%;
             document.SetForm.standbyMode.selectedIndex = %standbyMode%;
             document.SetForm.loraStandbyMode.selectedIndex = %loraStandbyMode%;
+        }
+
+        function showPage() {
+            document.getElementById("loader").style.display = "none";
+            document.getElementById("myDiv").style.display = "block";
         }
 
         function check_devaddr(iname) {
@@ -129,6 +143,8 @@
     %crights%, %fversion%, CQ: %quality% %
     <hr align='left'>
 
+    <div id="loader"></div>
+    <div style="display:none;" id="myDiv" class="animate-bottom">
     <form id='form1' name='SetForm' method='get' action='settings'>
         <table>
 
@@ -713,6 +729,7 @@
     <br>
     <form id='form3' action='/'><button type='submit'>Back</button></form>
     <br><br>
+</div>
 </body>
 
 </html>

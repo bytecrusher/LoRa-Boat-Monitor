@@ -37,12 +37,16 @@
 #include <Arduino.h>            // Arduino Environment
 #include <WiFi.h>               // WiFi lib with TCP server and client
 #include <WiFiClient.h>         // WiFi lib for clients
-#include <WebServer.h>          // WebServer lib
+//#include <WebServer.h>          // WebServer lib
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+
 #include <ESPmDNS.h>            // mDNS lib
 #include <Update.h>             // Web Update server
 #include <MD5Builder.h>         // MD5 lib
 #include "driver/adc.h"
 #include <ArduinoJson.h>
+#include <time.h>
 
 #include <U8x8lib.h>            // OLED Lib
 #include <lmic.h>               // LoRa Lib
@@ -90,7 +94,8 @@ configData newconf;             // Configuration stucture for new config data in
 
 TaskHandle_t Task1;             // Declare task for LoRa code
 
-WebServer httpServer(actconf.httpport);   // Port for HTTP server
+//WebServer httpServer(actconf.httpport);   // Port for HTTP server
+AsyncWebServer httpServer(actconf.httpport);
 MDNSResponder mdns;                       // Activate DNS responder
 WiFiServer server(actconf.dataport);      // Declare WiFi NMEA server port
 
@@ -117,6 +122,10 @@ int loopcounter = 0;
 
 bool toggleDisplayStatus = false;
 long LoraSendDurationSeconds = 0;
+boolean runDownloadingFiles = false;
+
+long timezone = 1; 
+byte daysavetime = 1;
 
 hw_timer_t *My_timer = NULL;
 
@@ -262,6 +271,15 @@ void enableWiFi(){
         u8x8.drawString(0,3,"Conection aborted");
         u8x8.refreshDisplay();    // Only required for SSD1606/7
       }
+
+      Serial.println("Contacting Time Server");
+	    configTime(3600*timezone, daysavetime*3600, "time.nist.gov", "0.pool.ntp.org", "1.pool.ntp.org");
+	    struct tm tmstruct ;
+      //delay(2000);
+      tmstruct.tm_year = 0;
+      getLocalTime(&tmstruct, 5000);
+	    Serial.printf("\nNow is : %d-%02d-%02d %02d:%02d:%02d\n",(tmstruct.tm_year)+1900,( tmstruct.tm_mon)+1, tmstruct.tm_mday,tmstruct.tm_hour , tmstruct.tm_min, tmstruct.tm_sec);
+      Serial.println("");
       
       // Start the NMEA TCP server
       server.begin();
@@ -481,7 +499,7 @@ void state1(){
       }
     }*/
   }
-  httpServer.handleClient();   // HTTP Server-handler for HTTP update server
+  //httpServer.handleClient();   // HTTP Server-handler for HTTP update server
   delay(20);
 
   VEdirectSend();
@@ -546,6 +564,11 @@ void state1(){
       flag1 = false;                        // Reset the send flag
     }
   }*/
+
+  if (runDownloadingFiles) {
+    DownloadFilesFromWeb(actconf.fversion);
+    runDownloadingFiles = false;
+  }
 
   loopcounter++;
 }
@@ -888,6 +911,10 @@ void setup() {
     //-------------------------------
 
   //DownloadFilesFromFtp();
+
+    // Route for root index.html
+  /*httpServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send(LittleFS, "/main.html", "text/html"); });*/
     
 }
 

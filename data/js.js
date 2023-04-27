@@ -105,4 +105,4 @@ function read_json() {
   xmlhttp.send();
 }
 
-setInterval(function () { read_json(); }, 4000);
+setInterval(function () { read_json(); }, 1000);
