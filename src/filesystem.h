@@ -8,166 +8,6 @@
    
 #define FORMAT_LITTLEFS_IF_FAILED true
 
-String serverIndex = String("<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>") +
-String("<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>") +
-    String("<input type='file' name='upload'>") +
-    String("<input type='submit' value='Upload'>") +
-"</form>"
-"<div id='prg'>progress: 0%</div>"
-"<input type='submit' style='margin: 20px' value='Format FS' onclick='FormatFS()'>"
-"<input type='submit' style='margin: 20px' value='Update Files' onclick='UpdateFiles()'>"
-"<div id='status'>Status: </div>"
-"<script>"
-    "var myVar;"
-    "var meinIntervall = null;"
-    "const Http = new XMLHttpRequest();"
-        "document.addEventListener('DOMContentLoaded', function() {"
-        "setTimeout(function() {"
-            //"//document.querySelector('body').classList.add('loaded');"
-            "showPage();"
-        "}, 10)"
-        "});"
-
-        "function showPage() {"
-            "document.getElementById('loader').style.display = 'none';"
-            "document.getElementById('myDiv').style.display = 'block';"
-        "}"
-
-        "function startInterval() {"
-            "meinIntervall = setInterval(function() { "
-                "meineFunktion(); "
-            "}, 500);"
-        "}"
-
-        "function meineFunktion() { "
-            " $.ajax({"
-            "url: '/updatefilesstatus',"
-            "type: 'GET',"               
-            "success:function(result) {"    
-                "if (result == 0) {"
-                    "clearInterval(meinIntervall);"
-                    "document.getElementById('loader').style.display = 'none';"
-                    "document.getElementById('myDiv').style.display = 'block';"
-                    "console.log('response = 0');"
-                "} else if (result == 1) {"
-                    "document.getElementById('loader').style.display = 'block';"
-                    "document.getElementById('myDiv').style.display = 'none';"
-                    "console.log('response = 1');"
-                "}"
-           "},"
-            "error: function (a, b, c) {"
-                "$('#status').html('Status: Error while updatefilesstatus GET.');"
-                "document.getElementById('loader').style.display = 'none';"
-                "document.getElementById('myDiv').style.display = 'block';"
-            "}"
-          "});"
-        "} "
-
-"$('form').submit(function(e){"
-    "e.preventDefault();"
-      "var form = $('#upload_form')[0];"
-      "var data = new FormData(form);"
-      " $.ajax({"
-            "url: '/upload',"
-            "type: 'POST',"               
-            "data: data,"
-            "contentType: false,"                  
-            "processData:false,"  
-            "xhr: function() {"
-                "var xhr = new window.XMLHttpRequest();"
-                "document.getElementById('loader').style.display = 'block';"
-                "document.getElementById('myDiv').style.display = 'none';"
-                "xhr.upload.addEventListener('progress', function(evt) {"
-                    "if (evt.lengthComputable) {"
-                        "var per = evt.loaded / evt.total;"
-                        "$('#prg').html('progress: ' + Math.round(per*100) + '%');"
-                    "}"
-               "}, false);"
-               "return xhr;"
-            "},"                                
-            "success:function(d, s) {"    
-                "console.log('successully uploaded File!');"
-                "document.getElementById('loader').style.display = 'none';"
-                "document.getElementById('myDiv').style.display = 'block';"
-           "},"
-            "error: function (a, b, c) {"
-                "$('#status').html('Status: Error while Uploading File.');"
-                "document.getElementById('loader').style.display = 'none';"
-                "document.getElementById('myDiv').style.display = 'block';"
-            "}"
-          "});"
-"});"
-"function FormatFS(){"
-      "var form = $('#upload_form')[0];"
-      "var data = new FormData(form);"
-      " $.ajax({"
-            "url: '/formatfs',"
-            "type: 'POST',"               
-            "data: data,"
-            "contentType: false,"                  
-            "processData:false,"  
-            "xhr: function() {"
-                "var xhr = new window.XMLHttpRequest();"
-                "document.getElementById('loader').style.display = 'block';"
-                "document.getElementById('myDiv').style.display = 'none';"
-                "xhr.upload.addEventListener('progress', function(evt) {"
-                    "if (evt.lengthComputable) {"
-                        "var per = evt.loaded / evt.total;"
-                        "$('#prg').html('progress: ' + Math.round(per*100) + '%');"
-                    "}"
-               "}, false);"
-               "return xhr;"
-            "},"                                
-            "success:function(d, s) {"    
-                "console.log('success!');"
-                "$('#status').html('Status: Formating Filesystem successfull.');"
-                "document.getElementById('loader').style.display = 'none';"
-                "document.getElementById('myDiv').style.display = 'block';"
-           "},"
-            "error: function (a, b, c) {"
-                "$('#status').html('Status: Error while formating Filesystem.');"
-                "document.getElementById('loader').style.display = 'none';"
-                "document.getElementById('myDiv').style.display = 'block';"
-            "}"
-          "});"
-"};"
-"function UpdateFiles(){"
-      "var form = $('#upload_form')[0];"
-      "var data = new FormData(form);"
-      " $.ajax({"
-            "url: '/updatefiles',"
-            "type: 'POST',"               
-            "data: data,"
-            "contentType: false,"                  
-            "processData:false,"  
-            "xhr: function() {"
-                "var xhr = new window.XMLHttpRequest();"
-                "document.getElementById('loader').style.display = 'block';"
-                "document.getElementById('myDiv').style.display = 'none';"
-                "startInterval();"
-                "xhr.upload.addEventListener('progress', function(evt) {"
-                    "if (evt.lengthComputable) {"
-                        "var per = evt.loaded / evt.total;"
-                        "$('#prg').html('progress: ' + Math.round(per*100) + '%');"
-                    "}"
-               "}, false);"
-               "return xhr;"
-            "},"                                
-            "success:function(d, s) {"    
-                "console.log('successully send POST to updatefiles!');"
-                //"document.getElementById('loader').style.display = 'none';"
-                //"document.getElementById('myDiv').style.display = 'block';"
-           "},"
-            "error: function (a, b, c) {"
-                "$('#status').html('Status: Error while Downlaoding Files from server.');"
-                "document.getElementById('loader').style.display = 'none';"
-                "document.getElementById('myDiv').style.display = 'block';"
-            "}"
-          "});"
-"};"
-"</script>"
-"<form action='/'><button type='submit'>Back</button></form>";
-
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
     Serial.printf("Listing directory: %s\r\n", dirname);
 
@@ -426,126 +266,14 @@ void testFileIO(fs::FS &fs, const char * path){
     }
 }
 
-//String printDirectory(File dir, int numTabs) {
-/*String printDirectory(fs::FS &fs, int numTabs) {
-  String response = "";
-  String dirname = "/";
-  File dir = fs.open(dirname);
-  while(true) {
-     File entry =  dir.openNextFile();
-     if (! entry) {
-       // no more files
-       Serial.println("**nomorefiles**");
-       break;
-     }
-     for (uint8_t i=0; i<numTabs; i++) {
-       Serial.print('\t');   // we'll have a nice indentation
-     }
-     // Recurse for directories, otherwise print the file size
-     if (entry.isDirectory()) {
-       printDirectory(fs, numTabs+1);
-     } else {
-       response += String("<a href='") + String(entry.name()) + String("'>") + String(entry.name()) + String("</a>") + String("</br>");
-     }
-     entry.close();
-   }
-   return String("List files:</br>") + response + String("</br></br> Upload file:") + serverIndex;
-}*/
+/*DynamicJsonDocument getMyDirAsJson(fs::FS &fs, const char * dirname, uint8_t levels){
+    //response += "<th>Type</th><th>Name</th><th>Size</th><th>LAST WRITE</th></tr>";
+    String response = "";
+    DynamicJsonDocument json_Dir(8048);
+    json_Dir["Device"]["Type"] = String(actconf.devname);
+    json_Dir["Device"]["CopyRights"] = String(actconf.crights);
+    //json_Dir.add("Filename") = ;
 
-String handleRoot(fs::FS &fs, const char * dirname, uint8_t levels){
-    String response = String("<!DOCTYPE html>") +
-    String("<html>") +
-    String("<head>") +
-    String("<title>LoRa Boat Monitor</title>") +
-    String("<link rel='stylesheet' type='text/css' href='/styles.css'>") +
-    String("<meta http-equiv='content-type' content='text/html; charset=UTF-8'>") +
-    String("<meta name=viewport content='width=device-width, initial-scale=1'>");
-  
-    //response += "<link rel='stylesheet' type='text/css' href='/css'>";
-    response += String("<style>") +
-                    String("table {") +
-                    String("font-family: arial, sans-serif;") +
-                    String("border-collapse: collapse;") +
-                    String("width: 100%;") +
-                    String("}") +
-                    String("td, th {") +
-                    String("border: 1px solid #dddddd;") +
-                    String("text-align: left;") +
-                    //String("padding: 8px;") +
-                    String("}") +
-                    String("tr:nth-child(even) {") +
-                    String("/*background-color: #dddddd;*/") +
-                    String("}") +
-
-                    String("/* Center the loader */") +
-String("#loader {") +
-    String("position: absolute;") +
-    String("left: 50%;") +
-    String("top: 50%;") +
-    String("z-index: 1;") +
-    String("width: 120px;") +
-    String("height: 120px;") +
-    String("margin: -76px 0 0 -76px;") +
-    String("border: 16px solid #f3f3f3;") +
-    String("border-radius: 50%;") +
-    String("border-top: 16px solid #3498db;") +
-    String("-webkit-animation: spin 2s linear infinite;") +
-    String("animation: spin 2s linear infinite;") +
-  String("}") +
-  
-  String("@-webkit-keyframes spin {") +
-    String("0% { -webkit-transform: rotate(0deg); }") +
-    String("100% { -webkit-transform: rotate(360deg); }") +
-  String("}") +
-  
-  String("@keyframes spin {") +
-    String("0% { transform: rotate(0deg); }") +
-    String("100% { transform: rotate(360deg); }") +
-  String("}") +
-  
-  String("/* Add animation to 'page content' */") +
-  String(".animate-bottom {") +
-    String("position: relative;") +
-    String("-webkit-animation-name: animatebottom;") +
-    String("-webkit-animation-duration: 1s;") +
-    String("animation-name: animatebottom;") +
-    String("animation-duration: 1s") +
-  String("}") +
-  
-  String("@-webkit-keyframes animatebottom {") +
-    String("from { bottom:-100px; opacity:0 } ") +
-    String("to { bottom:0px; opacity:1 }") +
-  String("}") +
-  
-  String("@keyframes animatebottom { ") +
-    String("from{ bottom:-100px; opacity:0 } ") +
-    String("to{ bottom:0; opacity:1 }") +
-  String("}") +
-  
-  String("#myDiv {") +
-    String("display: none;") +
-    String("/*text-align: center;*/") +
-  String("}") +
-                String("</style>");
-    response += String("</head><body>");
-
-    response += String("<h2>LoRa Boat Monitor</h2>");
-    response += String(String(actconf.crights) + ", " + String(actconf.fversion) + ", CQ: " + String(wlanquality()) + "<data id='quality'></data> %");
-    response += String("<hr align='left'>");
-    response += String("<h3>");
-    response += String("<blink>");
-    response += String("<data id='info'></data>");
-    response += String("</blink>");
-    response += String("</h3>");
-    response += String("<div id='loader'></div>");
-    response += String("<div style='display:none;' id='myDiv' class='animate-bottom'>");
-    //Serial.printf("Listing directory: %s\r\n", dirname);
-    response += "Listing directory: ";
-    response += dirname;
-    response += "<br><br>";
-    response += "<table><tr>";
-    response += "<th>Type</th><th>Name</th><th>Size</th><th>LAST WRITE</th></tr>";
-    
     File root = fs.open(dirname);
     if(!root){
         Serial.println("- failed to open directory");
@@ -602,7 +330,71 @@ String("#loader {") +
         file = root.openNextFile();
     }
     response += "</table>";
-    return response + String("</br></br> Upload file:") + serverIndex + "</body></html>";
+    return json_Dir;
+}*/
+
+String getMyDirAsString(fs::FS &fs, const char * dirname, uint8_t levels){
+    String response = "";
+    response += "Listing directory: " + (String)dirname + "<br><br>";
+    response += "<table><tr><th>Type</th><th>Name</th><th>Size</th><th>LAST WRITE</th></tr>";
+
+    File root = fs.open(dirname);
+    if(!root){
+        Serial.println("- failed to open directory");
+        response += "<br>";
+        return "- failed to open directory";
+    }
+    if(!root.isDirectory()){
+        Serial.println(" - not a directory");
+        response += "<br>";
+        return " - not a directory";
+    }
+
+    File file = root.openNextFile();
+    while(file){
+        if(file.isDirectory()){
+            Serial.print("  DIR : ");
+
+            Serial.print(file.name());
+            time_t t= file.getLastWrite();
+            struct tm * tmstruct = localtime(&t);
+            Serial.printf("  LAST WRITE: %d-%02d-%02d %02d:%02d:%02d\n",(tmstruct->tm_year)+1900,( tmstruct->tm_mon)+1, tmstruct->tm_mday,tmstruct->tm_hour , tmstruct->tm_min, tmstruct->tm_sec);
+
+            String timestamp = String((tmstruct->tm_year)+1900) + String("-") + String(( tmstruct->tm_mon)+1) + String("-") + String(tmstruct->tm_mday) + String(" ") + String(tmstruct->tm_hour) + String(":") + String(tmstruct->tm_min) + String(":") + String(tmstruct->tm_sec);
+
+            response += String("<tr>") +
+                        String("<td>Dir</td>") +
+                        String("<td>") + String(file.name()) + String("</td>") +
+                        String("<td>""</td>") +
+                        String("<td>") + timestamp + String("</td>") +
+                        String("</tr>");
+
+            if(levels){
+                listDir(fs, file.name(), levels -1);
+            }
+        } else {
+            Serial.print("  FILE: ");
+            Serial.print(file.name());
+            Serial.print("  SIZE: ");
+
+            Serial.print(file.size());
+            time_t t= file.getLastWrite();
+            struct tm * tmstruct = localtime(&t);
+            Serial.printf("  LAST WRITE: %d-%02d-%02d %02d:%02d:%02d\n",(tmstruct->tm_year)+1900,( tmstruct->tm_mon)+1, tmstruct->tm_mday,tmstruct->tm_hour , tmstruct->tm_min, tmstruct->tm_sec);
+
+            String timestamp = String((tmstruct->tm_year)+1900) + String("-") + String(( tmstruct->tm_mon)+1) + String("-") + String(tmstruct->tm_mday) + String(" ") + String(tmstruct->tm_hour) + String(":") + String(tmstruct->tm_min) + String(":") + String(tmstruct->tm_sec);
+
+            response += String("<tr>") +
+                        String("<td>FILE</td>") +
+                        String("<td><a href='") + String(file.name()) + String("'>") + String(file.name()) + String("</a></td>") +
+                        String("<td>") + file.size() + String("</td>") +
+                        String("<td>") + timestamp + String("</td>") +
+                        String("</tr>");
+        }
+        file = root.openNextFile();
+    }
+    response += "</table>";
+    return response;
 }
 
 uint32_t startTime;

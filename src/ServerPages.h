@@ -34,8 +34,45 @@ httpServer.on("/index.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   content.replace("%crights%", String(actconf.crights));
   content.replace("%fversion%", String(actconf.fversion));
   if (content == "- failed to open file for reading"){
-    content += handleRoot(LittleFS, "/", 0);
+    //content += initialsetup_html;
+    request->redirect("/initialsetup.html");
+  } else {
+    //httpServer.sendHeader("Cache-Control", "no-cache");
+    //httpServer.send(200, "text/html", content);
+    //request->send(LittleFS, "/main.html", "text/html");
+    request->send(200, "text/html", content);
   }
+});
+
+httpServer.on("/initialsetup.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+  //String content = readFile2(LittleFS, "/main.html");
+  String content = initialsetup_html;
+  content.replace("%devname%", String(actconf.devname));
+  content.replace("%crights%", String(actconf.crights));
+  content.replace("%fversion%", String(actconf.fversion));
+  content.replace("%wificonfig%", wificonfig_hmtl);
+  content.replace("%cssid%", String(actconf.cssid));
+  content.replace("%cpassword%", String(actconf.cpassword));
+  content.replace("%tabelle%", getMyDirAsString(LittleFS, "/", 0));
+
+  //httpServer.sendHeader("Cache-Control", "no-cache");
+  //httpServer.send(200, "text/html", content);
+  //request->send(LittleFS, "/main.html", "text/html");
+  request->send(200, "text/html", content);
+});
+
+httpServer.on("/filesystem.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+  //String content = readFile2(LittleFS, "/main.html");
+  String content = initialsetup_html;
+  content.replace("%devname%", String(actconf.devname));
+  content.replace("%crights%", String(actconf.crights));
+  content.replace("%fversion%", String(actconf.fversion));
+  content.replace("%cssid%", String(actconf.cssid));
+  content.replace("%cpassword%", String(actconf.cpassword));
+
+  content.replace("%wificonfig%", "");
+  content.replace("%tabelle%", getMyDirAsString(LittleFS, "/", 0));
+
   //httpServer.sendHeader("Cache-Control", "no-cache");
   //httpServer.send(200, "text/html", content);
   //request->send(LittleFS, "/main.html", "text/html");
@@ -973,15 +1010,6 @@ httpServer.on("/MD5", HTTP_GET, [](AsyncWebServerRequest *request) {
   //httpServer.sendHeader("Cache-Control", "no-cache");
   //httpServer.send(200, "text/javascript", content);
   request->send(200, "text/javascript", content);
-});
-
-// Use no cash because the js was permanently modifyed (transaction ID)
-httpServer.on("/filesystem.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-  Serial.print("http request");
-  String content = handleRoot(LittleFS, "/", 0);
-  //httpServer.sendHeader("Cache-Control", "no-cache");
-  //httpServer.send(200, "text/html", content);
-  request->send(200, "text/html", content);
 });
 
 // Firmware update

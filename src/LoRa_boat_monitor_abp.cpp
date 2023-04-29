@@ -84,6 +84,9 @@ configData actconf;             // Actual configuration, Global variable
 #include "task.h"               // Task for LoRa code
 #include "filesystem.h"         // Function for filesystem
 
+#include "initialsetup_html.h"
+#include "wificonfig_html.h"
+
 // Declarations
 int value;                      // Value from first byte in EEPROM
 int empty;                      // If EEPROM empty without configutation then set to 1 otherwise 0
@@ -567,8 +570,6 @@ void state1(){
     DownloadFilesFromWeb(actconf.fversion);
     runDownloadingFiles = false;
   }
-
-  Serial.println("loop ");
 
   if(reboot){
     DebugPrintln(3, "Reboot");
