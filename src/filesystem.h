@@ -457,7 +457,7 @@ String handleRoot(fs::FS &fs, const char * dirname, uint8_t levels){
     String("<html>") +
     String("<head>") +
     String("<title>LoRa Boat Monitor</title>") +
-    String("<link rel='stylesheet' type='text/css' href='/css'>") +
+    String("<link rel='stylesheet' type='text/css' href='/styles.css'>") +
     String("<meta http-equiv='content-type' content='text/html; charset=UTF-8'>") +
     String("<meta name=viewport content='width=device-width, initial-scale=1'>");
   

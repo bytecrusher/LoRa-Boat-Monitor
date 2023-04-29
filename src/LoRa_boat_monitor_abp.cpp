@@ -37,7 +37,6 @@
 #include <Arduino.h>            // Arduino Environment
 #include <WiFi.h>               // WiFi lib with TCP server and client
 #include <WiFiClient.h>         // WiFi lib for clients
-//#include <WebServer.h>          // WebServer lib
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 
@@ -99,12 +98,6 @@ AsyncWebServer httpServer(actconf.httpport);
 MDNSResponder mdns;                       // Activate DNS responder
 WiFiServer server(actconf.dataport);      // Declare WiFi NMEA server port
 
-//*******************
-//char destinationserver[] = "derguntmar.de";    // name address for Google (using DNS)
-//const char* server = "www.google.com"; // This should not be changed
-//WiFiClient client;
-//*******************
-
 Ticker Timer1;                  // Declare Timer for GPS data reading
 Ticker Timer2;                  // Declare Timer for relay ontime
 Ticker Timer3;                  // Declare Timer for NMEA sending
@@ -114,8 +107,12 @@ Ticker Timer3;                  // Declare Timer for NMEA sending
 RTC_DATA_ATTR int bootCount = 0;
 RTC_DATA_ATTR uint loraCount = 0;
 
+//SET_LOOP_TASK_STACK_SIZE(16*1024); // 16KB
+
 const int STATE_DELAY = 1000;
 int randomState = 0;
+
+bool reboot = false;
 
 StateMachine machine = StateMachine();
 int loopcounter = 0;
@@ -229,6 +226,7 @@ void enableWiFi(){
       DebugPrintln(3, "");
 
       #include "ServerPages.h"    // Webserver pages request functions
+      //handlewebserverresponse(httpServer, actconf, runDownloadingFiles);
       
       // Connect to WiFi network
       DebugPrint(3, "Connecting WiFi client to ");
@@ -570,6 +568,13 @@ void state1(){
     runDownloadingFiles = false;
   }
 
+  Serial.println("loop ");
+
+  if(reboot){
+    DebugPrintln(3, "Reboot");
+    ESP.restart(); // Restart ESP32
+  }
+
   loopcounter++;
 }
 
@@ -881,41 +886,10 @@ void setup() {
   readValues();     // initial read after boot, to get the status of alarm pin.
 
   enableWiFi();     // temp here
-  //-------------------------------
   if(!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED)){
         Serial.println("LittleFS Mount Failed");
         return;
     }
-    
-  //  listDir(LittleFS, "/", 0);
-	//createDir(LittleFS, "/mydir");
-	//writeFile(LittleFS, "/mydir/hello2.txt", "Hello2");
-  //writeFile(LittleFS, "/mydir/newdir2/newdir3/hello3.txt", "Hello3");
-    //writeFile2(LittleFS, "/mydir/newdir2/newdir3/hello3.txt", "Hello3");
-	//listDir(LittleFS, "/", 3);
-	//deleteFile(LittleFS, "/mydir/hello2.txt");
-  //deleteFile(LittleFS, "/mydir/newdir2/newdir3/hello3.txt");
-    //deleteFile2(LittleFS, "/mydir/newdir2/newdir3/hello3.txt");
-	//removeDir(LittleFS, "/mydir");
-	//listDir(LittleFS, "/", 3);
-    //writeFile(LittleFS, "/hello.txt", "Hello ");
-    //appendFile(LittleFS, "/hello.txt", "World!\r\n");
-    //readFile(LittleFS, "/hello.txt");
-    //renameFile(LittleFS, "/hello.txt", "/foo.txt");
-    //readFile(LittleFS, "/foo.txt");
-    //deleteFile(LittleFS, "/foo.txt");
-    //testFileIO(LittleFS, "/test.txt");
-    //deleteFile(LittleFS, "/test.txt");
-	
-    //Serial.println( "Test complete" );
-    //-------------------------------
-
-  //DownloadFilesFromFtp();
-
-    // Route for root index.html
-  /*httpServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send(LittleFS, "/main.html", "text/html"); });*/
-    
 }
 
 void loop() {

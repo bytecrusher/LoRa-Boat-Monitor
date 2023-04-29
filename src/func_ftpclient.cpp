@@ -23,8 +23,8 @@ void DownloadFilesFromFtp(char *fversion)
   getFileFromFtp("error.html");
   getFileFromFtp("favicon.ico");
   getFileFromFtp("firmware.html");
-  getFileFromFtp("js.js");
-  getFileFromFtp("json.json");
+  getFileFromFtp("app.js");
+  //getFileFromFtp("json.json");
   getFileFromFtp("lora.html");
   getFileFromFtp("main.html");
   getFileFromFtp("md5.js");

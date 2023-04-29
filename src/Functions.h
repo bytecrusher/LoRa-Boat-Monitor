@@ -125,13 +125,14 @@ void eraseEEPROMConfig(configData cfg) {
 
 void saveEEPROMConfig(configData cfg) {
   // Save configuration from RAM into EEPROM
-  noInterrupts();                       // Stop all interrupts important for writing in EEPROM
+  //noInterrupts();                       // Stop all interrupts important for writing in EEPROM
   EEPROM.begin(sizeEEPROM);
   EEPROM.put( cfgStart, cfg );
   delay(200);
   EEPROM.commit();                      // Only needed for ESP8266 to get data written
   EEPROM.end();                         // Free RAM copy of structure
-  interrupts();                         // Activate all interrupts
+  //interrupts();                         // Activate all interrupts
+  DebugPrintln(3, "New settings saved in EEPROM");
 }
 
 configData loadEEPROMConfig() {
@@ -209,10 +210,13 @@ int HexToInt(char str[])
 int getindex(String data[], String compare){
   // For all array elements
   for(int i=0; data[i].length() != 0; i++){
-    DebugPrint(3, i);
-    DebugPrint(3, " : ");
-     DebugPrintln(3, data[i]);
+    //DebugPrint(3, i);
+    //DebugPrint(3, " : ");
+    //DebugPrintln(3, data[i]);
     if(data[i] == compare){
+      DebugPrint(3, i);
+      DebugPrint(3, " : ");
+      DebugPrintln(3, data[i]);
       return i; 
     }
   }
@@ -397,7 +401,8 @@ uint16_t float4int(float value){
 // Flash LED for x ms
 void flashLED(int duration){
  digitalWrite(ledPin, HIGH);   // On (High activ)
- delay(duration);
+ //delay(duration);
+ vTaskDelay(duration);
  digitalWrite(ledPin, LOW);    // Off
 }
 

@@ -3,16 +3,18 @@
 
 <head>
     <title>Settings %devname%</title>
-    <link rel='stylesheet' type='text/css' href='/css'>
+    <link rel='stylesheet' type='text/css' href='/styles.css'>
     <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
     <meta name=viewport content='width=device-width, initial-scale=1'>
     <style type='text/css'>
         select {
             width: 150px;
+            /*width: 300px;*/
         }
 
         input {
             width: 145px;
+            /*width: 292px;*/
         }
     </style>
     <script>
@@ -141,13 +143,12 @@
 <body onload='setSelections();'>
     <h2>%devname%</h2>
     %crights%, %fversion%, CQ: %quality% %
-    <hr align='left'>
+    <hr>
 
     <div id="loader"></div>
     <div style="display:none;" id="myDiv" class="animate-bottom">
-    <form id='form1' name='SetForm' method='get' action='settings'>
+    <form id='form1' name='SetForm' method='get' action='savesettings'>
         <table>
-
             <tr>
                 <td>
                     <h3>Password Settings</h3>
@@ -310,7 +311,7 @@
                 <td></td>
             </tr>
 
-            /*
+            <!--/*
             // Target platform as C library
             typedef uint8_t bit_t;
             typedef uint8_t u1_t;
@@ -321,7 +322,7 @@
             typedef int32_t s4_t;
             typedef unsigned int uint;
             typedef const char* str_t;
-            */
+            */-->
 
             <tr>
                 <td>Device Address</td>
@@ -700,7 +701,7 @@
         <input type='hidden' required name='password' size='20' value='%userpassword%' maxlength='20'>
     </form>
     <br>
-    <hr align='left'>
+    <hr>
     <br>
     <!--form id='form2' action='http://192.168.4.1/settings'>
   

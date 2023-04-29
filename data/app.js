@@ -101,7 +101,7 @@ xmlhttp.onreadystatechange = function () {
 
 function read_json() {
   //xmlhttp.open('GET', 'http://192.168.4.1/json', true);
-  xmlhttp.open('GET', '/json', true);
+  xmlhttp.open('GET', '/data.json', true);
   xmlhttp.send();
 }
 

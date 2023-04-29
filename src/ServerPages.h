@@ -1,47 +1,13 @@
 // Server pages
 // Insert this library after server definition
 
-/*httpServer.on("/update", HTTP_GET, [] (AsyncWebServerRequest *request) {
-  String inputMessage1;
-  String inputMessage2;
-  // GET input1 value on <ESP_IP>/update?output=<inputMessage1>&state=<inputMessage2>
-  if (request->hasParam(PARAM_INPUT_1) && request->hasParam(PARAM_INPUT_2)) {
-    inputMessage1 = request->getParam(PARAM_INPUT_1)->value();
-    inputMessage2 = request->getParam(PARAM_INPUT_2)->value();
-    digitalWrite(inputMessage1.toInt(), inputMessage2.toInt());
-  }
-  else {
-    inputMessage1 = "No message sent";
-    inputMessage2 = "No message sent";
-  }
-  Serial.print("GPIO: ");
-  Serial.print(inputMessage1);
-  Serial.print(" - Set to: ");
-  Serial.println(inputMessage2);
-  request->send(200, "text/plain", "OK");
-});*/
-
-// Route for root / web page
-  /*server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/html", index_html, processor);
-  });*/
-
-  // Route for root index.html
-  //httpServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-  //  request->send(LittleFS, "/main.html", "text/html");
-  //});
-
 httpServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-//httpServer.on("/2", []() {
   // Read all received get arguments and save in a array
-  //int num = httpServer.args();
   int num = request->args();
   String vname[num];
   String value[num];
   for (int i = 0; i < num; i++) {
-    //vname[i] = httpServer.argName(i);
     vname[i] = request->argName(i);
-    //value[i] = httpServer.arg(i);
     value[i] = request->arg(i);
     // Check the return value from Restart web page
     if(vname[i] == "restart" &&  value[i] == "1"){
@@ -51,7 +17,18 @@ httpServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
       resetESP = 0;
     }
   }
+  request->redirect("/index.html");
 
+  // Restart routine
+  if(resetESP == 1){
+    delay(3000); // Waiting time for system restart
+    resetESP = 0;
+    // Restart the ESP32
+    ESP.restart();
+  }
+});
+
+httpServer.on("/index.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   String content = readFile2(LittleFS, "/main.html");
   content.replace("%devname%", String(actconf.devname));
   content.replace("%crights%", String(actconf.crights));
@@ -63,32 +40,10 @@ httpServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
   //httpServer.send(200, "text/html", content);
   //request->send(LittleFS, "/main.html", "text/html");
   request->send(200, "text/html", content);
-
-  // Restart routine
-  if(resetESP == 1){
-    delay(3000); // Waiting time for system restart
-    resetESP = 0;
-    // Restart the ESP32
-    ESP.restart();
-  }
 });
 
-/*httpServer.on("/test.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-//httpServer.on("/test.html", []() {
-  Serial.print(ESP.getFreeHeap());
-  Serial.print(ESP.getMaxAllocHeap());
-  String content = readFile2(LittleFS, "/test.html");
-  //httpServer.sendHeader("Cache-Control", "no-cache");
-  //httpServer.send(200, "text/html", content);
-  request->send(200, "text/html", content);
-  Serial.print(ESP.getFreeHeap());
-  Serial.print(ESP.getMaxAllocHeap());
-});*/
-
-httpServer.on("/sensorv", HTTP_GET, [](AsyncWebServerRequest *request) {
-//httpServer.on("/sensorv", []() {
+httpServer.on("/sensorv.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   // Send page
-  //String content = Sensorv();
   String content = readFile2(LittleFS, "/sensorv.html");
   content.replace("%devname%", String(actconf.devname));
   content.replace("%crights%", String(actconf.crights));
@@ -169,10 +124,8 @@ httpServer.on("/sensorv", HTTP_GET, [](AsyncWebServerRequest *request) {
   request->send(200, "text/html", content);
 });
 
-httpServer.on("/lora", HTTP_GET, [](AsyncWebServerRequest *request) {
-//httpServer.on("/lora", []() {
+httpServer.on("/lora.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   // Send page
-  //String content = Lora();
   String content = readFile2(LittleFS, "/lora.html");
 
   content.replace("%devname%", String(actconf.devname));
@@ -183,25 +136,17 @@ httpServer.on("/lora", HTTP_GET, [](AsyncWebServerRequest *request) {
   request->send(200, "text/html", content);
 });
 
-httpServer.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
-//httpServer.on("/settings", []() {
+httpServer.on("/savesettings", HTTP_GET, [](AsyncWebServerRequest *request) {
   // Read all received get arguments and save in a array
-  //int num = httpServer.args();
   int num = request->args();
   String vname[num];
   String value[num];
   for (int i = 0; i < num; i++) {
-    //vname[i] = httpServer.argName(i);
-    //value[i] = httpServer.arg(i);  
     vname[i] = request->argName(i);
     value[i] = request->arg(i);  
   } 
-  // Send page
-  //String content = Settings(num, vname, value);
-  String content = "";
-
   String hash = "";
-  bool reboot = false;
+//  bool reboot = false;
   
   // Print all received get arguments
   for (int i = 0; i < num; i++)
@@ -418,6 +363,14 @@ httpServer.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
     DebugPrintln(3, "Reboot");
     ESP.restart(); // Restart ESP32
   }
+  //request->send(200, "text/plain", "OK");
+  request->redirect("/settings.html");
+});
+
+httpServer.on("/settings.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+  // Send page
+  String hash = "";
+  String content = "";
   // Check page password
  if(actconf.crypt == 1 && (hash.length() == 0 || hash != cryptPassword(String(actconf.password)))){
    // Generate a new transaction ID
@@ -432,7 +385,8 @@ httpServer.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
     content.replace("%devname%", String(actconf.devname));
     content.replace("%crights%", String(actconf.crights));
     content.replace("%fversion%", String(actconf.fversion));
-    content.replace("%cssid%", WiFi.localIP().toString());
+    content.replace("%cssid%", String(actconf.cssid));
+    //content.replace("%cssid%", WiFi.localIP().toString());
     content.replace("%cpassword%", String(actconf.cpassword));
     content.replace("%password%", String(actconf.password));
     content.replace("%quality%", String(int(quality)));
@@ -452,7 +406,8 @@ httpServer.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
     content.replace("%lchannel%", String(getindex(lchannel, String(actconf.lchannel))));
     content.replace("%spreadf%", String(getindex(spreadf, String(actconf.spreadf))));
     content.replace("%dynsf%", String(getindex(dynsf, String(actconf.dynsf))));
-    content.replace("%tinterval%", String(getindex(dynsf, String(actconf.tinterval))));
+    //content.replace("%tinterval%", String(getindex(dynsf, String(actconf.tinterval))));
+    content.replace("%tinterval%", String(actconf.tinterval));
     content.replace("%relay%", String(getindex(relay, String(actconf.relay))));
 
     String mystring = String(actconf.devaddr, HEX);
@@ -461,14 +416,18 @@ httpServer.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
     content.replace("%devaddr%", String(devaddr));
 
     String nskey = "";
+    Serial.print("nskey: ");
     for (int i = 0; i < 16; i++){
       String mystring = String(actconf.nskey[i], HEX);
+      Serial.print(mystring);
       if(mystring.length() == 1){
         mystring = "0" + mystring;
       }
       mystring.toUpperCase();
-      nskey = mystring;
+      nskey += mystring;
     }
+    Serial.print(", komplett: ");
+    Serial.println(nskey);
     content.replace("%nskey%", String(nskey));
 
     String appkey = "";
@@ -478,7 +437,7 @@ httpServer.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
         mystring = "0" + mystring;
       }
       mystring.toUpperCase();
-      appkey = mystring;
+      appkey += mystring;
     }
     content.replace("%appkey%", String(appkey));
 
@@ -539,16 +498,12 @@ httpServer.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
   request->send(200, "text/html", content);
 });
 
-httpServer.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
-//httpServer.on("/restart", []() {
+httpServer.on("/restart.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   // Read all received get arguments and save in a array
-  //int num = httpServer.args();
   int num = request->args();
   String vname[num];
   String value[num];
   for (int i = 0; i < num; i++) {
-    //vname[i] = httpServer.argName(i);
-    //value[i] = httpServer.arg(i);
     vname[i] = request->argName(i);
     value[i] = request->arg(i);
   } 
@@ -587,16 +542,12 @@ httpServer.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
   request->send(200, "text/html", content);
 });
 
-httpServer.on("/firmware", HTTP_GET, [](AsyncWebServerRequest *request) {
-//httpServer.on("/firmware", []() {
+httpServer.on("/firmware.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   // Read all received get arguments and save in a array
-  //int num = httpServer.args();
   int num = request->args();
   String vname[num];
   String value[num];
   for (int i = 0; i < num; i++) {
-    //vname[i] = httpServer.argName(i);
-    //value[i] = httpServer.arg(i);  
     vname[i] = request->argName(i);
     value[i] = request->arg(i);  
   } 
@@ -636,8 +587,7 @@ httpServer.on("/firmware", HTTP_GET, [](AsyncWebServerRequest *request) {
   request->send(200, "text/html", content);
 });
 
-httpServer.on("/devinfo", HTTP_GET, [](AsyncWebServerRequest *request) {
-//httpServer.on("/devinfo", []() {
+httpServer.on("/devinfo.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   String content = readFile2(LittleFS, "/devinfo.html");
   content.replace("%devname%", String(actconf.devname));
   content.replace("%crights%", String(actconf.crights));
@@ -697,15 +647,16 @@ httpServer.on("/devinfo", HTTP_GET, [](AsyncWebServerRequest *request) {
 });
 
 httpServer.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request) {
-//httpServer.on("/favicon.ico", []() {
+  uint32_t start = millis();
   String content = readFile2(LittleFS, "/favicon.ico");
-  //httpServer.sendHeader("Cache-Control", "max-age=600");
-  //httpServer.send(200, "image/svg+xml", content);
-  request->send(200, "image/svg+xml", content);
+  AsyncWebServerResponse *response = request->beginResponse(200, "image/svg+xml", content);
+  response->addHeader("Cache-Control", "max-age=600");
+  request->send(response);
+  uint32_t end = millis() - start;
+  Serial.printf("facivon.ico sending takes: %u ms\r\n", end);
 });
 
-httpServer.on("/css", HTTP_GET, [](AsyncWebServerRequest *request) {
-//httpServer.on("/css", []() {
+httpServer.on("/styles.css", HTTP_GET, [](AsyncWebServerRequest *request) {
   String content = "";
    // Style activation
   switch (style) {
@@ -725,21 +676,21 @@ httpServer.on("/css", HTTP_GET, [](AsyncWebServerRequest *request) {
     // Day style white
     content = readFile2(LittleFS, "/css_white.css");
   }
-  //httpServer.sendHeader("Cache-Control", "max-age=1");
-  //httpServer.send(200, "text/css", content);
-  request->send(200, "text/css", content);
+
+  AsyncWebServerResponse *response = request->beginResponse(200, "text/css", content);
+  response->addHeader("Cache-Control", "max-age=100");
+  request->send(response);
+  //request->send(200, "text/css", content);
 });
 
-httpServer.on("/js", HTTP_GET, [](AsyncWebServerRequest *request) {
-//httpServer.on("/js", []() {
-  String content = readFile2(LittleFS, "/js.js");
-  //httpServer.sendHeader("Cache-Control", "max-age=600");
-  //httpServer.send(200, "text/javascript", content);
-  request->send(200, "text/javascript", content);
+httpServer.on("/app.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+  String content = readFile2(LittleFS, "/app.js");
+  AsyncWebServerResponse *response = request->beginResponse(200, "text/javascript", content);
+  response->addHeader("Cache-Control", "max-age=600");
+  request->send(response);
 });
 
-httpServer.on("/json", HTTP_GET, [](AsyncWebServerRequest *request) {
-//httpServer.on("/json", []() {
+httpServer.on("/data.json", HTTP_GET, [](AsyncWebServerRequest *request) {
   //unsigned long previousMillis = 0;
   //unsigned long elapsedMillis = 0;
   //previousMillis = millis();
@@ -925,11 +876,10 @@ httpServer.on("/json", HTTP_GET, [](AsyncWebServerRequest *request) {
 });
 
 httpServer.on("/json_old", HTTP_GET, [](AsyncWebServerRequest *request) {
-//httpServer.on("/json_old", []() {
   unsigned long previousMillis = 0;
   unsigned long elapsedMillis = 0;
   previousMillis = millis();
-  String content = readFile2(LittleFS, "/json.json");
+  String content = readFile2(LittleFS, "/data.json");
 
   content.replace("%devname%", String(actconf.devname));
   content.replace("%lorafrequency%", String(actconf.lorafrequency));
@@ -1018,7 +968,6 @@ httpServer.on("/json_old", HTTP_GET, [](AsyncWebServerRequest *request) {
 
 // Use no cash because the js was permanently modifyed (transaction ID)
 httpServer.on("/MD5", HTTP_GET, [](AsyncWebServerRequest *request) {
-//httpServer.on("/MD5", []() {
   String content = readFile2(LittleFS, "/md5.js");
   content.replace("%transactionID%", String(transactionID));
   //httpServer.sendHeader("Cache-Control", "no-cache");
@@ -1027,10 +976,8 @@ httpServer.on("/MD5", HTTP_GET, [](AsyncWebServerRequest *request) {
 });
 
 // Use no cash because the js was permanently modifyed (transaction ID)
-//httpServer.on("/filesystem2", HTTP_POST, [](AsyncWebServerRequest *request) {
-  httpServer.on("/filesystem", HTTP_GET, [](AsyncWebServerRequest *request) {
+httpServer.on("/filesystem.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   Serial.print("http request");
-//httpServer.on("/filesystem", []() {
   String content = handleRoot(LittleFS, "/", 0);
   //httpServer.sendHeader("Cache-Control", "no-cache");
   //httpServer.send(200, "text/html", content);
@@ -1098,7 +1045,6 @@ httpServer.on("/MD5", HTTP_GET, [](AsyncWebServerRequest *request) {
   });*/
 
 httpServer.on("/formatfs", HTTP_POST, [](AsyncWebServerRequest *request) {
-//httpServer.on("/formatfs", []() {
   formatfs(LittleFS);
   //httpServer.sendHeader("Cache-Control", "no-cache");
   //httpServer.send(200, "text/html", "done");
@@ -1106,7 +1052,6 @@ httpServer.on("/formatfs", HTTP_POST, [](AsyncWebServerRequest *request) {
 });
 
 httpServer.on("/updatefiles", HTTP_POST, [](AsyncWebServerRequest *request) {
-//httpServer.on("/updatefiles", []() {
   //DownloadFilesFromFtp(actconf.fversion);
   //DownloadFilesFromWeb(actconf.fversion);
   runDownloadingFiles = true;
@@ -1116,7 +1061,6 @@ httpServer.on("/updatefiles", HTTP_POST, [](AsyncWebServerRequest *request) {
 });
 
 httpServer.on("/updatefilesstatus", HTTP_GET, [](AsyncWebServerRequest *request) {
-//httpServer.on("/updatefiles", []() {
   //DownloadFilesFromFtp(actconf.fversion);
   //DownloadFilesFromWeb(actconf.fversion);
   String test = (String)runDownloadingFiles;
@@ -1131,7 +1075,5 @@ httpServer.onNotFound([](AsyncWebServerRequest *request){
   content.replace("%crights%", String(actconf.crights));
   content.replace("%fversion%", String(actconf.fversion));
   content.replace("%wlanquality%", String(wlanquality()));
-  //httpServer.send(404, "text/html", content);
   request->send(404, "text/html", content);
-  //request->send(404, "text/plain", "The content you are looking for was not found.");
 });

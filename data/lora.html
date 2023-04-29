@@ -3,7 +3,7 @@
 
 <head>
     <title>LoRa Info</title>
-    <link rel='stylesheet' type='text/css' href='/css'>
+    <link rel='stylesheet' type='text/css' href='/styles.css'>
     <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
     <meta name=viewport content='width=device-width, initial-scale=1'>
     <style>
@@ -41,7 +41,7 @@
         };
         function read_json() {
             //xmlhttp.open('GET', 'http://192.168.4.1/json', true);
-            xmlhttp.open('GET', '/json', true);
+            xmlhttp.open('GET', '/data.json', true);
             xmlhttp.send();
         }
         setInterval(function () { read_json(); }, 1000);
@@ -49,9 +49,9 @@
 
     <h2>%devname%</h2>
     %crights%, %fversion%, CQ: <data id='quality'></data>%
-    <hr align='left'>
+    <hr>
 
-    <h3>LoRa Info <blink><data id='info'></data></blink>
+    <h3>LoRa Info <data class="blink" id='info'></data>
     </h3>
     <FONT SIZE='4'>
         <table>
@@ -182,7 +182,7 @@
             </tr>
         </table>
     </FONT><br>
-    <hr align='left'>
+    <hr>
 
     <br>
     <form action='/'><button type='submit'>Back</button></form>
