@@ -912,97 +912,6 @@ httpServer.on("/data.json", HTTP_GET, [](AsyncWebServerRequest *request) {
   //Serial.println(elapsedMillis);
 });
 
-httpServer.on("/json_old", HTTP_GET, [](AsyncWebServerRequest *request) {
-  unsigned long previousMillis = 0;
-  unsigned long elapsedMillis = 0;
-  previousMillis = millis();
-  String content = readFile2(LittleFS, "/data.json");
-
-  content.replace("%devname%", String(actconf.devname));
-  content.replace("%lorafrequency%", String(actconf.lorafrequency));
-  content.replace("%crights%", String(actconf.crights));
-  content.replace("%fversion%", String(actconf.fversion));
-  content.replace("%wlanquality%", String(wlanquality()));
-  content.replace("%license%", String(actconf.license));
-  content.replace("%getSdkVersion%", String(ESP.getSdkVersion()) );
-  content.replace("%chipId%", String(chipId));
-  content.replace("%getCpuFreqMHz%", String(ESP.getCpuFreqMHz()));
-  content.replace("%getFreeHeap%", String(ESP.getFreeHeap()));
-  content.replace("%hname%", String(hname));
-  String mdnsname = "";
-    if(actconf.mDNS == 1){
-      mdnsname = String(hname) + ".local";
-    }
-    else{
-      mdnsname =F( "not activ");
-    }
-  content.replace("%mdnsname%", mdnsname);
-  content.replace("%serverMode%", String(actconf.serverMode));
-  content.replace("%sssid%", String(actconf.sssid));
-  content.replace("%softAPIP%", WiFi.softAPIP().toString());
-  //content.replace("%WiFichannel%", String(WiFi.channel()));
-  //content.replace("%WiFichannel%", String(actconf.cssid));
-  content.replace("%cssid%", WiFi.localIP().toString());
-  content.replace("%fieldstrength%", String(fieldstrength));
-  content.replace("%quality%", String(quality));
-  String mystring = String(actconf.devaddr, HEX);
-  mystring.toUpperCase();
-  content.replace("%devaddr%", mystring);
-  content.replace("%txChnl%", String(LMIC.txChnl));
-  content.replace("%sf%", String(sf));
-  content.replace("%slot%", String(slot));
-  content.replace("%seqnoUp%", String(LMIC.seqnoUp - 1));
-
-  content.replace("%latitude%", String(latitude, 6));
-  content.replace("%latitudeNS%", String(latitudeNS));
-  content.replace("%longitude%", String(longitude, 6));
-  content.replace("%longitudeEW%", String(longitudeEW));
-  content.replace("%gpsspeed%", String(gpsspeed));
-  content.replace("%course%", String(course));
-  content.replace("%altitude%", String(altitude, 0));
-  content.replace("%voltage%", String(voltage, 3));
-  content.replace("%capacity%", String(capacity, 0));
-  content.replace("%temp1wire%", String(temp1wire, 1));
-  content.replace("%tempUnit%", String(actconf.tempUnit));
-  content.replace("%tank1%", String(tank1, 3));
-  content.replace("%tank1p%", String(tank1p, 0));
-  content.replace("%tank2%", String(tank2, 3));
-  content.replace("%tank2p%", String(tank2p, 0));
-  content.replace("%alarm1%", String(alarm1));
-  content.replace("%relay%", String(actconf.relay));
-  content.replace("%relaytimer%", String(int(relaytimer * 5)));
-  content.replace("%envSensor%", String(actconf.envSensor));
-  content.replace("%standbyMode%", String(actconf.standbyMode));
-  content.replace("%loraStandbyMode%", String(actconf.loraStandbyMode));
-
-  String zhour = firstzero(hour);
-    String zminute = firstzero(minute);
-    String zsecond = firstzero(second);
-    String timestr = "" + String(zhour) + ":" + String(zminute) + ":" + String(zsecond) + "";
-    content.replace("%timestr%", timestr);
-
-    String zday = firstzero(day);
-    String zmonth = firstzero(month);
-    String zyear = firstzero(year);
-    String datestr = "" + String(zday) + "." + String(zmonth) + "." + String(zyear) + "";
-    content.replace("%datestr%", datestr);
-
-    String sunrisestr = "" + String(zhour) + ":" + String(zminute) + ":" + String(zsecond) + "";
-    content.replace("%sunrisestr%", sunrisestr);
-
-    String sunsetstr = "" + String(zhour) + ":" + String(zminute) + ":" + String(zsecond) + "";
-    content.replace("%sunsetstr%", sunsetstr);
-
-  //httpServer.sendHeader("Access-Control-Allow-Origin", "*"); // Needs new browser for CORS (Cross Origin Resource Sharing)
-  //httpServer.sendHeader("Cache-Control", "no-cache");
-  //httpServer.send(200, "application/json", content);
-  request->send(200, "application/json", content);
-
-  elapsedMillis = millis() - previousMillis;
-  Serial.print("Wert Stoppuhr: ");
-  Serial.println(elapsedMillis);
-});
-
 // Use no cash because the js was permanently modifyed (transaction ID)
 httpServer.on("/MD5", HTTP_GET, [](AsyncWebServerRequest *request) {
   String content = readFile2(LittleFS, "/md5.js");
@@ -1012,16 +921,36 @@ httpServer.on("/MD5", HTTP_GET, [](AsyncWebServerRequest *request) {
   request->send(200, "text/javascript", content);
 });
 
+// Use no cash because the js was permanently modifyed (transaction ID)
+httpServer.on("/md5.min.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+  String content = readFile2(LittleFS, "/md5.min.js");
+  content.replace("%transactionID%", String(transactionID));
+  //httpServer.sendHeader("Cache-Control", "no-cache");
+  //httpServer.send(200, "text/javascript", content);
+  request->send(200, "text/javascript", content);
+});
+
+// Use no cash because the js was permanently modifyed (transaction ID)
+httpServer.on("/md5.min.js.map", HTTP_GET, [](AsyncWebServerRequest *request) {
+  String content = readFile2(LittleFS, "/md5.min.js.map");
+  content.replace("%transactionID%", String(transactionID));
+  //httpServer.sendHeader("Cache-Control", "no-cache");
+  //httpServer.send(200, "text/javascript", content);
+  request->send(200, "text/javascript", content);
+});
+
 // Firmware update
+AsyncElegantOTA.begin(&httpServer);    // Start ElegantOTA
+
 /*httpServer.on("/update", HTTP_POST, [](AsyncWebServerRequest *request) {
 //httpServer.on("/update", HTTP_POST, []() {
   //httpServer.sendHeader("Connection", "close");
   //httpServer.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
-  request->send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK"));
+  request->send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
   ESP.restart();
-}, []() {
+}, [](AsyncWebServerRequest *request) {*/
 // Update routine
- HTTPUpload& upload = httpServer.upload();
+ /*HTTPUpload& upload = httpServer.upload();
     if (upload.status == UPLOAD_FILE_START) {
       Serial.printf("Update: %s\n", upload.filename.c_str());
       if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { //start with max available size
@@ -1037,9 +966,17 @@ httpServer.on("/MD5", HTTP_GET, [](AsyncWebServerRequest *request) {
         Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
       } else {
         Update.printError(Serial);
-      }
-    } 
-});*/
+      }*/
+    /*} */
+//});
+
+// run handleUpload function when any file is uploaded
+  /*httpServer.on("/update", HTTP_POST, [](AsyncWebServerRequest *request) {
+        request->send(200);
+      }, handleUpload);*/
+
+//AsyncElegantOTA.begin(&httpServer);    // Start ElegantOTA
+
 
 // run handleUpload function when any file is uploaded
   /*server->on("/upload", HTTP_POST, [](AsyncWebServerRequest *request) {

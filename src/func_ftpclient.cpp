@@ -24,7 +24,6 @@ void DownloadFilesFromFtp(char *fversion)
   getFileFromFtp("favicon.ico");
   getFileFromFtp("firmware.html");
   getFileFromFtp("app.js");
-  //getFileFromFtp("json.json");
   getFileFromFtp("lora.html");
   getFileFromFtp("main.html");
   getFileFromFtp("md5.js");

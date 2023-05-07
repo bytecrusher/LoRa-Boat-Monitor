@@ -299,7 +299,7 @@ String transID(){
 }
 
 String cryptPassword(String password){
-  MD5Builder md5;
+  /*MD5Builder md5;
   md5.begin();
   raw = password + transactionID;
   md5.add(raw);
@@ -315,11 +315,12 @@ String cryptPassword(String password){
   DebugPrint(3, "MD5 Hash: ");
   DebugPrintln(3, md5crypt);
   // Give back the crypted password
-  return md5crypt;
+  return md5crypt;*/
+  return "";
 }
 
 int encryptPassword(String password, String md5hash){
-  MD5Builder md5;
+  /*MD5Builder md5;
   md5.begin();
   raw = password + transactionID;
   md5.add(raw);
@@ -342,7 +343,8 @@ int encryptPassword(String password, String md5hash){
   }
   else{
     return 0;
-  }
+  }*/
+  return 0;
 }
 //**************************************************************************************
 // Clear serial 1 RX buffer
@@ -1161,7 +1163,6 @@ void readValues() {
 
 // Display sensor values on OLED
 void writeDisplay() {
-  
   // Formating display data
   char cnt[10];
   //dtostrf(int(counter16), 5, 0, cnt);
@@ -1398,5 +1399,35 @@ void sendNMEA() {
   // Set data sending flag1
   flag1 = true;
 }
+
+// handles uploads
+void handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+  String logmessage = "Client:" + request->client()->remoteIP().toString() + " " + request->url();
+  Serial.println(logmessage);
+
+  if (!index) {
+    logmessage = "Upload Start: " + String(filename);
+    // open the file on first call and store the file handle in the request object
+    //request->_tempFile = SPIFFS.open("/" + filename, "w");
+    request->_tempFile = LittleFS.open("/" + filename, "w");
+    Serial.println(logmessage);
+  }
+
+  if (len) {
+    // stream the incoming chunk to the opened file
+    request->_tempFile.write(data, len);
+    logmessage = "Writing file: " + String(filename) + " index=" + String(index) + " len=" + String(len);
+    Serial.println(logmessage);
+  }
+
+  if (final) {
+    logmessage = "Upload Complete: " + String(filename) + ",size: " + String(index + len);
+    // close the file handle as the upload is now done
+    request->_tempFile.close();
+    Serial.println(logmessage);
+    request->redirect("/");
+  }
+}
+
 
 #endif

@@ -39,10 +39,11 @@
 #include <WiFiClient.h>         // WiFi lib for clients
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
+#include <AsyncElegantOTA.h>
 
 #include <ESPmDNS.h>            // mDNS lib
 #include <Update.h>             // Web Update server
-#include <MD5Builder.h>         // MD5 lib
+//#include <MD5Builder.h>         // MD5 lib
 #include "driver/adc.h"
 #include <ArduinoJson.h>
 #include <time.h>
@@ -109,8 +110,6 @@ Ticker Timer3;                  // Declare Timer for NMEA sending
 #define TIME_TO_SLEEP  15        /* Time ESP32 will go to sleep (in seconds) */
 RTC_DATA_ATTR int bootCount = 0;
 RTC_DATA_ATTR uint loraCount = 0;
-
-//SET_LOOP_TASK_STACK_SIZE(16*1024); // 16KB
 
 const int STATE_DELAY = 1000;
 int randomState = 0;
@@ -219,6 +218,7 @@ void enableWiFi(){
       DebugPrintln(3, ".local");
 
       // Sart update server
+      DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "http://loraboatmonitorwebserverdata.derguntmar.de");
       httpServer.begin();
       DebugPrint(3, "HTTP Update Server started at port: ");
       DebugPrintln(3, actconf.httpport);
@@ -682,7 +682,7 @@ void setup() {
   DebugPrint(3, actconf.devname);
   DebugPrint(3, " ");
   DebugPrint(3, actconf.fversion);
-  DebugPrintln(3, " (C) Norbert Walter and modified by Guntmar Hoeche");
+  DebugPrintln(3, " (C) Norbert Walter and modified by Guntmar Hoeche (2023)");
   DebugPrintln(3, "******************************************");
   DebugPrintln(3, "");
   DebugPrintln(3, "Modul Type: Heltec LoRa-32");

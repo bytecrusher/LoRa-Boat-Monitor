@@ -16,10 +16,11 @@ void DownloadFilesFromWeb(char *fversion)
     testDownload("favicon.ico", fversion);
     testDownload("firmware.html", fversion);
     testDownload("app.js", fversion);
-    //testDownload("json.json", fversion);
     testDownload("lora.html", fversion);
     testDownload("main.html", fversion);
     testDownload("md5.js", fversion);
+    testDownload("md5.min.js", fversion);
+    testDownload("md5.min.js.map", fversion);
     testDownload("password.html", fversion);
     testDownload("restart.html", fversion);
     testDownload("sensorv.html", fversion);
