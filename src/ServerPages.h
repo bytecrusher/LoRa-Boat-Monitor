@@ -34,18 +34,13 @@ httpServer.on("/index.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   content.replace("%crights%", String(actconf.crights));
   content.replace("%fversion%", String(actconf.fversion));
   if (content == "- failed to open file for reading"){
-    //content += initialsetup_html;
     request->redirect("/initialsetup.html");
   } else {
-    //httpServer.sendHeader("Cache-Control", "no-cache");
-    //httpServer.send(200, "text/html", content);
-    //request->send(LittleFS, "/main.html", "text/html");
     request->send(200, "text/html", content);
   }
 });
 
 httpServer.on("/initialsetup.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-  //String content = readFile2(LittleFS, "/main.html");
   String content = initialsetup_html;
   content.replace("%devname%", String(actconf.devname));
   content.replace("%crights%", String(actconf.crights));
@@ -53,29 +48,30 @@ httpServer.on("/initialsetup.html", HTTP_GET, [](AsyncWebServerRequest *request)
   content.replace("%wificonfig%", wificonfig_hmtl);
   content.replace("%cssid%", String(actconf.cssid));
   content.replace("%cpassword%", String(actconf.cpassword));
+  content.replace("%wifiquality%", String(int(quality)));
   content.replace("%tabelle%", getMyDirAsString(LittleFS, "/", 0));
 
-  //httpServer.sendHeader("Cache-Control", "no-cache");
-  //httpServer.send(200, "text/html", content);
-  //request->send(LittleFS, "/main.html", "text/html");
   request->send(200, "text/html", content);
 });
 
 httpServer.on("/filesystem.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-  //String content = readFile2(LittleFS, "/main.html");
   String content = initialsetup_html;
   content.replace("%devname%", String(actconf.devname));
   content.replace("%crights%", String(actconf.crights));
   content.replace("%fversion%", String(actconf.fversion));
   content.replace("%cssid%", String(actconf.cssid));
   content.replace("%cpassword%", String(actconf.cpassword));
+  content.replace("%wifiquality%", String(int(quality)));
 
   content.replace("%wificonfig%", "");
   content.replace("%tabelle%", getMyDirAsString(LittleFS, "/", 0));
 
-  //httpServer.sendHeader("Cache-Control", "no-cache");
-  //httpServer.send(200, "text/html", content);
-  //request->send(LittleFS, "/main.html", "text/html");
+  content.replace("%FREESPIFFS%", humanReadableSize((LittleFS.totalBytes() - LittleFS.usedBytes())));
+  content.replace("%USEDSPIFFS%", humanReadableSize(LittleFS.usedBytes()));
+  content.replace("%TOTALSPIFFS%", humanReadableSize(LittleFS.totalBytes()));
+  content.replace("%USEDSPIFFSvalue%", String(LittleFS.usedBytes()));
+  content.replace("%TOTALSPIFFSvalue%", String(LittleFS.totalBytes()));
+
   request->send(200, "text/html", content);
 });
 
@@ -168,8 +164,7 @@ httpServer.on("/lora.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   content.replace("%devname%", String(actconf.devname));
   content.replace("%crights%", String(actconf.crights));
   content.replace("%fversion%", String(actconf.fversion));
-  //httpServer.sendHeader("Cache-Control", "max-age=600");
-  //httpServer.send(200, "text/html", content);
+  
   request->send(200, "text/html", content);
 });
 
@@ -355,6 +350,10 @@ httpServer.on("/savesettings", HTTP_GET, [](AsyncWebServerRequest *request) {
     if (vname[i] == "standbyMode") {
       value[i].toCharArray(actconf.standbyMode, 4);
     }
+    if (vname[i] == "standbySleepDuration") {
+      //value[i].toInteger(actconf.standbySleepDuration);
+      actconf.standbySleepDuration = toInteger(value[i]);
+    }
     if (vname[i] == "loraStandbyMode") {
       value[i].toCharArray(actconf.loraStandbyMode, 8);
     }
@@ -400,7 +399,6 @@ httpServer.on("/savesettings", HTTP_GET, [](AsyncWebServerRequest *request) {
     DebugPrintln(3, "Reboot");
     ESP.restart(); // Restart ESP32
   }
-  //request->send(200, "text/plain", "OK");
   request->redirect("/settings.html");
 });
 
@@ -408,26 +406,45 @@ httpServer.on("/settings.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   // Send page
   String hash = "";
   String content = "";
+
+  String inputMessage;
+  String inputParam;
+
+  if (request->hasParam("password")) {
+    inputMessage = request->getParam("password")->value();
+    inputParam = "password";
+    hash = inputMessage;
+    DebugPrintln(3, hash);
+  }
+
   // Check page password
- if(actconf.crypt == 1 && (hash.length() == 0 || hash != cryptPassword(String(actconf.password)))){
-   // Generate a new transaction ID
-   transID();
-   content = readFile2(LittleFS, "/password.html");
-   content.replace("%action%", "settings");
- } else{
-   // Generate a new transaction ID
-   transID();
+  if(actconf.crypt == 1 && (hash.length() == 0 || hash != cryptPassword(String(actconf.password)))){
+    // Generate a new transaction ID
+    transID();
+    DebugPrintln(3, "in pw schleife");
+    DebugPrintln(3, (String(actconf.password)));
+    DebugPrintln(3, cryptPassword(String(actconf.password)));
+    content = readFile2(LittleFS, "/password.html");
+    content.replace("%action%", "settings.html");
+    content.replace("%devname%", String(actconf.devname));
+    content.replace("%crights%", String(actconf.crights));
+    content.replace("%fversion%", String(actconf.fversion));
+    content.replace("%quality%", String(int(quality)));
+
+  } else{
+    // Generate a new transaction ID
+    transID();
     content = readFile2(LittleFS, "/settings.html");
 
     content.replace("%devname%", String(actconf.devname));
     content.replace("%crights%", String(actconf.crights));
     content.replace("%fversion%", String(actconf.fversion));
     content.replace("%cssid%", String(actconf.cssid));
-    //content.replace("%cssid%", WiFi.localIP().toString());
     content.replace("%cpassword%", String(actconf.cpassword));
     content.replace("%password%", String(actconf.password));
     content.replace("%quality%", String(int(quality)));
 
+    content.replace("%hostname%", String(actconf.hostname));
     content.replace("%sssid%", String(actconf.sssid));
     content.replace("%spassword%", String(actconf.spassword));
 
@@ -443,7 +460,6 @@ httpServer.on("/settings.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     content.replace("%lchannel%", String(getindex(lchannel, String(actconf.lchannel))));
     content.replace("%spreadf%", String(getindex(spreadf, String(actconf.spreadf))));
     content.replace("%dynsf%", String(getindex(dynsf, String(actconf.dynsf))));
-    //content.replace("%tinterval%", String(getindex(dynsf, String(actconf.tinterval))));
     content.replace("%tinterval%", String(actconf.tinterval));
     content.replace("%relay%", String(getindex(relay, String(actconf.relay))));
 
@@ -528,54 +544,65 @@ httpServer.on("/settings.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     content.replace("%tempUnit%", String(getindex(tempunits, String(actconf.tempUnit))));
     content.replace("%envSensor%", String(getindex(envSensor, String(actconf.envSensor))));
     content.replace("%standbyMode%", String(getindex(standbyMode, String(actconf.standbyMode))));
+    content.replace("%standbySleepDuration%", String(actconf.standbySleepDuration));
     content.replace("%loraStandbyMode%", String(getindex(loraStandbyMode, String(actconf.loraStandbyMode))));
   }
-  //httpServer.sendHeader("Cache-Control", "no-cache");
-  //httpServer.send(200, "text/html", content);
+
   request->send(200, "text/html", content);
 });
 
 httpServer.on("/restart.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   // Read all received get arguments and save in a array
-  int num = request->args();
+  /*int num = request->args();
   String vname[num];
   String value[num];
   for (int i = 0; i < num; i++) {
     vname[i] = request->argName(i);
     value[i] = request->arg(i);
-  } 
+  } */
 
   // Send page
   String hash = "";
- // Print all received get arguments
- for(int i = 0; i < num; i++)
+  // Print all received get arguments
+  /*for(int i = 0; i < num; i++)
   {
     String out = vname[i] + " : " + value[i];
     DebugPrintln(3, out);
     if(vname[i] == "password"){
       hash = value[i];
     }
-  }
+  }*/
   String content = "";
- // Check page password
- if(actconf.crypt == 1 && (hash.length() == 0 || hash != cryptPassword(String(actconf.password)))){
-   // Generate a new transaction ID
-   transID();
+
+  String inputMessage;
+  String inputParam;
+  if (request->hasParam("password")) {
+    inputMessage = request->getParam("password")->value();
+    inputParam = "password";
+    hash = inputMessage;
+    DebugPrintln(3, hash);
+  }
+
+  // Check page password
+  if(actconf.crypt == 1 && (hash.length() == 0 || hash != cryptPassword(String(actconf.password)))){
+    // Generate a new transaction ID
+    transID();
     content = readFile2(LittleFS, "/password.html");
     content.replace("%action%", "restart");
-     }
- else{
-   // Generate a new transaction ID
-   transID();
+  }
+  else
+  {
+    // Generate a new transaction ID
+    transID();
+//    DebugPrintln(3, content);
     content = readFile2(LittleFS, "/restart.html");
+//    DebugPrintln(3, content);
     content.replace("%devname%", String(actconf.devname));
     content.replace("%crights%", String(actconf.crights));
     content.replace("%fversion%", String(actconf.fversion));
     content.replace("%quality%", String(wlanquality()));
- }
+  }
 
-  //httpServer.sendHeader("Cache-Control", "no-cache");
-  //httpServer.send(200, "text/html", content);
   request->send(200, "text/html", content);
 });
 
@@ -619,8 +646,7 @@ httpServer.on("/firmware.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     content.replace("%chipId%", String(chipId));
     content.replace("%getCpuFreqMHz%", String(String(ESP.getCpuFreqMHz())));
   }
-  //httpServer.sendHeader("Cache-Control", "no-cache");
-  //httpServer.send(200, "text/html", content);
+
   request->send(200, "text/html", content);
 });
 
@@ -678,8 +704,6 @@ httpServer.on("/devinfo.html", HTTP_GET, [](AsyncWebServerRequest *request) {
  }
   content.replace("%envSensorBME280%", envSensorBME280);
   
-  //httpServer.sendHeader("Cache-Control", "no-cache");
-  //httpServer.send(200, "text/html", content);
   request->send(200, "text/html", content);
 });
 
@@ -717,7 +741,6 @@ httpServer.on("/styles.css", HTTP_GET, [](AsyncWebServerRequest *request) {
   AsyncWebServerResponse *response = request->beginResponse(200, "text/css", content);
   response->addHeader("Cache-Control", "max-age=100");
   request->send(response);
-  //request->send(200, "text/css", content);
 });
 
 httpServer.on("/app.js", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -725,6 +748,37 @@ httpServer.on("/app.js", HTTP_GET, [](AsyncWebServerRequest *request) {
   AsyncWebServerResponse *response = request->beginResponse(200, "text/javascript", content);
   response->addHeader("Cache-Control", "max-age=600");
   request->send(response);
+});
+
+httpServer.on("/staticdata.json", HTTP_GET, [](AsyncWebServerRequest *request) {
+  DynamicJsonDocument json_Device(8048);
+  json_Device["Device"]["Type"] = String(actconf.devname);
+  json_Device["Device"]["CopyRights"] = String(actconf.crights);
+  json_Device["Device"]["FirmwareVersion"] = String(actconf.fversion);
+  json_Device["Device"]["License"] = String(actconf.license);
+
+  json_Device["Device"]["ESP32"]["SDKVersion"] = String(ESP.getSdkVersion());
+  json_Device["Device"]["ESP32"]["ChipID"] = String(chipId);
+  json_Device["Device"]["ESP32"]["CPUSpeed"]["Value"] = String(ESP.getCpuFreqMHz());
+  json_Device["Device"]["ESP32"]["CPUSpeed"]["Unit"] = "MHz";
+
+  json_Device["Device"]["NetworkParameter"]["WLANClientSSID"] = String(actconf.cssid);
+  json_Device["Device"]["NetworkParameter"]["WLANClientIP"] = WiFi.localIP().toString();
+  json_Device["Device"]["NetworkParameter"]["FieldStrength"]["Value"] = String(fieldstrength);
+  json_Device["Device"]["NetworkParameter"]["FieldStrength"]["Unit"] = "dBm";
+
+  json_Device["Device"]["NetworkParameter"]["ConnectionQuality"]["Value"] = String(int(quality));
+  json_Device["Device"]["NetworkParameter"]["ConnectionQuality"]["Unit"] = "%";
+
+  json_Device["Device"]["NetworkParameter"]["WLANServerSSID"] = String(actconf.sssid);
+  json_Device["Device"]["NetworkParameter"]["WLANServerIP"] = WiFi.softAPIP().toString();
+  json_Device["Device"]["NetworkParameter"]["ServerMode"] = String(actconf.serverMode);
+  json_Device["Device"]["NetworkParameter"]["ServerHostName"] = String(actconf.hostname);
+
+  String stringjsondata = "";
+  serializeJson(json_Device, stringjsondata);
+
+  request->send(200, "application/json", stringjsondata);
 });
 
 httpServer.on("/data.json", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -751,7 +805,7 @@ httpServer.on("/data.json", HTTP_GET, [](AsyncWebServerRequest *request) {
   json_Device["Device"]["NetworkParameter"]["FieldStrength"]["Value"] = String(fieldstrength);
   json_Device["Device"]["NetworkParameter"]["FieldStrength"]["Unit"] = "dBm";
 
-  json_Device["Device"]["NetworkParameter"]["ConnectionQuality"]["Value"] = String(quality);
+  json_Device["Device"]["NetworkParameter"]["ConnectionQuality"]["Value"] = String(int(quality));
   json_Device["Device"]["NetworkParameter"]["ConnectionQuality"]["Unit"] = "%";
 
   json_Device["Device"]["NetworkParameter"]["WLANServerSSID"] = String(actconf.sssid);
@@ -768,7 +822,8 @@ httpServer.on("/data.json", HTTP_GET, [](AsyncWebServerRequest *request) {
   json_Device["Device"]["LoRaSettings"]["DynamicSF"] = String(actconf.dynsf);
   json_Device["Device"]["LoRaSettings"]["TXInterval"] = String(actconf.tinterval);
   json_Device["Device"]["LoRaSettings"]["TimeSlot"] = String(slot);
-  json_Device["Device"]["LoRaSettings"]["TXCounter"] = String(LMIC.seqnoUp - 1);
+  //json_Device["Device"]["LoRaSettings"]["TXCounter"] = String(LMIC.seqnoUp - 1);
+  json_Device["Device"]["LoRaSettings"]["TXCounter"] = String(LMIC.seqnoUp);
   json_Device["Device"]["LoRaSettings"]["Relay"] = String(actconf.relay);
 
   json_Device["Device"]["DisplaySettings"]["Skin"] = String(actconf.skin);
@@ -902,9 +957,6 @@ httpServer.on("/data.json", HTTP_GET, [](AsyncWebServerRequest *request) {
   String stringjsondata = "";
   serializeJson(json_Device, stringjsondata);
 
-  //httpServer.sendHeader("Access-Control-Allow-Origin", "*"); // Needs new browser for CORS (Cross Origin Resource Sharing)
-  //httpServer.sendHeader("Cache-Control", "no-cache");
-  //httpServer.send(200, "application/json", stringjsondata);
   request->send(200, "application/json", stringjsondata);
 
   //elapsedMillis = millis() - previousMillis;
@@ -912,12 +964,19 @@ httpServer.on("/data.json", HTTP_GET, [](AsyncWebServerRequest *request) {
   //Serial.println(elapsedMillis);
 });
 
+httpServer.on("/reseteeprom", HTTP_GET, [](AsyncWebServerRequest *request) {
+  //String content = readFile2(LittleFS, "/md5.js");
+  //content.replace("%transactionID%", String(transactionID));
+  //eraseEEPROMConfig(defconf);
+  saveEEPROMConfig(defconf);
+  request->send(200, "text/javascript", "ok, EEPROM erased.");
+});
+
 // Use no cash because the js was permanently modifyed (transaction ID)
-httpServer.on("/MD5", HTTP_GET, [](AsyncWebServerRequest *request) {
+httpServer.on("/MD5.js", HTTP_GET, [](AsyncWebServerRequest *request) {
   String content = readFile2(LittleFS, "/md5.js");
   content.replace("%transactionID%", String(transactionID));
-  //httpServer.sendHeader("Cache-Control", "no-cache");
-  //httpServer.send(200, "text/javascript", content);
+
   request->send(200, "text/javascript", content);
 });
 
@@ -925,8 +984,7 @@ httpServer.on("/MD5", HTTP_GET, [](AsyncWebServerRequest *request) {
 httpServer.on("/md5.min.js", HTTP_GET, [](AsyncWebServerRequest *request) {
   String content = readFile2(LittleFS, "/md5.min.js");
   content.replace("%transactionID%", String(transactionID));
-  //httpServer.sendHeader("Cache-Control", "no-cache");
-  //httpServer.send(200, "text/javascript", content);
+
   request->send(200, "text/javascript", content);
 });
 
@@ -934,8 +992,7 @@ httpServer.on("/md5.min.js", HTTP_GET, [](AsyncWebServerRequest *request) {
 httpServer.on("/md5.min.js.map", HTTP_GET, [](AsyncWebServerRequest *request) {
   String content = readFile2(LittleFS, "/md5.min.js.map");
   content.replace("%transactionID%", String(transactionID));
-  //httpServer.sendHeader("Cache-Control", "no-cache");
-  //httpServer.send(200, "text/javascript", content);
+
   request->send(200, "text/javascript", content);
 });
 
@@ -971,17 +1028,9 @@ AsyncElegantOTA.begin(&httpServer);    // Start ElegantOTA
 //});
 
 // run handleUpload function when any file is uploaded
-  /*httpServer.on("/update", HTTP_POST, [](AsyncWebServerRequest *request) {
+  httpServer.on("/upload", HTTP_POST, [](AsyncWebServerRequest *request) {
         request->send(200);
-      }, handleUpload);*/
-
-//AsyncElegantOTA.begin(&httpServer);    // Start ElegantOTA
-
-
-// run handleUpload function when any file is uploaded
-  /*server->on("/upload", HTTP_POST, [](AsyncWebServerRequest *request) {
-        request->send(200);
-      }, handleUpload);*/
+      }, handleUpload);
 
   /*handling uploading file */
   /*httpServer.on("/upload", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -1011,8 +1060,7 @@ AsyncElegantOTA.begin(&httpServer);    // Start ElegantOTA
 
 httpServer.on("/formatfs", HTTP_POST, [](AsyncWebServerRequest *request) {
   formatfs(LittleFS);
-  //httpServer.sendHeader("Cache-Control", "no-cache");
-  //httpServer.send(200, "text/html", "done");
+
   request->send(200, "text/html", "done");
 });
 
@@ -1020,8 +1068,7 @@ httpServer.on("/updatefiles", HTTP_POST, [](AsyncWebServerRequest *request) {
   //DownloadFilesFromFtp(actconf.fversion);
   //DownloadFilesFromWeb(actconf.fversion);
   runDownloadingFiles = true;
-  //httpServer.sendHeader("Cache-Control", "no-cache");
-  //httpServer.send(200, "text/html", "done");
+
   request->send(200, "text/html", "done");
 });
 
@@ -1029,8 +1076,7 @@ httpServer.on("/updatefilesstatus", HTTP_GET, [](AsyncWebServerRequest *request)
   //DownloadFilesFromFtp(actconf.fversion);
   //DownloadFilesFromWeb(actconf.fversion);
   String test = (String)runDownloadingFiles;
-  //httpServer.sendHeader("Cache-Control", "no-cache");
-  //httpServer.send(200, "text/html", "done");
+
   request->send(200, "text/html", test);
 });
 

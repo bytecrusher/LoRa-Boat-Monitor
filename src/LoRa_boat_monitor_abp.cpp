@@ -43,7 +43,6 @@
 
 #include <ESPmDNS.h>            // mDNS lib
 #include <Update.h>             // Web Update server
-//#include <MD5Builder.h>         // MD5 lib
 #include "driver/adc.h"
 #include <ArduinoJson.h>
 #include <time.h>
@@ -79,11 +78,11 @@ configData actconf;             // Actual configuration, Global variable
 #include "Definitions.h"        // Global definitions
 #include "GPS.h"                // GPS parsing functions
 #include "vedirect.h"           // VE.direct lib
+#include "filesystem.h"         // Function for filesystem
 #include "Functions.h"          // Function lib
 #include "NMEATelegrams.h"      // Function library for NMEA telegrams
 #include "LoRa.h"               // LoRa Lib
 #include "task.h"               // Task for LoRa code
-#include "filesystem.h"         // Function for filesystem
 
 #include "initialsetup_html.h"
 #include "wificonfig_html.h"
@@ -99,7 +98,7 @@ TaskHandle_t Task1;             // Declare task for LoRa code
 
 //WebServer httpServer(actconf.httpport);   // Port for HTTP server
 AsyncWebServer httpServer(actconf.httpport);
-MDNSResponder mdns;                       // Activate DNS responder
+//MDNSResponder mdns;                       // Activate DNS responder
 WiFiServer server(actconf.dataport);      // Declare WiFi NMEA server port
 
 Ticker Timer1;                  // Declare Timer for GPS data reading
@@ -107,7 +106,7 @@ Ticker Timer2;                  // Declare Timer for relay ontime
 Ticker Timer3;                  // Declare Timer for NMEA sending
 
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
-#define TIME_TO_SLEEP  15        /* Time ESP32 will go to sleep (in seconds) */
+#define TIME_TO_SLEEP  actconf.standbySleepDuration       /* Time ESP32 will go to sleep */
 RTC_DATA_ATTR int bootCount = 0;
 RTC_DATA_ATTR uint loraCount = 0;
 
@@ -133,7 +132,7 @@ bool opened = false;
 
 void IRAM_ATTR onTimer(){
   //digitalWrite(LED, !digitalRead(LED));
-  Serial.println("onTimer()");
+  //Serial.println("onTimer()");
   //Serial.println(xPortGetCoreID());
   sendLoraQueue = true;
 }
@@ -167,30 +166,9 @@ void UBLOX_GPS_Shutdown()
 void enableWiFi(){
   //adc_power_on();
   WiFi.disconnect(false);  // Reconnect the network
-  /*WiFi.mode(WIFI_STA);    // Switch WiFi off
- 
-  Serial.println("START WIFI");
-  WiFi.begin(actconf.cssid, actconf.cpassword);
- 
-  int i = 0;
-  while ((WiFi.status() != WL_CONNECTED) && (i <= 20))
-  {
-    delay(500);
-    Serial.print(".");
-    i++;
-  }
-  if (i <= 20)
-  {
-    Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
-  }
-  else
-  {
-    Serial.println("");
-    Serial.println("WiFi not connected");
-  }*/
+  WiFi.hostname(hname);   // Provide the hostname
+  String hostname = "boatmonitor-3"; /*New Host name defined*/
+  WiFi.setHostname (hostname.c_str()); /*ESP32 hostname set*/
 
   //*****************************************************************************************
       // Starting access point for update server
@@ -201,35 +179,14 @@ void enableWiFi(){
     //  DebugPrintln(3, actconf.apchannel);
       DebugPrint(3, "Max AP connections: ");
       DebugPrintln(3, actconf.maxconnections);
-      WiFi.mode(WIFI_AP_STA);
-      WiFi.softAP(actconf.sssid, actconf.spassword, actconf.apchannel, false, actconf.maxconnections);
+      //WiFi.mode(WIFI_AP_STA);
+      WiFi.mode(WIFI_MODE_APSTA);
+      //WiFi.softAP(actconf.sssid, actconf.spassword, actconf.apchannel, false, actconf.maxconnections);
+      WiFi.softAP(actconf.sssid, actconf.spassword);
       hname = String(actconf.hostname) + "-" + String(actconf.deviceID);
-      WiFi.hostname(hname);   // Provide the hostname
+      
       DebugPrint(3, "Host name: ");
       DebugPrintln(3, hname);
-      if(actconf.mDNS == 1){
-        MDNS.begin(hname.c_str());                              // Start mDNS service
-        MDNS.addService("http", "tcp", actconf.httpport);       // HTTP service
-        MDNS.addService("nmea-0183", "tcp", actconf.dataport);  // NMEA0183 dada service for AVnav
-      }  
-      DebugPrintln(3, "mDNS service: activ");
-      DebugPrint(3, "mDNS name: ");
-      DebugPrint(3, hname);
-      DebugPrintln(3, ".local");
-
-      // Sart update server
-      DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "http://loraboatmonitorwebserverdata.derguntmar.de");
-      httpServer.begin();
-      DebugPrint(3, "HTTP Update Server started at port: ");
-      DebugPrintln(3, actconf.httpport);
-      DebugPrint(3, "Use this URL: ");
-      DebugPrint(3, "http://");
-      DebugPrint(3, WiFi.softAPIP());
-      DebugPrintln(3, "/update");
-      DebugPrintln(3, "");
-
-      #include "ServerPages.h"    // Webserver pages request functions
-      //handlewebserverresponse(httpServer, actconf, runDownloadingFiles);
       
       // Connect to WiFi network
       DebugPrint(3, "Connecting WiFi client to ");
@@ -273,6 +230,17 @@ void enableWiFi(){
         u8x8.refreshDisplay();    // Only required for SSD1606/7
       }
 
+      if(actconf.mDNS == 1){
+        MDNS.end();
+        MDNS.begin(hname.c_str());                              // Start mDNS service
+        MDNS.addService("http", "tcp", actconf.httpport);       // HTTP service
+        MDNS.addService("nmea-0183", "tcp", actconf.dataport);  // NMEA0183 dada service for AVnav
+        DebugPrintln(3, "mDNS service: activ");
+        DebugPrint(3, "mDNS name: ");
+        DebugPrint(3, hname);
+        DebugPrintln(3, ".local");
+      }
+
       Serial.println("Contacting Time Server");
 	    configTime(3600*timezone, daysavetime*3600, "time.nist.gov", "0.pool.ntp.org", "1.pool.ntp.org");
 	    struct tm tmstruct ;
@@ -281,6 +249,19 @@ void enableWiFi(){
       getLocalTime(&tmstruct, 5000);
 	    Serial.printf("\nNow is : %d-%02d-%02d %02d:%02d:%02d\n",(tmstruct.tm_year)+1900,( tmstruct.tm_mon)+1, tmstruct.tm_mday,tmstruct.tm_hour , tmstruct.tm_min, tmstruct.tm_sec);
       Serial.println("");
+
+      #include "ServerPages.h"    // Webserver pages request functions
+
+      // Sart update server
+      DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "http://loraboatmonitorwebserverdata.derguntmar.de");
+      httpServer.begin();
+      DebugPrint(3, "HTTP Update Server started at port: ");
+      DebugPrintln(3, actconf.httpport);
+      DebugPrint(3, "Use this URL: ");
+      DebugPrint(3, "http://");
+      DebugPrint(3, WiFi.softAPIP());
+      DebugPrintln(3, "/update");
+      DebugPrintln(3, "");
       
       // Start the NMEA TCP server
       server.begin();
@@ -445,7 +426,6 @@ void state0(){
       toggleDisplayStatus = true;
     }
 
-    //LoraWANPrintLMICOpmode();
     //PrintRuntime();
     lastPrintTime = millis();
     long seconds = millis() / 1000;
@@ -461,7 +441,7 @@ void state0(){
 void state1(){
   if(machine.executeOnce){
     DebugPrintln(3, "state1 once");
-    //enableWiFi();
+    enableWiFi();
     delay(2000);    // to be able to read the displayed infos.
     u8x8.setPowerSave(0);
     u8x8.clearDisplay();
@@ -504,6 +484,7 @@ void state1(){
   delay(20);
 
   VEdirectSend();
+
   // Read measuring data and display on OLED all 1s
   if(millis() > starttime1 + 1000){
     starttime1 = millis();        // Read actual time	
@@ -515,6 +496,7 @@ void state1(){
     readValues();
     writeDisplay();
   }
+
   VEdirectRead();
 
   // TCP-Server for NMEA0183
@@ -869,7 +851,7 @@ void setup() {
   First we configure the wake up source
   We set our ESP32 to wake up every 5 seconds
   */
-  esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
+  esp_sleep_enable_timer_wakeup((TIME_TO_SLEEP * 60) * uS_TO_S_FACTOR);
   //Serial.println("Setup ESP32 to sleep for every " + String(TIME_TO_SLEEP) + " Seconds");
 
   S0->addTransition(&transitionS0S1,S1);    // Transition to itself (see transition logic for details)
@@ -882,11 +864,10 @@ void setup() {
   
   My_timer = timerBegin(0, 80, true);
   timerAttachInterrupt(My_timer, &onTimer, true);
-  timerAlarmWrite(My_timer, 60000000, true);
+  timerAlarmWrite(My_timer, (60000000 * actconf.standbySleepDuration), true);
 
   readValues();     // initial read after boot, to get the status of alarm pin.
 
-  enableWiFi();     // temp here
   if(!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED)){
         Serial.println("LittleFS Mount Failed");
         return;

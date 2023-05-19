@@ -82,17 +82,18 @@ display: none;
     
   </head><body>
   <h2>LoRa Boat Monitor</h2>
-  %crights%, %fversion%, CQ: <data id='quality'></data> %
+  %crights%, %fversion%, CQ: <data id='quality'></data> %wifiquality% %
   <hr>
   <h3><data class="blink" id='info'></data></h3>
 
   <div id='loader'></div>
     <div style='display:none;' id='myDiv' class='animate-bottom'>
-%wificonfig%
+    %wificonfig%
+    <p><progress id="file" value="%USEDSPIFFSvalue%" max="%TOTALSPIFFSvalue%"> %USEDSPIFFSvalue%% </progress> Free: <span id="freespiffs">%FREESPIFFS%</span> | Used: <span id="usedspiffs">%USEDSPIFFS%</span> | Total: <span id="totalspiffs">%TOTALSPIFFS%</span></p>
     %tabelle%
 </br></br> Upload file:
 <script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>
-<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>
+<form method='POST' action='/upload' enctype='multipart/form-data' id='upload_form'>
 <input type='file' name='upload'>
 <input type='submit' value='Upload'>
 </form>

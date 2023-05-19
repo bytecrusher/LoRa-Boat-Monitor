@@ -94,9 +94,7 @@ String readFile2(fs::FS &fs, const char * path){
     Serial.print("- read from file (readfile2): ");
     Serial.println(path);
     while(file.available()){
-        //filecontent = file.read();
         filecontent+=String((char)file.read());
-        //Serial.write(file.read());
     }
     file.close();
     return filecontent;
@@ -335,7 +333,7 @@ void testFileIO(fs::FS &fs, const char * path){
 
 String getMyDirAsString(fs::FS &fs, const char * dirname, uint8_t levels){
     String response = "";
-    response += "Listing directory: " + (String)dirname + "<br><br>";
+    //response += "<p>Listing directory: " + (String)dirname + "</p>";
     response += "<table><tr><th>Type</th><th>Name</th><th>Size</th><th>LAST WRITE</th></tr>";
 
     File root = fs.open(dirname);

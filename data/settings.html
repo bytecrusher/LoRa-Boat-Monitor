@@ -20,10 +20,16 @@
     <script>
         var myVar;
         document.addEventListener("DOMContentLoaded", function() {
-        setTimeout(function() {
-            //document.querySelector("body").classList.add("loaded");
-            showPage();
-        }, 10)
+            setTimeout(function() {
+                //document.querySelector("body").classList.add("loaded");
+                showPage();
+            }, 10)
+            // Get the form and file field
+            let myform = document.querySelector('#upload');
+            let file = document.querySelector('#file');
+
+            // Listen for submit events
+            myform.addEventListener('submit', handleSubmit);
         });
 
         function setSelections() {
@@ -57,6 +63,7 @@
             document.SetForm.tempunit.selectedIndex = %tempUnit%;
             document.SetForm.envSensor.selectedIndex = %envSensor%;
             document.SetForm.standbyMode.selectedIndex = %standbyMode%;
+            document.SetForm.standbyMode.standbySleepDuration = %standbySleepDuration%;
             document.SetForm.loraStandbyMode.selectedIndex = %loraStandbyMode%;
         }
 
@@ -137,6 +144,53 @@
             }
         }
 
+        function downloadConfigAsJson() {
+            const formData = new FormData(form1);
+            var myjsonString = JSON.stringify(Object.fromEntries(formData));
+            var boardname = "boatmonitor-" + document.getElementById('deviceid').value;
+            download(myjsonString, boardname + '.json', 'text/plain');
+        }
+
+        /**
+         * Handle submit events
+         * @param  {Event} event The event object
+         */
+        function handleSubmit (event) {
+            // Stop the form from reloading the page
+            event.preventDefault();
+            // If there's no file, do nothing
+            if (!file.value.length) return;
+            // Create a new FileReader() object
+            let reader = new FileReader();
+            // Setup the callback event to run when the file is read
+            reader.onload = logFile;
+            // Read the file
+            reader.readAsText(file.files[0]);
+        }
+
+        /**
+         * Log the uploaded file to the console
+         * @param {event} Event The file loaded event
+         */
+        function logFile (event) {
+            let str = event.target.result;
+            let json = JSON.parse(str);
+            Object.entries(json).forEach((entry) => {
+                const [key, value] = entry;
+                //console.log(`${key}: ${value}`);
+                document.getElementsByName(`${key}`)[0].value = value;
+            });
+            //console.log('string', str);
+            //console.log('json', json);
+        }
+
+        function download(content, fileName, contentType) {
+            var a = document.createElement("a");
+            var file = new Blob([content], {type: contentType});
+            a.href = URL.createObjectURL(file);
+            a.download = fileName;
+            a.click();
+        }
     </script>
 </head>
 
@@ -210,16 +264,20 @@
             </tr>
 
             <tr>
+                <td>base Hostname ("-Device ID" will be added)</td>
+                <td><input type='text' required name='hostname' size='20' value='%hostname%' maxlength='20'></td>
+                <td></td>
+            </tr>
+
+            <tr>
                 <td>WLAN Client SSID</td>
-                <td><input type='text' required name='cssid' size='20' value='%cssid%' maxlength='20'
-                        onchange='check_ssid("cssid")'></td>
+                <td><input type='text' required name='cssid' size='20' value='%cssid%' maxlength='20' onchange='check_ssid("cssid")'></td>
                 <td></td>
             </tr>
 
             <tr>
                 <td>WLAN Client Password</td>
-                <td><input type='text' required name='cpasswd' size='20' value='%cpassword%' maxlength='20'
-                        onchange='check_passwd("cpasswd")'></td>
+                <td><input type='text' required name='cpasswd' size='20' value='%cpassword%' maxlength='20' onchange='check_passwd("cpasswd")'></td>
                 <td></td>
             </tr>
 
@@ -460,7 +518,7 @@
             <tr>
                 <td>Device ID</td>
                 <td>
-                    <select name='deviceid' size='1'>
+                    <select id='deviceid' name='deviceid' size='1'>
                         <option value='0'>0</option>
                         <option value='1'>1</option>
                         <option value='2'>2</option>
@@ -620,6 +678,12 @@
             </tr>
 
             <tr>
+                <td>Standby sleep duration (time in Mintues)</td>
+                <td><input type='text' required name='standbySleepDuration' size='20' value='%standbySleepDuration%' maxlength='20'></td>
+                <td></td>
+            </tr>
+
+            <tr>
                 <td>Lora only in Standy?</td>
                 <td>
                     <select name='loraStandbyMode' size='1'>
@@ -701,10 +765,21 @@
         <input type='hidden' required name='password' size='20' value='%userpassword%' maxlength='20'>
     </form>
     <br>
+    
+    <form id='form4' action='/reseteeprom'>
+        <button type="button" onclick="downloadConfigAsJson()">Download Config</button>
+        <button type='submit'>Factory Settings</button>
+    </form>
+    <br>
+    <form id="upload">
+        <input type="file" id="file" accept=".json" style="width:270px;">
+        <button>Upload Config</button>
+    </form>
+    <br>
     <hr>
     <br>
+    
     <!--form id='form2' action='http://192.168.4.1/settings'>
-  
 <input hidden type='text' name='itype' value='simple'>  
 <input hidden type='text' name='isize' value='200'>  
 <input hidden type='text' name='cssid' value='MyBoat'>
@@ -724,9 +799,9 @@
 <input hidden type='text' name='dwrange' value='50'>
 <input hidden type='text' name='tstype' value='Off'>
 <input hidden type='text' name='sendtsd' value='0'>
-<input hidden type='text' name='tempunit' value='C'>
-    
+<input hidden type='text' name='tempunit' value='C'>    
 <button type='submit'>Set Defaults</button></form-->
+
     <br>
     <form id='form3' action='/'><button type='submit'>Back</button></form>
     <br><br>

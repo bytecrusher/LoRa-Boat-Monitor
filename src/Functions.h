@@ -112,7 +112,7 @@ void DebugPrint(int type, IPAddress x){
 
 void eraseEEPROMConfig(configData cfg) {
   // Reset EEPROM bytes to '0' for the length of the data structure
-  noInterrupts();                       // Stop all interrupts important for writing in EEPROM
+  //noInterrupts();                       // Stop all interrupts important for writing in EEPROM
   EEPROM.begin(sizeEEPROM);
   for (int i = cfgStart ; i < sizeof(cfg) ; i++) {
     EEPROM.write(i, 0);
@@ -120,7 +120,7 @@ void eraseEEPROMConfig(configData cfg) {
   delay(200);
   EEPROM.commit();
   EEPROM.end();
-  interrupts();                         // Activate all interrupts
+  //interrupts();                         // Activate all interrupts
 }
 
 void saveEEPROMConfig(configData cfg) {
@@ -299,7 +299,7 @@ String transID(){
 }
 
 String cryptPassword(String password){
-  /*MD5Builder md5;
+  MD5Builder md5;
   md5.begin();
   raw = password + transactionID;
   md5.add(raw);
@@ -315,12 +315,11 @@ String cryptPassword(String password){
   DebugPrint(3, "MD5 Hash: ");
   DebugPrintln(3, md5crypt);
   // Give back the crypted password
-  return md5crypt;*/
-  return "";
+  return md5crypt;
 }
 
 int encryptPassword(String password, String md5hash){
-  /*MD5Builder md5;
+  MD5Builder md5;
   md5.begin();
   raw = password + transactionID;
   md5.add(raw);
@@ -343,7 +342,7 @@ int encryptPassword(String password, String md5hash){
   }
   else{
     return 0;
-  }*/
+  }
   return 0;
 }
 //**************************************************************************************
@@ -1428,6 +1427,5 @@ void handleUpload(AsyncWebServerRequest *request, String filename, size_t index,
     request->redirect("/");
   }
 }
-
 
 #endif

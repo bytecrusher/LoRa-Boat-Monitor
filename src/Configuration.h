@@ -32,10 +32,7 @@ typedef struct {
   //u4_t devaddr = 0x12345678;                // LoRa device address
   uint8_t nskey[16] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00 };  // LoRa Network session key
   uint8_t appkey[16] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00 }; // LoRa Application Key
-  //u1_t nskey[16] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00 };  // LoRa Network session key
-  //u1_t appkey[16] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00 }; // LoRa Application Key
-
-
+  
   char lorafrequency[6] = "EU868";          // LoRa frequency region [EU868|US915]
   int lchannel = 1;                         // Used LoRa channel [0...7|8|9] 0...7 single channel mode, 8 dynamic channel mode with channel 0...7, 9 dynamic channel mode with channel 0...2
   int spreadf = 10;                         // Spreading factor (SF) [7|8|9|10]
@@ -71,6 +68,7 @@ typedef struct {
 
   char envSensor[20] = "Off";               // Select environment sensor [Off|BME280|VEdirect-Read|VEdirect-Send]
   char standbyMode[4] = "Off";              // Select Standby mode [Off|On]
+  int standbySleepDuration = 15;            // Time to sleep in Standby in minutes.
   char loraStandbyMode[8] = "Standby";      // Select is Lora only sends in Standby mode [Standby|Always]
 } configData;
 
