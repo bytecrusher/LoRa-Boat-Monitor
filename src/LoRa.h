@@ -214,7 +214,8 @@ void do_send(osjob_t *j)
     int alarmrelay = (actconf.relay * 16) + alarm1;
     byte alarmrelayLow = lowByte(alarmrelay);
     // place the bytes into the payload
-    mydata[26] = alarmrelayLow;
+    //mydata[26] = alarmrelayLow;
+    mydata[26] = alarm1;
     if (debugValues) {
       DebugPrint(3, F("Alarm: "));
       DebugPrintln(3, alarm1);

@@ -3,10 +3,10 @@ xmlhttp.onreadystatechange = function () {
   if (this.readyState == 4 && this.status == 200) {
     var myObj = JSON.parse(this.responseText);
 
-    cssid = document.getElementById('cssid');
-    cssid.value = myObj.Device.NetworkParameter.WLANClientSSID;
-    sssid = document.getElementById('sssid');
-    sssid.value = myObj.Device.NetworkParameter.WLANServerSSID;
+    //cssid = document.getElementById('cssid');
+    //cssid.value = myObj.Device.NetworkParameter.WLANClientSSID;
+    //sssid = document.getElementById('sssid');
+    //sssid.value = myObj.Device.NetworkParameter.WLANServerSSID;
 
     heapsize = document.getElementById('heapsize');
     heapsize.value = myObj.Device.ESP32.FreeHeapSize.Value;
@@ -19,7 +19,7 @@ xmlhttp.onreadystatechange = function () {
     quality = document.getElementById('quality');
     quality.value = myObj.Device.NetworkParameter.ConnectionQuality.Value;
     document.getElementById('qunit').innerHTML = myObj.Device.NetworkParameter.ConnectionQuality.Unit;
-    document.getElementById('quality2').innerHTML = myObj.Device.NetworkParameter.ConnectionQuality.Value;
+    document.getElementById('quality').innerHTML = myObj.Device.NetworkParameter.ConnectionQuality.Value;
 
     actualch = document.getElementById('actualch');
     actualch.value = myObj.Device.LoRaSettings.ActualChannel;
@@ -68,8 +68,14 @@ xmlhttp.onreadystatechange = function () {
     tank1 = document.getElementById('tank1');
     tank1.value = myObj.Device.MeasuringValues.Tank1Voltage.Value;
 
+    tank1adc = document.getElementById('tank1adc');
+    tank1adc.value = myObj.Device.MeasuringValues.Tank1adc.Value;
+
     tank2 = document.getElementById('tank2');
     tank2.value = myObj.Device.MeasuringValues.Tank2Voltage.Value;
+
+    tank2adc = document.getElementById('tank2adc');
+    tank2adc.value = myObj.Device.MeasuringValues.Tank2adc.Value;
 
     alarm = document.getElementById('alarm');
     alarm.value = myObj.Device.MeasuringValues.Alarm.Value;
@@ -82,6 +88,44 @@ xmlhttp.onreadystatechange = function () {
 
     envSensor = document.getElementById('envSensor');
     envSensor.value = myObj.Device.MeasuringValues.EnvSensor.Value;
+
+    standbyMode = document.getElementById('standbyMode');
+    standbyMode.value = myObj.Device.MeasuringValues.standbyMode.Value;
+
+    loraStandbyMode = document.getElementById('loraStandbyMode');
+    loraStandbyMode.value = myObj.Device.MeasuringValues.loraStandbyMode.Value;
+
+    // If Demo Mode active the give out a message
+    servermode = myObj.Device.NetworkParameter.ServerMode;
+    if (servermode == 4) {
+      document.getElementById('info').innerHTML = '(Demo Mode)';
+    } else {
+      document.getElementById('info').innerHTML = '';
+    }
+  }
+};
+
+
+var xmlhttpStaticData = new XMLHttpRequest();
+xmlhttpStaticData.onreadystatechange = function () {
+  if (this.readyState == 4 && this.status == 200) {
+    var myObj = JSON.parse(this.responseText);
+
+    cssid = document.getElementById('cssid');
+    cssid.value = myObj.Device.NetworkParameter.WLANClientSSID;
+    sssid = document.getElementById('sssid');
+    sssid.value = myObj.Device.NetworkParameter.WLANServerSSID;
+
+    actualch = document.getElementById('actualch');
+    actualch.value = myObj.Device.LoRaSettings.ActualChannel;
+    actualsf = document.getElementById('actualsf');
+    actualsf.value = myObj.Device.LoRaSettings.ActualSF;
+    tinterval = document.getElementById('tinterval');
+    tinterval.value = myObj.Device.LoRaSettings.TXInterval * 30;
+    slot = document.getElementById('slot');
+    slot.value = myObj.Device.LoRaSettings.TimeSlot;
+    counter = document.getElementById('counter');
+    counter.value = myObj.Device.LoRaSettings.TXCounter;
 
     standbyMode = document.getElementById('standbyMode');
     standbyMode.value = myObj.Device.MeasuringValues.standbyMode.Value;

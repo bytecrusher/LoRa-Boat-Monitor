@@ -30,9 +30,8 @@ httpServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
 
 httpServer.on("/index.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   String content = readFile2(LittleFS, "/main.html");
-  content.replace("%devname%", String(actconf.devname));
-  content.replace("%crights%", String(actconf.crights));
-  content.replace("%fversion%", String(actconf.fversion));
+  //content.replace("%header%", String(readFile2(LittleFS, "/header.html")));
+  content.replace("%header%", getheader());
   if (content == "- failed to open file for reading"){
     request->redirect("/initialsetup.html");
   } else {
@@ -48,23 +47,8 @@ httpServer.on("/initialsetup.html", HTTP_GET, [](AsyncWebServerRequest *request)
   content.replace("%wificonfig%", wificonfig_hmtl);
   content.replace("%cssid%", String(actconf.cssid));
   content.replace("%cpassword%", String(actconf.cpassword));
-  content.replace("%wifiquality%", String(int(quality)));
-  content.replace("%tabelle%", getMyDirAsString(LittleFS, "/", 0));
-
-  request->send(200, "text/html", content);
-});
-
-httpServer.on("/filesystem.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-  String content = initialsetup_html;
-  content.replace("%devname%", String(actconf.devname));
-  content.replace("%crights%", String(actconf.crights));
-  content.replace("%fversion%", String(actconf.fversion));
-  content.replace("%cssid%", String(actconf.cssid));
-  content.replace("%cpassword%", String(actconf.cpassword));
-  content.replace("%wifiquality%", String(int(quality)));
-
-  content.replace("%wificonfig%", "");
-  content.replace("%tabelle%", getMyDirAsString(LittleFS, "/", 0));
+  content.replace("%quality%", String(int(quality)));
+  //content.replace("%tabelle%", getMyDirAsString(LittleFS, "/", 0));
 
   content.replace("%FREESPIFFS%", humanReadableSize((LittleFS.totalBytes() - LittleFS.usedBytes())));
   content.replace("%USEDSPIFFS%", humanReadableSize(LittleFS.usedBytes()));
@@ -75,9 +59,71 @@ httpServer.on("/filesystem.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   request->send(200, "text/html", content);
 });
 
+httpServer.on("/gettable", HTTP_GET, [](AsyncWebServerRequest *request) {
+  String content = "";
+  //content.replace("%tabelle%", getMyDirAsString(LittleFS, "/", 0));
+  content = getMyDirAsString(LittleFS, "/", 0);
+  //request->send(200, "text/html", content);
+  request->send(200, "text/plain", content);
+});
+
+httpServer.on("/filesystem.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+
+  // Read all received get arguments and save in a array
+  int num = request->args();
+  String vname[num];
+  String value[num];
+  for (int i = 0; i < num; i++) {
+    vname[i] = request->argName(i);
+    value[i] = request->arg(i);  
+  } 
+
+  String hash = "";
+  // Print all received get arguments
+  for(int i = 0; i < num; i++)
+  {
+    String out = vname[i] + " : " + value[i];
+    DebugPrintln(3, out);
+    
+    if(vname[i] == "password"){
+      hash = value[i];
+    }
+  }
+
+  String content = "";
+  if(actconf.crypt == 1 && (hash.length() == 0 || hash != cryptPassword(String(actconf.password)))){
+    // Generate a new transaction ID
+    transID();
+    content = readFile2(LittleFS, "/password.html");
+    content.replace("%header%", getheader());
+    content.replace("%action%", "filesystem.html");
+  } else {
+    content = initialsetup_html;
+    content.replace("%devname%", String(actconf.devname));
+    content.replace("%crights%", String(actconf.crights));
+    content.replace("%fversion%", String(actconf.fversion));
+    content.replace("%cssid%", String(actconf.cssid));
+    content.replace("%cpassword%", String(actconf.cpassword));
+    content.replace("%quality%", String(int(quality)));
+
+    content.replace("%wificonfig%", "");
+    //content.replace("%tabelle%", getMyDirAsString(LittleFS, "/", 0));
+
+    content.replace("%FREESPIFFS%", humanReadableSize((LittleFS.totalBytes() - LittleFS.usedBytes())));
+    content.replace("%USEDSPIFFS%", humanReadableSize(LittleFS.usedBytes()));
+    content.replace("%TOTALSPIFFS%", humanReadableSize(LittleFS.totalBytes()));
+    content.replace("%USEDSPIFFSvalue%", String(LittleFS.usedBytes()));
+    content.replace("%TOTALSPIFFSvalue%", String(LittleFS.totalBytes()));
+  }
+
+  request->send(200, "text/html", content);
+});
+
 httpServer.on("/sensorv.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   // Send page
   String content = readFile2(LittleFS, "/sensorv.html");
+  //content.replace("%header%", String(readFile2(LittleFS, "/header.html")));
+  content.replace("%header%", getheader());
   content.replace("%devname%", String(actconf.devname));
   content.replace("%crights%", String(actconf.crights));
   content.replace("%fversion%", String(actconf.fversion));
@@ -158,14 +204,17 @@ httpServer.on("/sensorv.html", HTTP_GET, [](AsyncWebServerRequest *request) {
 });
 
 httpServer.on("/lora.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-  // Send page
   String content = readFile2(LittleFS, "/lora.html");
-
-  content.replace("%devname%", String(actconf.devname));
-  content.replace("%crights%", String(actconf.crights));
-  content.replace("%fversion%", String(actconf.fversion));
-  
+  content.replace("%header%", getheader());
   request->send(200, "text/html", content);
+});
+
+httpServer.on("/ping", HTTP_GET, [](AsyncWebServerRequest *request) {
+  request->send(200, "text/plain", "true");
+});
+
+httpServer.on("/getdata", HTTP_GET, [](AsyncWebServerRequest *request) {
+  request->send(200, "text/plain", String(alarm1));
 });
 
 httpServer.on("/savesettings", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -348,6 +397,8 @@ httpServer.on("/savesettings", HTTP_GET, [](AsyncWebServerRequest *request) {
       value[i].toCharArray(actconf.envSensor, 20);
     }
     if (vname[i] == "standbyMode") {
+      // Check if Alarm is High (?), to prevent the user from locking out.
+      //String(alarm1)
       value[i].toCharArray(actconf.standbyMode, 4);
     }
     if (vname[i] == "standbySleepDuration") {
@@ -400,6 +451,7 @@ httpServer.on("/savesettings", HTTP_GET, [](AsyncWebServerRequest *request) {
     ESP.restart(); // Restart ESP32
   }
   request->redirect("/settings.html");
+  //request->send(200, "text/plain", "OK");
 });
 
 httpServer.on("/settings.html", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -425,6 +477,7 @@ httpServer.on("/settings.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     DebugPrintln(3, (String(actconf.password)));
     DebugPrintln(3, cryptPassword(String(actconf.password)));
     content = readFile2(LittleFS, "/password.html");
+    content.replace("%header%", getheader());
     content.replace("%action%", "settings.html");
     content.replace("%devname%", String(actconf.devname));
     content.replace("%crights%", String(actconf.crights));
@@ -435,7 +488,8 @@ httpServer.on("/settings.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     // Generate a new transaction ID
     transID();
     content = readFile2(LittleFS, "/settings.html");
-
+    //content.replace("%header%", String(readFile2(LittleFS, "/header.html")));
+    content.replace("%header%", getheader());
     content.replace("%devname%", String(actconf.devname));
     content.replace("%crights%", String(actconf.crights));
     content.replace("%fversion%", String(actconf.fversion));
@@ -588,7 +642,8 @@ httpServer.on("/restart.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     // Generate a new transaction ID
     transID();
     content = readFile2(LittleFS, "/password.html");
-    content.replace("%action%", "restart");
+    content.replace("%header%", getheader());
+    content.replace("%action%", "restart.html");
   }
   else
   {
@@ -597,6 +652,7 @@ httpServer.on("/restart.html", HTTP_GET, [](AsyncWebServerRequest *request) {
 //    DebugPrintln(3, content);
     content = readFile2(LittleFS, "/restart.html");
 //    DebugPrintln(3, content);
+    content.replace("%header%", getheader());
     content.replace("%devname%", String(actconf.devname));
     content.replace("%crights%", String(actconf.crights));
     content.replace("%fversion%", String(actconf.fversion));
@@ -633,15 +689,14 @@ httpServer.on("/firmware.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     // Generate a new transaction ID
     transID();
     content = readFile2(LittleFS, "/password.html");
-    content.replace("%action%", "firmware");
+    content.replace("%header%", getheader());
+    content.replace("%action%", "firmware.html");
   } else {
     transID();
     content = readFile2(LittleFS, "/firmware.html");
+    content.replace("%header%", getheader());
     content.replace("%devname%", String(actconf.devname));
-    content.replace("%crights%", String(actconf.crights));
     content.replace("%fversion%", String(actconf.fversion));
-    content.replace("%wlanquality%", String(wlanquality()));
-    content.replace("%license%", String(actconf.license));
     content.replace("%getSdkVersion%", String(ESP.getSdkVersion()));
     content.replace("%chipId%", String(chipId));
     content.replace("%getCpuFreqMHz%", String(String(ESP.getCpuFreqMHz())));
@@ -652,10 +707,9 @@ httpServer.on("/firmware.html", HTTP_GET, [](AsyncWebServerRequest *request) {
 
 httpServer.on("/devinfo.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   String content = readFile2(LittleFS, "/devinfo.html");
+  content.replace("%header%", getheader());
   content.replace("%devname%", String(actconf.devname));
-  content.replace("%crights%", String(actconf.crights));
   content.replace("%fversion%", String(actconf.fversion));
-  content.replace("%wlanquality%", String(wlanquality()));
   content.replace("%license%", String(actconf.license));
   content.replace("%getSdkVersion%", String(ESP.getSdkVersion()));
   content.replace("%chipId%", String(chipId));
@@ -669,8 +723,10 @@ httpServer.on("/devinfo.html", HTTP_GET, [](AsyncWebServerRequest *request) {
       mdnsname =F( "not activ");
     }
   content.replace("%mdnsname%", mdnsname);
+  content.replace("%sssid%", String(actconf.sssid));
   content.replace("%softAPIP%", WiFi.softAPIP().toString());
   content.replace("%WiFichannel%", String(WiFi.channel()));
+  content.replace("%cssid%", String(actconf.cssid));
   content.replace("%localIP%", WiFi.localIP().toString());
   String mystring = String(actconf.devaddr, HEX);
   mystring.toUpperCase();
@@ -707,40 +763,35 @@ httpServer.on("/devinfo.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   request->send(200, "text/html", content);
 });
 
-httpServer.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request) {
-  uint32_t start = millis();
-  String content = readFile2(LittleFS, "/favicon.ico");
-  AsyncWebServerResponse *response = request->beginResponse(200, "image/svg+xml", content);
-  response->addHeader("Cache-Control", "max-age=600");
-  request->send(response);
-  uint32_t end = millis() - start;
-  Serial.printf("facivon.ico sending takes: %u ms\r\n", end);
-});
+httpServer.serveStatic("/favicon.ico", LittleFS, "/favicon.ico").setCacheControl("max-age=600");
 
 httpServer.on("/styles.css", HTTP_GET, [](AsyncWebServerRequest *request) {
+  long int t1 = millis();
   String content = "";
+  String cssfilename = "";
    // Style activation
   switch (style) {
   case 0:
-    // Night style red
-    content = readFile2(LittleFS, "/css_red.css");
+    cssfilename = "/css_red.css";
     break;
   case 1:
-    // Day style black
-    content = readFile2(LittleFS, "/css_black.css");
+    cssfilename = "/css_black.css";
     break;
   case 2:
-    // Day style white
-    content = readFile2(LittleFS, "/css_white.css");
+    cssfilename = "/css_white.css";
     break;  
   default:
-    // Day style white
-    content = readFile2(LittleFS, "/css_white.css");
+    cssfilename = "/css_white.css";
   }
-
-  AsyncWebServerResponse *response = request->beginResponse(200, "text/css", content);
-  response->addHeader("Cache-Control", "max-age=100");
-  request->send(response);
+  if (LittleFS.exists(cssfilename)) {
+    AsyncWebServerResponse *response = request->beginResponse(LittleFS, cssfilename, "text/css");
+    response->addHeader("Cache-Control", "max-age=100");
+    request->send(response);
+  } else {
+    request->send(404, "text/plain", "The content you are looking for was not found.");
+  }
+  long int t2 = millis();
+  Serial.print("Time taken by the task: "); Serial.print(t2-t1); Serial.println(" milliseconds");
 });
 
 httpServer.on("/app.js", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -764,16 +815,34 @@ httpServer.on("/staticdata.json", HTTP_GET, [](AsyncWebServerRequest *request) {
 
   json_Device["Device"]["NetworkParameter"]["WLANClientSSID"] = String(actconf.cssid);
   json_Device["Device"]["NetworkParameter"]["WLANClientIP"] = WiFi.localIP().toString();
-  json_Device["Device"]["NetworkParameter"]["FieldStrength"]["Value"] = String(fieldstrength);
-  json_Device["Device"]["NetworkParameter"]["FieldStrength"]["Unit"] = "dBm";
-
-  json_Device["Device"]["NetworkParameter"]["ConnectionQuality"]["Value"] = String(int(quality));
-  json_Device["Device"]["NetworkParameter"]["ConnectionQuality"]["Unit"] = "%";
 
   json_Device["Device"]["NetworkParameter"]["WLANServerSSID"] = String(actconf.sssid);
   json_Device["Device"]["NetworkParameter"]["WLANServerIP"] = WiFi.softAPIP().toString();
   json_Device["Device"]["NetworkParameter"]["ServerMode"] = String(actconf.serverMode);
   json_Device["Device"]["NetworkParameter"]["ServerHostName"] = String(actconf.hostname);
+
+  // Unused ?
+  //json_Device["Device"]["DeviceSettings"]["SerialDebugMode"] = String(actconf.debug);
+  //json_Device["Device"]["DeviceSettings"]["SerialSpeed"] = String(actconf.serspeed);
+  //json_Device["Device"]["DeviceSettings"]["DeviceID"] = String(actconf.deviceID);
+  //json_Device["Device"]["DeviceSettings"]["DeviceType"] = String(actconf.deviceType);
+  //json_Device["Device"]["DeviceSettings"]["SendData"] = String(actconf.senddata);
+  //json_Device["Device"]["DeviceSettings"]["VoltageOffset"] = String(actconf.voffset);
+  //json_Device["Device"]["DeviceSettings"]["VoltageSlopeA1"] = String(actconf.a1vslope);
+  //json_Device["Device"]["DeviceSettings"]["VoltageSlopeA2"] = String(actconf.a2vslope);
+  //json_Device["Device"]["DeviceSettings"]["VoltageAverage"] = String(actconf.vaverage);
+  //json_Device["Device"]["DeviceSettings"]["Tank1Offset"] = String(actconf.t1offset);
+  //json_Device["Device"]["DeviceSettings"]["Tank1SlopeA1"] = String(actconf.a1t1slope);
+  //json_Device["Device"]["DeviceSettings"]["Tank1SlopeA2"] = String(actconf.a2t1slope);
+  //json_Device["Device"]["DeviceSettings"]["Tank1Average"] = String(actconf.t1average);
+  //json_Device["Device"]["DeviceSettings"]["Tank2Offset"] = String(actconf.t2offset);
+  //json_Device["Device"]["DeviceSettings"]["Tank2SlopeA1"] = String(actconf.a1t2slope);
+  //json_Device["Device"]["DeviceSettings"]["Tank2SlopeA2"] = String(actconf.a2t2slope);
+  //json_Device["Device"]["DeviceSettings"]["Tank2Average"] = String(actconf.t2average);
+  //json_Device["Device"]["DeviceSettings"]["TempSensorType"] = String(actconf.tempSensorType);
+  //json_Device["Device"]["DeviceSettings"]["TempUnit"] = String(actconf.tempUnit);
+  json_Device["Device"]["DeviceSettings"]["envSensor"] = String(actconf.envSensor);
+  json_Device["Device"]["DeviceSettings"]["standbyMode"] = String(actconf.standbyMode);
 
   String stringjsondata = "";
   serializeJson(json_Device, stringjsondata);
@@ -787,33 +856,16 @@ httpServer.on("/data.json", HTTP_GET, [](AsyncWebServerRequest *request) {
   //previousMillis = millis();
  
   DynamicJsonDocument json_Device(8048);
-  json_Device["Device"]["Type"] = String(actconf.devname);
-  json_Device["Device"]["CopyRights"] = String(actconf.crights);
-  json_Device["Device"]["FirmwareVersion"] = String(actconf.fversion);
-  json_Device["Device"]["License"] = String(actconf.license);
-
-  json_Device["Device"]["ESP32"]["SDKVersion"] = String(ESP.getSdkVersion());
-  json_Device["Device"]["ESP32"]["ChipID"] = String(chipId);
-  json_Device["Device"]["ESP32"]["CPUSpeed"]["Value"] = String(ESP.getCpuFreqMHz());
-  json_Device["Device"]["ESP32"]["CPUSpeed"]["Unit"] = "MHz";
-
   json_Device["Device"]["ESP32"]["FreeHeapSize"]["Value"] = String(ESP.getFreeHeap());
-  json_Device["Device"]["ESP32"]["FreeHeapSize"]["Unit"] = "Byte";
+  json_Device["Device"]["ESP32"]["FreeHeapSize"]["Unit"] = "Byte";  // TODO: bring into staticdata.json
 
-  json_Device["Device"]["NetworkParameter"]["WLANClientSSID"] = String(actconf.cssid);
-  json_Device["Device"]["NetworkParameter"]["WLANClientIP"] = WiFi.localIP().toString();
   json_Device["Device"]["NetworkParameter"]["FieldStrength"]["Value"] = String(fieldstrength);
-  json_Device["Device"]["NetworkParameter"]["FieldStrength"]["Unit"] = "dBm";
+  json_Device["Device"]["NetworkParameter"]["FieldStrength"]["Unit"] = "dBm";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["NetworkParameter"]["ConnectionQuality"]["Value"] = String(int(quality));
-  json_Device["Device"]["NetworkParameter"]["ConnectionQuality"]["Unit"] = "%";
+  json_Device["Device"]["NetworkParameter"]["ConnectionQuality"]["Unit"] = "%";  // TODO: bring into staticdata.json
 
-  json_Device["Device"]["NetworkParameter"]["WLANServerSSID"] = String(actconf.sssid);
-  json_Device["Device"]["NetworkParameter"]["WLANServerIP"] = WiFi.softAPIP().toString();
-  json_Device["Device"]["NetworkParameter"]["ServerMode"] = String(actconf.serverMode);
-  json_Device["Device"]["NetworkParameter"]["ServerHostName"] = String(actconf.hostname);
-
-  json_Device["Device"]["LoRaSettings"]["DeviceAddress"] = String(actconf.devname);
+  json_Device["Device"]["LoRaSettings"]["DeviceAddress"] = String(actconf.devname);  // TODO: bring into staticdata.json
   json_Device["Device"]["LoRaSettings"]["Frequency"] = String(actconf.lorafrequency);
   json_Device["Device"]["LoRaSettings"]["Channel"] = String(actconf.lchannel);
   json_Device["Device"]["LoRaSettings"]["ActualChannel"] = String(LMIC.txChnl);
@@ -829,130 +881,113 @@ httpServer.on("/data.json", HTTP_GET, [](AsyncWebServerRequest *request) {
   json_Device["Device"]["DisplaySettings"]["Skin"] = String(actconf.skin);
   json_Device["Device"]["DisplaySettings"]["InstrumentSize"] = String(actconf.instrumentSize);
 
-  json_Device["Device"]["DeviceSettings"]["SerialDebugMode"] = String(actconf.debug);
-  json_Device["Device"]["DeviceSettings"]["SerialSpeed"] = String(actconf.serspeed);
-  json_Device["Device"]["DeviceSettings"]["DeviceID"] = String(actconf.deviceID);
-  json_Device["Device"]["DeviceSettings"]["DeviceType"] = String(actconf.deviceType);
-  json_Device["Device"]["DeviceSettings"]["SendData"] = String(actconf.senddata);
-  json_Device["Device"]["DeviceSettings"]["VoltageOffset"] = String(actconf.voffset);
-  json_Device["Device"]["DeviceSettings"]["VoltageSlopeA1"] = String(actconf.a1vslope);
-  json_Device["Device"]["DeviceSettings"]["VoltageSlopeA2"] = String(actconf.a2vslope);
-  json_Device["Device"]["DeviceSettings"]["VoltageAverage"] = String(actconf.vaverage);
-  json_Device["Device"]["DeviceSettings"]["Tank1Offset"] = String(actconf.t1offset);
-  json_Device["Device"]["DeviceSettings"]["Tank1SlopeA1"] = String(actconf.a1t1slope);
-  json_Device["Device"]["DeviceSettings"]["Tank1SlopeA2"] = String(actconf.a2t1slope);
-  json_Device["Device"]["DeviceSettings"]["Tank1Average"] = String(actconf.t1average);
-  json_Device["Device"]["DeviceSettings"]["Tank2Offset"] = String(actconf.t2offset);
-  json_Device["Device"]["DeviceSettings"]["Tank2SlopeA1"] = String(actconf.a1t2slope);
-  json_Device["Device"]["DeviceSettings"]["Tank2SlopeA2"] = String(actconf.a2t2slope);
-  json_Device["Device"]["DeviceSettings"]["Tank2Average"] = String(actconf.t2average);
-  json_Device["Device"]["DeviceSettings"]["TempSensorType"] = String(actconf.tempSensorType);
-  json_Device["Device"]["DeviceSettings"]["TempUnit"] = String(actconf.tempUnit);
-  json_Device["Device"]["DeviceSettings"]["envSensor"] = String(actconf.envSensor);
-  json_Device["Device"]["DeviceSettings"]["standbyMode"] = String(actconf.standbyMode);
-
   json_Device["Device"]["MeasuringValues"]["AirTemperature"]["Value"] = String(temperature, 1);
-  json_Device["Device"]["MeasuringValues"]["AirTemperature"]["Unit"] = String(actconf.tempUnit);
+  json_Device["Device"]["MeasuringValues"]["AirTemperature"]["Unit"] = String(actconf.tempUnit);  // TODO: bring into staticdata.json
 
-  json_Device["Device"]["AirPressure"]["AirTemperature"]["Value"] = String(pressure, 0);
-  json_Device["Device"]["AirPressure"]["AirTemperature"]["Unit"] = "mbar";
+  json_Device["Device"]["MeasuringValues"]["AirPressure"]["Value"] = String(pressure, 0);
+  json_Device["Device"]["MeasuringValues"]["AirPressure"]["Unit"] = "mbar";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["AirHumidity"]["Value"] = String(humidity, 0);
-  json_Device["Device"]["MeasuringValues"]["AirHumidity"]["Unit"] = "%";
+  json_Device["Device"]["MeasuringValues"]["AirHumidity"]["Unit"] = "%";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["Dewpoint"]["Value"] = String(dewp, 1);
-  json_Device["Device"]["MeasuringValues"]["Dewpoint"]["Unit"] = String(actconf.tempUnit);
+  json_Device["Device"]["MeasuringValues"]["Dewpoint"]["Unit"] = String(actconf.tempUnit);  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["Temp1Wire"]["Value"] = String(temp1wire, 1);
-  json_Device["Device"]["MeasuringValues"]["Temp1Wire"]["Unit"] = String(actconf.tempUnit);
+  json_Device["Device"]["MeasuringValues"]["Temp1Wire"]["Unit"] = String(actconf.tempUnit);  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["BatteryVoltage"]["Value"] = String(voltage, 3);
-  json_Device["Device"]["MeasuringValues"]["BatteryVoltage"]["Unit"] = "V";
+  json_Device["Device"]["MeasuringValues"]["BatteryVoltage"]["Unit"] = "V";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["BatteryCapacity"]["Value"] = String(capacity, 0);
-  json_Device["Device"]["MeasuringValues"]["BatteryCapacity"]["Unit"] = "%";
+  json_Device["Device"]["MeasuringValues"]["BatteryCapacity"]["Unit"] = "%";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["Tank1Voltage"]["Value"] = String(tank1, 3);
-  json_Device["Device"]["MeasuringValues"]["Tank1Voltage"]["Unit"] = "V";
+  json_Device["Device"]["MeasuringValues"]["Tank1Voltage"]["Unit"] = "V";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["Tank2Voltage"]["Value"] = String(tank2, 3);
-  json_Device["Device"]["MeasuringValues"]["Tank2Voltage"]["Unit"] = "V";
+  json_Device["Device"]["MeasuringValues"]["Tank2Voltage"]["Unit"] = "V";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["Tank1"]["Value"] = String(tank1p, 3);
-  json_Device["Device"]["MeasuringValues"]["Tank1"]["Unit"] = "%";
+  json_Device["Device"]["MeasuringValues"]["Tank1"]["Unit"] = "%";  // TODO: bring into staticdata.json
+
+  json_Device["Device"]["MeasuringValues"]["Tank1adc"]["Value"] = String(tank1adc);
 
   json_Device["Device"]["MeasuringValues"]["Tank2"]["Value"] = String(tank2p, 3);
-  json_Device["Device"]["MeasuringValues"]["Tank2"]["Unit"] = "%";
+  json_Device["Device"]["MeasuringValues"]["Tank2"]["Unit"] = "%";  // TODO: bring into staticdata.json
+
+  json_Device["Device"]["MeasuringValues"]["Tank2adc"]["Value"] = String(tank2adc);
 
   json_Device["Device"]["MeasuringValues"]["Alarm"]["Value"] = String(alarm1);
-  json_Device["Device"]["MeasuringValues"]["Alarm"]["Unit"] = "bin";
+  json_Device["Device"]["MeasuringValues"]["Alarm"]["Unit"] = "bin";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["Relay"]["Value"] = String(actconf.relay);
-  json_Device["Device"]["MeasuringValues"]["Relay"]["Unit"] = "bin";
+  json_Device["Device"]["MeasuringValues"]["Relay"]["Unit"] = "bin";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["RelayTimer"]["Value"] = String(int(relaytimer * 5));
-  json_Device["Device"]["MeasuringValues"]["RelayTimer"]["Unit"] = "x5min";
+  json_Device["Device"]["MeasuringValues"]["RelayTimer"]["Unit"] = "x5min";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["EnvSensor"]["Value"] = String(actconf.envSensor);
-  json_Device["Device"]["MeasuringValues"]["EnvSensor"]["Unit"] = "";
+  json_Device["Device"]["MeasuringValues"]["EnvSensor"]["Unit"] = "";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["standbyMode"]["Value"] = String(actconf.standbyMode);
-  json_Device["Device"]["MeasuringValues"]["standbyMode"]["Unit"] = "";
+  json_Device["Device"]["MeasuringValues"]["standbyMode"]["Unit"] = "";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["loraStandbyMode"]["Value"] = String(actconf.loraStandbyMode);
-  json_Device["Device"]["MeasuringValues"]["loraStandbyMode"]["Unit"] = "";
+  json_Device["Device"]["MeasuringValues"]["loraStandbyMode"]["Unit"] = "";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["VEdirectV"]["Value"] = "%vedirectVoltage%";
-  json_Device["Device"]["MeasuringValues"]["VEdirectV"]["Unit"] = "V";
+  json_Device["Device"]["MeasuringValues"]["VEdirectV"]["Unit"] = "V";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["VEdirectC"]["Value"] = "%vedirectCurrent%";
-  json_Device["Device"]["MeasuringValues"]["VEdirectC"]["Unit"] = "A";
+  json_Device["Device"]["MeasuringValues"]["VEdirectC"]["Unit"] = "A";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["VEdirectT"]["Value"] = "%vedirectTemp%";
-  json_Device["Device"]["MeasuringValues"]["VEdirectT"]["Unit"] = "°C";
+  json_Device["Device"]["MeasuringValues"]["VEdirectT"]["Unit"] = "°C";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["Latitude"]["Value"] = String(latitude, 6);
-  json_Device["Device"]["MeasuringValues"]["Latitude"]["Unit"] = String(latitudeNS);
+  json_Device["Device"]["MeasuringValues"]["Latitude"]["Unit"] = String(latitudeNS);  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["Longitude"]["Value"] = String(longitude, 6);
-  json_Device["Device"]["MeasuringValues"]["Longitude"]["Unit"] = String(longitudeEW);
+  json_Device["Device"]["MeasuringValues"]["Longitude"]["Unit"] = String(longitudeEW);  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["Altitude"]["Value"] = String(altitude, 0);
-  json_Device["Device"]["MeasuringValues"]["Altitude"]["Unit"] = "m";
+  json_Device["Device"]["MeasuringValues"]["Altitude"]["Unit"] = "m";  // TODO: bring into staticdata.json
 
   String zhour = firstzero(hour);
   String zminute = firstzero(minute);
   String zsecond = firstzero(second); 
   String timestr = "\"" + String(zhour) + ":" + String(zminute) + ":" + String(zsecond) + "\"";
   json_Device["Device"]["MeasuringValues"]["Time"]["Value"] = String(timestr);
-  json_Device["Device"]["MeasuringValues"]["Time"]["Unit"] = "UTC";
+  json_Device["Device"]["MeasuringValues"]["Time"]["Unit"] = "UTC";  // TODO: bring into staticdata.json
 
   String zday = firstzero(day);
   String zmonth = firstzero(month);
   String zyear = firstzero(year);
   String datestr = "\"" + String(zday) + "." + String(zmonth) + "." + String(zyear) + "\"";
   json_Device["Device"]["MeasuringValues"]["Date"]["Value"] = String(datestr);
-  json_Device["Device"]["MeasuringValues"]["Date"]["Unit"] = "GTM";
+  json_Device["Device"]["MeasuringValues"]["Date"]["Unit"] = "GTM";  // TODO: bring into staticdata.json
 
   String sunrisestr = "\"" + String(zhour) + ":" + String(zminute) + ":" + String(zsecond) + "\"";
   json_Device["Device"]["MeasuringValues"]["Sunrise"]["Value"] = String(sunrisestr);
-  json_Device["Device"]["MeasuringValues"]["Sunrise"]["Unit"] = "UTC";
+  json_Device["Device"]["MeasuringValues"]["Sunrise"]["Unit"] = "UTC";  // TODO: bring into staticdata.json
 
   String sunsetstr = "\"" + String(zhour) + ":" + String(zminute) + ":" + String(zsecond) + "\"";
   json_Device["Device"]["MeasuringValues"]["Sunset"]["Value"] = String(sunsetstr);
-  json_Device["Device"]["MeasuringValues"]["Sunset"]["Unit"] = "UTC";
+  json_Device["Device"]["MeasuringValues"]["Sunset"]["Unit"] = "UTC";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["Speed"]["Value"] = String(gpsspeed);
-  json_Device["Device"]["MeasuringValues"]["Speed"]["Unit"] = "kn";
+  json_Device["Device"]["MeasuringValues"]["Speed"]["Unit"] = "kn";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["Course"]["Value"] = String(course);
-  json_Device["Device"]["MeasuringValues"]["Course"]["Unit"] = "°";
+  json_Device["Device"]["MeasuringValues"]["Course"]["Unit"] = "°";  // TODO: bring into staticdata.json
 
-  json_Device["Device"]["NMEAValues"]["String1"] = sendXDR1(0);
-  json_Device["Device"]["NMEAValues"]["String2"] = sendXDR2(0);
-  json_Device["Device"]["NMEAValues"]["String3"] = sendXDR3(0);
-  json_Device["Device"]["NMEAValues"]["String4"] = "°";
-  json_Device["Device"]["NMEAValues"]["String5"] = "°";
+  // for debugging purpose?
+  //json_Device["Device"]["NMEAValues"]["String1"] = sendXDR1(0);
+  //json_Device["Device"]["NMEAValues"]["String2"] = sendXDR2(0);
+  //json_Device["Device"]["NMEAValues"]["String3"] = sendXDR3(0);
+  //json_Device["Device"]["NMEAValues"]["String4"] = "°";
+  //json_Device["Device"]["NMEAValues"]["String5"] = "°";
 
   String stringjsondata = "";
   serializeJson(json_Device, stringjsondata);
@@ -965,14 +1000,11 @@ httpServer.on("/data.json", HTTP_GET, [](AsyncWebServerRequest *request) {
 });
 
 httpServer.on("/reseteeprom", HTTP_GET, [](AsyncWebServerRequest *request) {
-  //String content = readFile2(LittleFS, "/md5.js");
-  //content.replace("%transactionID%", String(transactionID));
-  //eraseEEPROMConfig(defconf);
   saveEEPROMConfig(defconf);
   request->send(200, "text/javascript", "ok, EEPROM erased.");
 });
 
-// Use no cash because the js was permanently modifyed (transaction ID)
+// Use no cache because the js was permanently modifyed (transaction ID)
 httpServer.on("/MD5.js", HTTP_GET, [](AsyncWebServerRequest *request) {
   String content = readFile2(LittleFS, "/md5.js");
   content.replace("%transactionID%", String(transactionID));
@@ -980,21 +1012,26 @@ httpServer.on("/MD5.js", HTTP_GET, [](AsyncWebServerRequest *request) {
   request->send(200, "text/javascript", content);
 });
 
-// Use no cash because the js was permanently modifyed (transaction ID)
-httpServer.on("/md5.min.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+// Use no cache because the js was permanently modifyed (transaction ID)
+/*httpServer.on("/md5.min.js", HTTP_GET, [](AsyncWebServerRequest *request) {
   String content = readFile2(LittleFS, "/md5.min.js");
   content.replace("%transactionID%", String(transactionID));
 
   request->send(200, "text/javascript", content);
-});
+});*/
+httpServer.serveStatic("/md5.min.js", LittleFS, "/md5.min.js").setCacheControl("max-age=600");
 
-// Use no cash because the js was permanently modifyed (transaction ID)
-httpServer.on("/md5.min.js.map", HTTP_GET, [](AsyncWebServerRequest *request) {
+
+// Use no cache because the js was permanently modifyed (transaction ID)
+/*httpServer.on("/md5.min.js.map", HTTP_GET, [](AsyncWebServerRequest *request) {
   String content = readFile2(LittleFS, "/md5.min.js.map");
   content.replace("%transactionID%", String(transactionID));
 
   request->send(200, "text/javascript", content);
-});
+});*/
+httpServer.serveStatic("/md5.min.js.map", LittleFS, "/md5.min.js.map").setCacheControl("max-age=600");
+
+httpServer.serveStatic("/gauge.min.js", LittleFS, "/gauge.min.js").setCacheControl("max-age=600");
 
 // Firmware update
 AsyncElegantOTA.begin(&httpServer);    // Start ElegantOTA
@@ -1029,8 +1066,8 @@ AsyncElegantOTA.begin(&httpServer);    // Start ElegantOTA
 
 // run handleUpload function when any file is uploaded
   httpServer.on("/upload", HTTP_POST, [](AsyncWebServerRequest *request) {
-        request->send(200);
-      }, handleUpload);
+    request->send(200);
+  }, handleUpload);
 
   /*handling uploading file */
   /*httpServer.on("/upload", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -1076,15 +1113,14 @@ httpServer.on("/updatefilesstatus", HTTP_GET, [](AsyncWebServerRequest *request)
   //DownloadFilesFromFtp(actconf.fversion);
   //DownloadFilesFromWeb(actconf.fversion);
   String test = (String)runDownloadingFiles;
+  //String test = (String)runDownloadingFilesStatus;
 
   request->send(200, "text/html", test);
 });
 
 httpServer.onNotFound([](AsyncWebServerRequest *request){
   String content = readFile2(LittleFS, "/error.html");
+  content.replace("%header%", getheader());
   content.replace("%devname%", String(actconf.devname));
-  content.replace("%crights%", String(actconf.crights));
-  content.replace("%fversion%", String(actconf.fversion));
-  content.replace("%wlanquality%", String(wlanquality()));
   request->send(404, "text/html", content);
 });

@@ -15,6 +15,8 @@ void DownloadFilesFromWeb(char *fversion)
     testDownload("error.html", fversion);
     testDownload("favicon.ico", fversion);
     testDownload("firmware.html", fversion);
+    testDownload("gauge.min.js", fversion);
+    testDownload("header.html", fversion);
     testDownload("app.js", fversion);
     testDownload("lora.html", fversion);
     testDownload("main.html", fversion);

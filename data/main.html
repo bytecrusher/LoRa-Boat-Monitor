@@ -45,7 +45,7 @@
         }
         //quality = document.getElementById('quality');
         //quality.value = myObj.Device.NetworkParameter.ConnectionQuality.Value;
-        document.getElementById('quality').innerHTML = myObj.Device.NetworkParameter.ConnectionQuality.Value;
+        //document.getElementById('quality').innerHTML = myObj.Device.NetworkParameter.ConnectionQuality.Value;
       }
     };
     function read_json() {
@@ -53,9 +53,7 @@
       xmlhttp.send();
     } 
   </script>
-  <h2>LoRa Boat Monitor</h2>
-  %crights%, %fversion%, CQ: <data id='quality'></data> %
-  <hr>
+  %header%
   <h3><data class="blink" id='info'></data></h3>
   <table>
     <tr>

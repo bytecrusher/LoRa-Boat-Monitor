@@ -11,8 +11,9 @@
 </head>
 
 <body>
-
+  <script src='/gauge.min.js' type='text/javascript'></script>
   <script>
+    var staticData;
     var xmlhttp = new XMLHttpRequest();
     xmlhttp.onreadystatechange = function () {
       if (this.readyState == 4 && this.status == 200) {
@@ -21,7 +22,7 @@
         // Fill all values in Page
         document.getElementById('quality').innerHTML = myObj.Device.NetworkParameter.ConnectionQuality.Value;
         //if (String(actconf.envSensor) == "BME280") {
-        if (myObj.Device.DeviceSettings.envSensor == "BME280") {
+        if (staticData.Device.DeviceSettings.envSensor == "BME280") {
           document.getElementById('airtemp').innerHTML = myObj.Device.MeasuringValues.AirTemperature.Value;
           document.getElementById('atunit').innerHTML = myObj.Device.MeasuringValues.AirTemperature.Unit;
           document.getElementById('pressure').innerHTML = myObj.Device.MeasuringValues.AirPressure.Value;
@@ -46,9 +47,30 @@
         document.getElementById('1wtemp').innerHTML = myObj.Device.MeasuringValues.Temp1Wire.Value;
         document.getElementById('1wunit').innerHTML = myObj.Device.MeasuringValues.Temp1Wire.Unit;
         document.getElementById('tank1').innerHTML = myObj.Device.MeasuringValues.Tank1.Value;
+        document.getElementById('tank1adc').innerHTML = myObj.Device.MeasuringValues.Tank1adc.Value;
+        //document.gauges.get('canvas-id').value = myObj.Device.MeasuringValues.Tank1.Value;
+        //document.gauges.get('canvas-id').value = ((myObj.Device.MeasuringValues.Tank1adc.Value / (4096 / 80)) - 40);   // 4096 adc max, 80 steps at all, -40 for adjusting the scale.
+        gauge.value = ((myObj.Device.MeasuringValues.Tank1adc.Value / (4096 / 80)) - 40);   // 4096 adc max, 80 steps at all, -40 for adjusting the scale.
+        gauge.update()
+
         document.getElementById('tank2').innerHTML = myObj.Device.MeasuringValues.Tank2.Value;
-        document.getElementById('alarm').innerHTML = myObj.Device.MeasuringValues.Alarm.Value;
-        document.getElementById('relay').innerHTML = myObj.Device.MeasuringValues.Relay.Value;
+        document.getElementById('tank2adc').innerHTML = myObj.Device.MeasuringValues.Tank2adc.Value;
+        //document.getElementById('alarm').innerHTML = myObj.Device.MeasuringValues.Alarm.Value;
+
+        if (myObj.Device.MeasuringValues.Alarm.Value == '0') {
+          document.getElementById("alarm").classList.remove('led-red');
+        } else {
+          document.getElementById("alarm").classList.add('led-red');
+        }
+
+        if (myObj.Device.MeasuringValues.Relay.Value == '0') {
+          document.getElementById("relay").classList.remove('led-green');
+        } else {
+          document.getElementById("relay").classList.add('led-green');
+        }
+        //document.getElementById('relay').innerHTML = myObj.Device.MeasuringValues.Relay.Value;
+
+
         var rtime = 5 * myObj.Device.MeasuringValues.RelayTimer.Value;
         document.getElementById('rtimer').innerHTML = rtime;
 
@@ -68,15 +90,25 @@
       xmlhttp.send();
     }
     setInterval(function () { read_json(); }, 1000);
+
+    var xmlhttpStaticData = new XMLHttpRequest();
+    xmlhttpStaticData.onreadystatechange = function () {
+      if (this.readyState == 4 && this.status == 200) {
+        staticData = JSON.parse(this.responseText);
+        staticData.Device.DeviceSettings.envSensor == "BME280"
+      }
+    };
+
+    xmlhttpStaticData.open('GET', '/staticdata.json', true);
+    xmlhttpStaticData.send();
+
+
   </script>
 
-  <h2>%devname%</h2>
-  %crights%, %fversion%, CQ: <data id='quality'></data>%
-  <hr>
+  %header%
+  <div>%envSensorString%</div>
 
-  %envSensorString%
-
-  <h3>Position Speed Course</h3>
+  <div><h3>Position Speed Course</h3></div>
   <FONT SIZE='4'>
     <table>
       <tr>
@@ -129,7 +161,7 @@
           </div>
         </td>
         <td>Alt:</td>
-        <td><data id='alt'></data>m</td>
+        <td><data id='alt'></data> m</td>
         <td></td>
       </tr>
       <tr>
@@ -147,7 +179,7 @@
           </div>
         </td>
         <td>Spd:</td>
-        <td><data id='speed'></data>kn</td>
+        <td><data id='speed'></data> kn</td>
         <td></td>
       </tr>
       <tr>
@@ -330,8 +362,9 @@
 
         </td>
         <td>Water:</td>
-        <td><data id='tank1'></data>%</td>
-        <td></td>
+        <td><data id='tank1'></data>%<br>
+          <data id='tank1adc'></data></td>
+        <td><canvas id="canvas-id"></canvas></td>
       </tr>
       <tr>
         <td>
@@ -350,8 +383,9 @@
           </div>
         </td>
         <td>Fuel:</td>
-        <td><data id='tank2'></data>%</td>
-        <td></td>
+        <td><data id='tank2'></data>%<br>
+          <data id='tank2adc'></data></td>
+        <td><canvas id="canvas-id2"></canvas></td>
       </tr>
     </table>
   </FONT><br>
@@ -377,7 +411,7 @@
 
         </td>
         <td>Alarm:</td>
-        <td><data id='alarm'></data></td>
+        <td><div id='alarm' class="led"></div></td>
         <td></td>
       </tr>
       <tr>
@@ -392,7 +426,7 @@
           </div>
         </td>
         <td>Relay:</td>
-        <td><data id='relay'></data></td>
+        <td><div id='relay' class="led"></div></td>
         <td></td>
       </tr>
       <tr>
@@ -415,10 +449,56 @@
       </tr>
     </table>
   </FONT><br>
-  <hr>
 
+  <hr>
   <br>
   <form action='/'><button type='submit'>Back</button></form>
+  <script>
+    var gauge;
+    document.addEventListener("DOMContentLoaded", () => {
+      gauge = new RadialGauge({
+        renderTo: 'canvas-id',
+        width: 300,
+        height: 300,
+        units: "",
+        title: "Rudder Angel",
+        minValue: -40,
+        startAngle: 300,
+        ticksAngle: 120,
+        valueBox: false,
+        maxValue: 40,
+        majorTicks: [
+            "-40",
+            "0",
+            "40"
+        ],
+        minorTicks: 2,
+        strokeTicks: true,
+        highlights: [
+            {
+                "from": 0,
+                "to": 40,
+                "color": "rgba(200, 50, 50, .75)"
+            },
+            {
+                "from": -40,
+                "to": 0,
+                "color": "rgba(0, 128, 0, .3)"
+            }
+        ],
+        colorPlate: "#fff",
+        borderShadowWidth: 0,
+        borders: false,
+        needleType: "arrow",
+        needleWidth: 4,
+        needleCircleSize: 7,
+        needleCircleOuter: true,
+        needleCircleInner: false,
+        animationDuration: 500,
+        animationRule: "linear"
+      }).draw();
+    });
+  </script>
 </body>
 
 </html>

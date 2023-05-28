@@ -144,6 +144,26 @@
             }
         }
 
+        function check_alarmState(event) {
+            var selectElement = event.target;
+            var value = selectElement.value;
+            if (value == "On") {
+                var xhr = new XMLHttpRequest();
+                xhr.onreadystatechange = function () {
+                    if (this.readyState == 4 && this.status == 200) {
+                        //console.log(xhr.response);
+                        if (xhr.response == "0") {
+                            alert("Please check wiring and make sure, Batterie switch is on.");
+                            selectElement.value = "Off";
+                        }
+                    }
+                };
+                //xhr.open("GET", "/getdata?alarmState="+element.id+"&state=1", true);
+                xhr.open("GET", "/getdata", true);
+                xhr.send();
+            }
+        }
+
         function downloadConfigAsJson() {
             const formData = new FormData(form1);
             var myjsonString = JSON.stringify(Object.fromEntries(formData));
@@ -195,10 +215,7 @@
 </head>
 
 <body onload='setSelections();'>
-    <h2>%devname%</h2>
-    %crights%, %fversion%, CQ: %quality% %
-    <hr>
-
+    %header%
     <div id="loader"></div>
     <div style="display:none;" id="myDiv" class="animate-bottom">
     <form id='form1' name='SetForm' method='get' action='savesettings'>
@@ -465,11 +482,12 @@
             </tr>
 
             <tr>
-                <td>Relay</td>
+                <td>Relay (Mode)</td>
                 <td>
                     <select name='relay' size='1'>
                         <option value='0'>Off</option>
                         <option value='1'>On</option>
+                        <option value='2'>Controll GPS Modul</option>
                     </select>
                 </td>
                 <td></td>
@@ -669,7 +687,7 @@
             <tr>
                 <td>Activate Standby Mode (Alarm Input X1-3)</td>
                 <td>
-                    <select name='standbyMode' size='1'>
+                    <select name='standbyMode' size='1' onchange='check_alarmState(event)'>
                         <option value='Off'>Off</option>
                         <option value='On'>On</option>
                     </select>
@@ -768,7 +786,7 @@
     
     <form id='form4' action='/reseteeprom'>
         <button type="button" onclick="downloadConfigAsJson()">Download Config</button>
-        <button type='submit'>Factory Settings</button>
+        <button type='submit' style="margin-left: 20px;">Factory Settings</button>
     </form>
     <br>
     <form id="upload">

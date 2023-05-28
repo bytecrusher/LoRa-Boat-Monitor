@@ -334,7 +334,7 @@ void testFileIO(fs::FS &fs, const char * path){
 String getMyDirAsString(fs::FS &fs, const char * dirname, uint8_t levels){
     String response = "";
     //response += "<p>Listing directory: " + (String)dirname + "</p>";
-    response += "<table><tr><th>Type</th><th>Name</th><th>Size</th><th>LAST WRITE</th></tr>";
+    response += "<table><tr><th>Type</th><th>Name</th><th>Size (KB)</th><th>LAST WRITE</th></tr>";
 
     File root = fs.open(dirname);
     if(!root){
@@ -385,7 +385,7 @@ String getMyDirAsString(fs::FS &fs, const char * dirname, uint8_t levels){
             response += String("<tr>") +
                         String("<td>FILE</td>") +
                         String("<td><a href='") + String(file.name()) + String("'>") + String(file.name()) + String("</a></td>") +
-                        String("<td>") + file.size() + String("</td>") +
+                        String("<td>") + float(file.size() / 1024.0) + String("</td>") +
                         String("<td>") + timestamp + String("</td>") +
                         String("</tr>");
         }

@@ -24,6 +24,8 @@ int ccounter;                       // Actual connection test counter
 int SendPeriod = 2000;              // SendPeriod in [ms], Attention! Range is limited [2000]
 volatile bool flag1 = false;        // Flag for data sending
 
+volatile bool flag2 = false;        // Flag for data sending
+
 // LoRa timeslot counter for different spreading factors
 long slotcounter = 0;               // Slot counter
 int slot = 0;                       // Actual time slot
@@ -47,6 +49,8 @@ float tank1;                        // Tank 1 level [V]
 float tank2;                        // Tank 1 level [V]
 float tank1p;                       // Tank 2 level [%]
 float tank2p;                       // Tank 2 level [%]
+uint16_t tank1adc;                        // Tank 1 level [V]
+uint16_t tank2adc;                        // Tank 1 level [V]
 
 int alarm1;                         // Digital Alarm input
 int relaytimer = 0;                 // Relay timer for ontime n x 5min
@@ -199,7 +203,7 @@ String lorafrequencys[2] = {"EU868", "US915"};
 String lchannel[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 String spreadf[4] = {"7", "8", "9", "10"};
 String dynsf[2] = {"0", "1"};
-String relay[2] = {"0", "1"};
+String relay[3] = {"0", "1", "2"};
 String debugmode[4] = {"0", "1", "2", "3"};
 String serspeed[10] = {"300", "1200", "2400", "4800", "9600", "19200", "38400", "57600", "74880", "115200"};
 String deviceid[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};

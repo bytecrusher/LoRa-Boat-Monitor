@@ -99,7 +99,11 @@ TaskHandle_t Task1;             // Declare task for LoRa code
 //WebServer httpServer(actconf.httpport);   // Port for HTTP server
 AsyncWebServer httpServer(actconf.httpport);
 //MDNSResponder mdns;                       // Activate DNS responder
-WiFiServer server(actconf.dataport);      // Declare WiFi NMEA server port
+//WiFiServer server(actconf.dataport);        // Declare WiFi NMEA server port
+WiFiServer server(2222);        // Declare WiFi NMEA server port
+#define MAX_CLIENTS 3 //maximal number of simultaneousy connected clients
+WiFiClient clients[MAX_CLIENTS]; //Array of clients
+char result[70] = "0";  //string for NMEA-assembly (dollar symbol, MWV, CS)
 
 Ticker Timer1;                  // Declare Timer for GPS data reading
 Ticker Timer2;                  // Declare Timer for relay ontime
@@ -121,6 +125,7 @@ int loopcounter = 0;
 bool toggleDisplayStatus = false;
 long LoraSendDurationSeconds = 0;
 boolean runDownloadingFiles = false;
+boolean runDownloadingFilesStatus = false;
 
 long timezone = 1; 
 byte daysavetime = 1;
@@ -277,6 +282,10 @@ void enableWiFi(){
         DebugPrintln(3, WiFi.softAPIP());
       };
       DebugPrintln(3, "");
+      Timer3.attach_ms(SendPeriod, sendNMEA);    // Data transmission timer for NMEA
+
+      // TCP-Server for NMEA0183
+      //client = server.available();// Check if a client is connected
     //*****************************************************************************************
 }
 
@@ -384,11 +393,16 @@ void VEdirectRead()
 
 void state0(){
   //Serial.println(F("State0"));
-  if (alarm1 == false) {
+  if (alarm1 == true) {
     return;
   }
+
+  if (String(actconf.standbyMode) == "Off") {
+    return;
+  }
+
   if(machine.executeOnce){
-    if (alarm1 == true) {
+    if (alarm1 == false) {
       // disable gps
       //Timer1.detach();
       u8x8.clearDisplay();
@@ -451,12 +465,20 @@ void state1(){
     u8x8.drawString(0,2,"WiFI mode");
     u8x8.refreshDisplay();    // Only required for SSD1606/7
 
+    if (actconf.relay == 1) {
+      digitalWrite(relayPin, HIGH); // Relay on
+    } else if (actconf.relay == 2) {
+      digitalWrite(relayPin, HIGH); // Relay on
+    }
+
     if (String(actconf.loraStandbyMode) == "Always") {
       timerAlarmEnable(My_timer);
     } else {
       timerAlarmDisable(My_timer);
     }
   }
+
+  Serial.println(F("loop anfang."));
 
   //readValues();
   //delay(20);
@@ -498,15 +520,18 @@ void state1(){
   }
 
   VEdirectRead();
-
+  
   // TCP-Server for NMEA0183
   /*WiFiClient client = server.available();// Check if a client is connected
   int i = 0;
+  //client = server.available();// Check if a client is connected
 
+  Serial.println(client.connected());
+  Serial.println(client.available());
   // While TCP client is connected or Serial Mode is active
   while ((client.connected() && !client.available()) || (int(actconf.serverMode) == 1)) {
     Serial.println(F("While client connected."));
-    httpServer.handleClient();      // HTTP Server-handler for HTTP update server
+    //httpServer.handleClient();      // HTTP Server-handler for HTTP update server
 
     if ((i == 0) && ((int(actconf.serverMode) == 0) || (int(actconf.serverMode) == 4))) {
       DebugPrintln(3, "TCP client connected");
@@ -521,7 +546,7 @@ void state1(){
       if (String(actconf.envSensor) == "BME280") {
         bme.takeForcedMeasurement();  // has no effect in normal mode
       }  
-      readValues();
+      //readValues();
       writeDisplay();
     }
 
@@ -542,15 +567,73 @@ void state1(){
             if(nmea != ""){
               client.println(sendRMC(1));   // Send GPS RMC telegram
             }
-         }
+            client.println("$GPGSV,3,1,11,03,03,111,00,04,15,270,00,06,01,010,00,13,06,292,00*74");
+            client.println("$GPGLL,4738.9884,N,12226.9827,W,220259,A*32");
+            /* $GPGSV,3,2,11,14,25,170,00,16,57,208,39,18,67,296,40,19,40,246,00*74 $GPGSV,3,3,11,22,42,067,42,24,14,311,43,27,05,244,00,,,,*4D $GPGLL,4738.9884,N,12226.9827,W,220259,A*32 $GPGGA,220259,4738.9884,N,12226.9827,W,1,12,1.5,0.0,M,0.0,M,*41 $GPVHW,45.0,T,63.0,M,0.0,N,0.0,K*46 $GPVDR,135.0,T,149.0,M,2.2,N*25 $HCHDT,45.0,T*18 $HCHDM,63.0,M*1C $IIMWV,316,T,0.0,N,A*21 $IIMWV,NaN,R,0.0,N,A*72 $GPRMC,220259,A,4738.9884,N,12226.9827,W,2.2,135.0,220523,14.0,E*58");*/
+  /*       }
       }
       flag1 = false;                        // Reset the send flag
+      //break;
     }
   }*/
 
+  //___________________________
+
+  //--------------------------------------------------------
+  // Assembly and sending of the NMEA0183-sentence via TCP
+  //--------------------------------------------------------
+  
+  /*if (server.hasClient()) {  //only send if there are clients to receive
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+
+      //added check for clients[i].status==0 to reuse connections
+      if ( !(clients[i] && clients[i].connected() ) ) {
+        if (clients[i]) {
+          clients[i].stop(); // make room for new connection
+        }
+        clients[i] = server.available();
+        continue;
+      }
+    }
+     // No free spot or exceeded MAX_CLENTS so reject incoming connection
+    server.available().stop();
+  }
+
+  //checksum(MWVSentence).toCharArray(g, 85); //calculate checksum and store it
+
+  //final assembly of the TCP-message to be send
+  /*strcpy(result, "$");  //start with the dollar symbol
+  strcat(result, MWVSentence); //append the MWVSentence
+  strcat(result, "*"); //star-seperator for the CS
+  strcat(result, g);  //append the CS*/
+
+//  strcpy(result, "$GPGSV,3,1,11,03,03,111,00,04,15,270,00,06,01,010,00,13,06,292,00*74");    // Send XDR2 telegram battery sensors
+  //client.println(sendXDR3(1));    // Send XDR3 telegram level and control
+
+  // Broadcast NMEA0183 sentence to all clients
+/*  for (int i = 0; i < MAX_CLIENTS; i++) {
+    if (clients[i] && clients[i].connected()) {
+      clients[i].println(result);  //make sure to use println and not write, at least it did not work for me
+      //clients[i].println("$");
+      //clients[i].println("$GPGSV,3,1,11,03,03,111,00,04,15,270,00,06,01,010,00,13,06,292,00*74");
+      //$GPGSV,3,2,11,14,25,170,00,16,57,208,39,18,67,296,40,19,40,246,00*74 $GPGSV,3,3,11,22,42,067,42,24,14,311,43,27,05,244,00,,,,*4D $GPGLL,4738.7636,N,12226.6491,W,215915,A*30 $GPGGA,215915,4738.7636,N,12226.6491,W,1,12,1.5,0.0,M,0.0,M,*43 $GPVHW,45.0,T,63.0,M,0.0,N,0.0,K*46 $GPVDR,135.0,T,149.0,M,2.2,N*25 $HCHDT,45.0,T*18 $HCHDM,63.0,M*1C $IIMWV,313,T,0.0,N,A*24 $IIMWV,NaN,R,0.0,N,A*72 $GPRMC,215915,A,4738.7636,N,12226.6491,W,2.2,135.0,230523,14.0,E*5B ");
+    }
+  }*/
+  //___________________________
+
+  Serial.println(F("nach while."));
+
+  if (flag2 == true) {
+    //readGPSValues();
+  }
+
+  Serial.println(F("nach read gps."));
+
   if (runDownloadingFiles) {
+    runDownloadingFilesStatus = true;
     DownloadFilesFromWeb(actconf.fversion);
     runDownloadingFiles = false;
+    runDownloadingFilesStatus = false;
   }
 
   if(reboot){
@@ -565,7 +648,10 @@ State* S0 = machine.addState(&state0);
 State* S1 = machine.addState(&state1);
 
 bool transitionS0S1(){
-  if (alarm1 == false) {
+    //if (String(actconf.standbyMode) == "Off") {
+
+  if ((alarm1 == true) || (String(actconf.standbyMode) == "Off")) {
+    Serial.println(F("Zeile 570"));
     return true;
   } else {
     return false;
@@ -573,7 +659,7 @@ bool transitionS0S1(){
 }
 
 bool transitionS1S0(){
-  if (alarm1 == true) {
+  if ((alarm1 == false) && (String(actconf.standbyMode) == "On")) {
     return true;
   } else {
     return false;
@@ -755,9 +841,9 @@ void setup() {
   }  
 
   //##### Cyclic timer #####
-  Timer1.attach_ms(5000, readGPSValues);     // Start timer 1 all 5s cyclic GPS data reading
+  Timer1.attach_ms(5000, readGPSValuesFlag);     // Start timer 1 all 5s cyclic GPS data reading
   Timer2.attach_ms(300000, relayTimer);      // Start timer 2 all 5min cyclic counter increment
-  Timer3.attach_ms(SendPeriod, sendNMEA);    // Data transmission timer for NMEA
+  //Timer3.attach_ms(SendPeriod, sendNMEA);    // Data transmission timer for NMEA
 
   //####### Starting BME280 ######
   if (String(actconf.envSensor) == "BME280") {
@@ -858,6 +944,7 @@ void setup() {
   S1->addTransition(&transitionS1S0,S0);  // S1 transition to S0
 
   if (String(actconf.standbyMode) == "On") {
+    Serial.println(F("Zeile 863"));
     rtc_gpio_pullup_en(GPIO_NUM_39);
     esp_sleep_enable_ext0_wakeup(GPIO_NUM_39,0);
   }

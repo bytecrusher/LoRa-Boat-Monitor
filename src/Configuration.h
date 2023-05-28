@@ -39,7 +39,7 @@ typedef struct {
   int dynsf = 1;                            // Dynamic spreading factor [0|1] 0=off, 1=on (transmit schema SF SF SF SF SF SF SF SF SF SF SF+1 SF+2)
   int tinterval = 1;                        // LoRa transmit interval x30s, [1...255] (value x 30s, 10 X 30s = 300s = 5min)
   int sendlora = 1;                         // Send LoRa telegrams [0|1] 0=off 1=on
-  int relay = 0;                            // Relay status [0|1] 0=off 1=on
+  int relay = 0;                            // Relay status [0|1|2] 0=off 1=on 2=controll GPS Modul
                                             // Info: see relaytimer [0|1...255] 0=off 1...255= value x 5min on time for relay
 
   int instrumentSize = 400;                 // Instrument size X * Y [pix] [200|250|300|350|400|450|500|550|600]

@@ -67,7 +67,10 @@ h7 {
 body {
     color: rgb(200, 200, 200);
     font-family: arial;
+    /*padding: 50px;
+    background-color: #222;*/
 }
+
 
 /* Blinking text definition */
 blink {
@@ -148,3 +151,38 @@ svg {
   #myDiv {
     display: none;
   }
+
+.led {
+    /*margin: 20px auto;*/
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.25);
+    box-shadow: #000 0 -1px 6px 1px;
+}
+.led-red {
+    background-color: #F00;
+    box-shadow: #000 0 -1px 6px 1px, inset #600 0 -1px 8px, #F00 0 3px 11px;
+}
+.led-orange {
+    background-color: #FF7000;
+    box-shadow: #000 0 -1px 6px 1px, inset #630 0 -1px 8px, #FF7000 0 3px 11px;
+}
+
+.led-yellow {
+    background-color: #FF0;
+    box-shadow: #000 0 -1px 6px 1px, inset #660 0 -1px 8px, #FF0 0 3px 11px;
+}
+
+.led-green {
+    background-color: #80FF00;
+    box-shadow: #000 0 -1px 6px 1px, inset #460 0 -1px 8px, #80FF00 0 3px 11px;
+}
+
+.led-blue {
+    background-color: #06F;
+    box-shadow: #000 0 -1px 6px 1px, inset #006 0 -1px 8px, #06F 0 3px 11px;
+}
+
+.box { float: left; /*width: 32%;*/ /*margin-right: 2%;*/ /*padding: 20px;*/ /*background: #eee;*/ /*box-sizing: border-box;*/ }
+.box:last-child { margin-right: 0; }

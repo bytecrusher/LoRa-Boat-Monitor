@@ -1052,6 +1052,11 @@ void readValues() {
     }
     // Analog input 0...3.3V => 0...33V => 0...4096
     tank1 = 3.3 / 4096 * analogRead(TANK1_IN);
+    tank1adc = analogRead(TANK1_IN);  // real adc value
+    uint16_t sensorMin = 0;
+    uint16_t sensorMax = 3674;  // max value without Resistor.
+    tank1adc = map(tank1adc, sensorMin, sensorMax, 0, 4096);
+
     if (debugADC) {
       DebugPrint(3, tank1);
       DebugPrint(3, " V ");
@@ -1079,6 +1084,16 @@ void readValues() {
     }
     // Analog input 0...3.3V => 0...33V => 0...4096
     tank2 = 3.3 / 4096 * analogRead(TANK2_IN);
+    tank2adc = analogRead(TANK2_IN);  // real adc value
+    // apply the calibration to the sensor reading
+    //uint16_t sensor2Min = 0;
+    //uint16_t sensor2Max = 3674;
+    //tank2adc = map(tank2adc, sensor2Min, sensor2Max, 0, 4096);
+
+    // in case the sensor value is outside the range seen during calibration
+    tank2adc = constrain(tank2adc, 0, 4096);
+
+
     if (debugADC) {
       DebugPrint(3, tank2);
       DebugPrint(3, " V ");
@@ -1101,12 +1116,10 @@ void readValues() {
       DebugPrintln(3, " %");
     }
 
+    // Digital input 12V activ via opto coupler
+    alarm1 = !digitalRead(alarmPin);  // Invert for easer logic.
     if (debugAlarm1) {
       DebugPrint(3, "Alarm = ");
-    }
-    // Digital input 12V activ via opto coupler
-    alarm1 = digitalRead(alarmPin);
-    if (debugAlarm1) {
       DebugPrint(3, alarm1);
       DebugPrintln(3, "  ");
     }
@@ -1227,6 +1240,11 @@ void writeDisplay() {
   u8x8.drawString(8,7,"R:");
   u8x8.drawString(11,7, rel);
   u8x8.refreshDisplay();    // Only required for SSD1606/7 
+}
+
+// Timer 1 interrupt Read and print GPS values
+void readGPSValuesFlag() {
+  flag2 = true;
 }
 
 // Timer 1 interrupt Read and print GPS values
@@ -1377,6 +1395,7 @@ void readGPSValues() {
     }
   }
   while(Serial2.read() >= 0);  // Clear read buffer
+  flag2 = false;
 }
 
 // Timer2 Interrupt relay timer
@@ -1396,6 +1415,7 @@ void relayTimer(){
 // Timer3 routine for NMEA data sending with normal speed (all 2s)
 void sendNMEA() {
   // Set data sending flag1
+  //Serial.println("NMEA timer.");
   flag1 = true;
 }
 
@@ -1426,6 +1446,25 @@ void handleUpload(AsyncWebServerRequest *request, String filename, size_t index,
     Serial.println(logmessage);
     request->redirect("/");
   }
+}
+
+// Make size of files human readable
+// source: https://github.com/CelliesProjects/minimalUploadAuthESP32
+String humanReadableSize(const size_t bytes) {
+  if (bytes < 1024) return String(bytes) + " B";
+  else if (bytes < (1024 * 1024)) return String(bytes / 1024.0) + " KB";
+  else if (bytes < (1024 * 1024 * 1024)) return String(bytes / 1024.0 / 1024.0) + " MB";
+  else return String(bytes / 1024.0 / 1024.0 / 1024.0) + " GB";
+}
+
+String getheader() {
+  String content = readFile2(LittleFS, "/header.html");
+  //content.replace("%header%", String(readFile2(LittleFS, "/header.html")));
+  content.replace("%devname%", String(actconf.devname));
+  content.replace("%crights%", String(actconf.crights));
+  content.replace("%fversion%", String(actconf.fversion));
+  content.replace("%quality%", String(int(quality)));
+  return content;
 }
 
 #endif
