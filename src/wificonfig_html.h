@@ -1,4 +1,4 @@
-const char wificonfig_hmtl[] PROGMEM = R"rawliteral(
+const char wificonfig_html[] PROGMEM = R"rawliteral(
     <br><h3>Please enter the Wifi Network informations.</h3><br>
   <form name="wifiform" action="/savesettings" method="GET">
     WLAN Client SSID: <input type='text' required name='cssid' size='20' value='%cssid%' maxlength='20' onchange='check_ssid("cssid")'>

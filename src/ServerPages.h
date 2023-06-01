@@ -44,7 +44,7 @@ httpServer.on("/initialsetup.html", HTTP_GET, [](AsyncWebServerRequest *request)
   content.replace("%devname%", String(actconf.devname));
   content.replace("%crights%", String(actconf.crights));
   content.replace("%fversion%", String(actconf.fversion));
-  content.replace("%wificonfig%", wificonfig_hmtl);
+  content.replace("%wificonfig%", wificonfig_html);
   content.replace("%cssid%", String(actconf.cssid));
   content.replace("%cpassword%", String(actconf.cpassword));
   content.replace("%quality%", String(int(quality)));
