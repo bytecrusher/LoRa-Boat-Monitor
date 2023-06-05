@@ -37,6 +37,7 @@ byte rpayload[200];                 // Received LoRa payload over downlink (arra
 long starttime0 = millis();         // Timer0 value for measuring loop
 unsigned long starttime1 = millis();         // Timer1 value for measuring loop
 long starttime2 = millis();         // Timer2 value for measuring loop
+unsigned long starttime3 = millis();         // Timer1 value for measuring loop
 float fieldstrength;                // WLAN field strength
 float quality;                      // WLAN quality
 float temperature;                  // Temperature in [°C]
@@ -122,7 +123,7 @@ int c_counter = 0;            // Number of commata in RMC telegram
 #define I2C_SCL 22            // SCL standard GPIO22
 #define I2C_SPEED 100000      // I2C Speed 100KHz
 uint8_t address = 0x76;       // BME280 I2C address
-TwoWire I2CBME = TwoWire(0);  // Redefinition of I2C because changed pins
+TwoWire I2CBME = TwoWire(1);  // Redefinition of I2C because changed pins
 Adafruit_BME280 bme;          // Instance for BME280
 
 // VE.direct battery monitor (BMV-712) Victron
@@ -140,8 +141,10 @@ String gpsStatus = "";        // GPS status [A fix ok|V no fix]
 
 // OLED SSD1306
 // U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(clock, data, reset);
-U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(15, 4, 16);         // Heltec ESP32 LoRa (V2) pin definitions
+//U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(15, 4, 16);         // Heltec ESP32 LoRa (V2) pin definitions
                                                            // Clock GPIO15, Data GPIO4, Reset GPIO16
+U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(16, 15, 4);
+
 // Pin mapping for lmic LoRa chip SX1276
 const lmic_pinmap lmic_pins = {
     .nss = 18,
@@ -218,6 +221,7 @@ String tempunits[2] = {"C", "F"};
 String envSensor[4] = {"Off", "BME280", "VEdirect-Read", "VEdirect-Send"};
 String standbyMode[2] = {"Off", "On"};
 String loraStandbyMode[2] = {"Standby", "Always"};
+String cssStyle[3] = {"0", "1", "2"};
 
 boolean sendLoraQueue = false;
 #endif

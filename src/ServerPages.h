@@ -32,6 +32,7 @@ httpServer.on("/index.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   String content = readFile2(LittleFS, "/main.html");
   //content.replace("%header%", String(readFile2(LittleFS, "/header.html")));
   content.replace("%header%", getheader());
+  content.replace("%devname%", String(actconf.devname));
   if (content == "- failed to open file for reading"){
     request->redirect("/initialsetup.html");
   } else {
@@ -96,6 +97,7 @@ httpServer.on("/filesystem.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     transID();
     content = readFile2(LittleFS, "/password.html");
     content.replace("%header%", getheader());
+    content.replace("%devname%", String(actconf.devname));
     content.replace("%action%", "filesystem.html");
   } else {
     content = initialsetup_html;
@@ -120,13 +122,9 @@ httpServer.on("/filesystem.html", HTTP_GET, [](AsyncWebServerRequest *request) {
 });
 
 httpServer.on("/sensorv.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-  // Send page
   String content = readFile2(LittleFS, "/sensorv.html");
-  //content.replace("%header%", String(readFile2(LittleFS, "/header.html")));
   content.replace("%header%", getheader());
   content.replace("%devname%", String(actconf.devname));
-  content.replace("%crights%", String(actconf.crights));
-  content.replace("%fversion%", String(actconf.fversion));
 
   String envSensorString = "";
   if (String(actconf.envSensor) == "BME280") {
@@ -206,15 +204,42 @@ httpServer.on("/sensorv.html", HTTP_GET, [](AsyncWebServerRequest *request) {
 httpServer.on("/lora.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   String content = readFile2(LittleFS, "/lora.html");
   content.replace("%header%", getheader());
+  content.replace("%devname%", String(actconf.devname));
   request->send(200, "text/html", content);
 });
 
-httpServer.on("/ping", HTTP_GET, [](AsyncWebServerRequest *request) {
-  request->send(200, "text/plain", "true");
-});
-
 httpServer.on("/getdata", HTTP_GET, [](AsyncWebServerRequest *request) {
-  request->send(200, "text/plain", String(alarm1));
+  String inputMessage;
+  StaticJsonDocument<100> data;
+
+  if (request->hasParam("data")) {
+    int paramsNr = request->params();
+
+    for(int i=0;i<paramsNr;i++){
+      AsyncWebParameter* p = request->getParam(i);
+      if (p->name() == "data") {
+        inputMessage = p->value();
+        if (inputMessage == "alarm1") {
+          DebugPrintln(3, "getdata param = alarm1");
+          data["alarm1"] = alarm1;
+        } if (inputMessage == "Tank1") {
+          //data["Tank1"] = tank1;
+          //data["Tank1adc"] = tank1adc;
+          data["Tank1"] = String(tank1);
+          data["Tank1adc"] = String(tank1adc);
+          //json_Device["Device"]["MeasuringValues"]["Tank1adc"]["Value"] = String(tank1adc);
+        } //else if (inputMessage == "ping") {
+          //data["ping"] = true;
+        //}
+      }
+    }
+    data["data"] = true;
+  } else {
+    data["ping"] = true;
+  }
+  String response;
+  serializeJson(data, response);
+  request->send(200, "application/json", response);
 });
 
 httpServer.on("/savesettings", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -437,6 +462,9 @@ httpServer.on("/savesettings", HTTP_GET, [](AsyncWebServerRequest *request) {
     if (vname[i] == "t2offset") {
       actconf.t2offset = toFloat(value[i]);
     }
+    if (vname[i] == "cssStyle") {
+      actconf.cssStyle = toFloat(value[i]);
+    }
   }
   // Save the settings if the number of return values is greater 0
   if(num > 0) {  
@@ -478,25 +506,18 @@ httpServer.on("/settings.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     DebugPrintln(3, cryptPassword(String(actconf.password)));
     content = readFile2(LittleFS, "/password.html");
     content.replace("%header%", getheader());
-    content.replace("%action%", "settings.html");
     content.replace("%devname%", String(actconf.devname));
-    content.replace("%crights%", String(actconf.crights));
-    content.replace("%fversion%", String(actconf.fversion));
-    content.replace("%quality%", String(int(quality)));
+    content.replace("%action%", "settings.html");
 
   } else{
     // Generate a new transaction ID
     transID();
     content = readFile2(LittleFS, "/settings.html");
-    //content.replace("%header%", String(readFile2(LittleFS, "/header.html")));
     content.replace("%header%", getheader());
     content.replace("%devname%", String(actconf.devname));
-    content.replace("%crights%", String(actconf.crights));
-    content.replace("%fversion%", String(actconf.fversion));
     content.replace("%cssid%", String(actconf.cssid));
     content.replace("%cpassword%", String(actconf.cpassword));
     content.replace("%password%", String(actconf.password));
-    content.replace("%quality%", String(int(quality)));
 
     content.replace("%hostname%", String(actconf.hostname));
     content.replace("%sssid%", String(actconf.sssid));
@@ -600,6 +621,7 @@ httpServer.on("/settings.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     content.replace("%standbyMode%", String(getindex(standbyMode, String(actconf.standbyMode))));
     content.replace("%standbySleepDuration%", String(actconf.standbySleepDuration));
     content.replace("%loraStandbyMode%", String(getindex(loraStandbyMode, String(actconf.loraStandbyMode))));
+    content.replace("%cssStyle%", String(getindex(cssStyle, String(actconf.cssStyle))));
   }
 
   request->send(200, "text/html", content);
@@ -643,20 +665,16 @@ httpServer.on("/restart.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     transID();
     content = readFile2(LittleFS, "/password.html");
     content.replace("%header%", getheader());
+    content.replace("%devname%", String(actconf.devname));
     content.replace("%action%", "restart.html");
   }
   else
   {
     // Generate a new transaction ID
     transID();
-//    DebugPrintln(3, content);
     content = readFile2(LittleFS, "/restart.html");
-//    DebugPrintln(3, content);
     content.replace("%header%", getheader());
     content.replace("%devname%", String(actconf.devname));
-    content.replace("%crights%", String(actconf.crights));
-    content.replace("%fversion%", String(actconf.fversion));
-    content.replace("%quality%", String(wlanquality()));
   }
 
   request->send(200, "text/html", content);
@@ -690,6 +708,7 @@ httpServer.on("/firmware.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     transID();
     content = readFile2(LittleFS, "/password.html");
     content.replace("%header%", getheader());
+    content.replace("%devname%", String(actconf.devname));
     content.replace("%action%", "firmware.html");
   } else {
     transID();
@@ -770,18 +789,18 @@ httpServer.on("/styles.css", HTTP_GET, [](AsyncWebServerRequest *request) {
   String content = "";
   String cssfilename = "";
    // Style activation
-  switch (style) {
+  switch (actconf.cssStyle) {
   case 0:
-    cssfilename = "/css_red.css";
+    cssfilename = "/css_black.css";
     break;
   case 1:
-    cssfilename = "/css_black.css";
+    cssfilename = "/css_red.css";
     break;
   case 2:
     cssfilename = "/css_white.css";
     break;  
   default:
-    cssfilename = "/css_white.css";
+    cssfilename = "/css_black.css";
   }
   if (LittleFS.exists(cssfilename)) {
     AsyncWebServerResponse *response = request->beginResponse(LittleFS, cssfilename, "text/css");

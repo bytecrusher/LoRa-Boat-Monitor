@@ -2,7 +2,7 @@
 <html>
 
 <head>
-  <title>Sensor Values</title>
+  <title>Sensor Values - %devname%</title>
   <link rel='stylesheet' type='text/css' href='/styles.css'>
   <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
   <meta name=viewport content='width=device-width, initial-scale=1'>
@@ -46,12 +46,12 @@
         document.getElementById('capacity').innerHTML = myObj.Device.MeasuringValues.BatteryCapacity.Value;
         document.getElementById('1wtemp').innerHTML = myObj.Device.MeasuringValues.Temp1Wire.Value;
         document.getElementById('1wunit').innerHTML = myObj.Device.MeasuringValues.Temp1Wire.Unit;
-        document.getElementById('tank1').innerHTML = myObj.Device.MeasuringValues.Tank1.Value;
-        document.getElementById('tank1adc').innerHTML = myObj.Device.MeasuringValues.Tank1adc.Value;
+        //document.getElementById('tank1').innerHTML = myObj.Device.MeasuringValues.Tank1.Value;
+        //document.getElementById('tank1adc').innerHTML = myObj.Device.MeasuringValues.Tank1adc.Value;
         //document.gauges.get('canvas-id').value = myObj.Device.MeasuringValues.Tank1.Value;
         //document.gauges.get('canvas-id').value = ((myObj.Device.MeasuringValues.Tank1adc.Value / (4096 / 80)) - 40);   // 4096 adc max, 80 steps at all, -40 for adjusting the scale.
-        gauge.value = ((myObj.Device.MeasuringValues.Tank1adc.Value / (4096 / 80)) - 40);   // 4096 adc max, 80 steps at all, -40 for adjusting the scale.
-        gauge.update()
+        //gauge.value = ((myObj.Device.MeasuringValues.Tank1adc.Value / (4096 / 80)) - 40);   // 4096 adc max, 80 steps at all, -40 for adjusting the scale.
+        //gauge.update()
 
         document.getElementById('tank2').innerHTML = myObj.Device.MeasuringValues.Tank2.Value;
         document.getElementById('tank2adc').innerHTML = myObj.Device.MeasuringValues.Tank2adc.Value;
@@ -70,19 +70,14 @@
         }
         //document.getElementById('relay').innerHTML = myObj.Device.MeasuringValues.Relay.Value;
 
-
         var rtime = 5 * myObj.Device.MeasuringValues.RelayTimer.Value;
         document.getElementById('rtimer').innerHTML = rtime;
-
 
         // If Demo Mode active the give out a message
         servermode = myObj.Device.NetworkParameter.ServerMode;
         if (servermode == 4) {
           document.getElementById('info').innerHTML = '(Demo Mode)';
-        } else {
-          //document.getElementById('info').innerHTML = '';
         }
-
       }
     };
     function read_json() {
@@ -90,6 +85,27 @@
       xmlhttp.send();
     }
     setInterval(function () { read_json(); }, 1000);
+
+    //____________________
+    var xmlhttp2 = new XMLHttpRequest();
+    xmlhttp2.onreadystatechange = function () {
+      if (this.readyState == 4 && this.status == 200) {
+        var myObj2 = JSON.parse(this.responseText);
+
+        document.getElementById('tank1').innerHTML = myObj2.Tank1;
+        document.getElementById('tank1adc').innerHTML = myObj2.Tank1adc;
+        //gauge.value = ((myObj2.Tank1adc / (4096 / 80)) - 40);   // 4096 adc max, 80 steps at all, -40 for adjusting the scale.
+        gauge.value = ((myObj2.Tank1 / (100 / 80)) - 40);   // 4096 adc max, 80 steps at all, -40 for adjusting the scale.
+        gauge.update()
+       
+      }
+    };
+    function run_getdata() {
+      xmlhttp2.open('GET', '/getdata?data=Tank1', true);
+      xmlhttp2.send();
+    }
+    setInterval(function () { run_getdata(); }, 250);
+    //___________________
 
     var xmlhttpStaticData = new XMLHttpRequest();
     xmlhttpStaticData.onreadystatechange = function () {
@@ -101,7 +117,6 @@
 
     xmlhttpStaticData.open('GET', '/staticdata.json', true);
     xmlhttpStaticData.send();
-
 
   </script>
 
@@ -307,18 +322,6 @@
         <td></td>
       </tr>
       <td>
-
-        <!--div class='svg'>
-<svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-battery-automotive' width='30' height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none' stroke-linecap='round' stroke-linejoin='round'>
-<path stroke='none' d='M0 0h24v24H0z' fill='none'/>
-<rect x='3' y='6' width='18' height='14' rx='2' />
-<path d='M6 6v-2' />
-<line x1='19' y1='4' x2='19' y2='6' />
-<line x1='6.5' y1='13' x2='9.5' y2='13' />
-<line x1='14.5' y1='13' x2='17.5' y2='13' />
-<line x1='16' y1='11.5' x2='16' y2='14.5' />
-</svg>
-</div-->
 
       </td>
       <td>Cap:</td>

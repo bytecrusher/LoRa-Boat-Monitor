@@ -37,15 +37,14 @@
 #include <Arduino.h>            // Arduino Environment
 #include <WiFi.h>               // WiFi lib with TCP server and client
 #include <WiFiClient.h>         // WiFi lib for clients
-#include <AsyncTCP.h>
-#include <ESPAsyncWebServer.h>
-#include <AsyncElegantOTA.h>
+#include <AsyncTCP.h>           // asynchron TCP lib
+#include <ESPAsyncWebServer.h>  // asynchron webserver lib
+#include <AsyncElegantOTA.h>    // OTA lib
 
 #include <ESPmDNS.h>            // mDNS lib
 #include <Update.h>             // Web Update server
-#include "driver/adc.h"
-#include <ArduinoJson.h>
-#include <time.h>
+#include "driver/adc.h"         // adc lib
+#include <ArduinoJson.h>        // JSON lib
 
 #include <U8x8lib.h>            // OLED Lib
 #include <lmic.h>               // LoRa Lib
@@ -54,20 +53,20 @@
 #include <SPI.h>                // SPI/I2C Lib for OLED and BME280
 #include <Adafruit_Sensor.h>    // BME280
 #include <Adafruit_BME280.h>    // BME280
-#include <Ticker.h>             // Timer lib
+#include <Ticker.h>             // Ticker lib
 #include <EEPROM.h>             // EEPROM lib
 #include <WString.h>            // Needs for structures
 #include <OneWire.h>            // 1Wire lib
 #include <DallasTemperature.h>  // DS18B20 lib
-#include <StateMachine.h>
+#include <StateMachine.h>       // Statemachine lib
 
-#include "driver/rtc_io.h"
-#include "FS.h"
-#include <LittleFS.h>
-#include <time.h>
+#include "driver/rtc_io.h"      // rtc lib
+#include "FS.h"                 // FS lib
+#include <LittleFS.h>           // Lib for LittleFS filesystem
+#include <time.h>               // Time lib
 
-#include "func_ftpclient.h"
-#include "func_webclient.h"
+#include "func_ftpclient.h"     // my lib for FTP connection (getting files for webserver)
+#include "func_webclient.h"     // my lib for webclient connection (getting files for webserver)
 
 #include "Configuration.h"      // Configuration
 
@@ -84,8 +83,8 @@ configData actconf;             // Actual configuration, Global variable
 #include "LoRa.h"               // LoRa Lib
 #include "task.h"               // Task for LoRa code
 
-#include "initialsetup_html.h"
-#include "wificonfig_html.h"
+#include "initialsetup_html.h"  // HTML file for initial setup of the devide (if filesystem is formated)
+#include "wificonfig_html.h"    // HTML file for wifi config. (obsolete)
 
 // Declarations
 int value;                      // Value from first byte in EEPROM
@@ -96,11 +95,9 @@ configData newconf;             // Configuration stucture for new config data in
 
 TaskHandle_t Task1;             // Declare task for LoRa code
 
-//WebServer httpServer(actconf.httpport);   // Port for HTTP server
-AsyncWebServer httpServer(actconf.httpport);
+AsyncWebServer httpServer(actconf.httpport);   // Port for HTTP server
 //MDNSResponder mdns;                       // Activate DNS responder
-//WiFiServer server(actconf.dataport);        // Declare WiFi NMEA server port
-WiFiServer server(2222);        // Declare WiFi NMEA server port
+WiFiServer server(actconf.dataport);        // Declare WiFi NMEA server port
 #define MAX_CLIENTS 3 //maximal number of simultaneousy connected clients
 WiFiClient clients[MAX_CLIENTS]; //Array of clients
 char result[70] = "0";  //string for NMEA-assembly (dollar symbol, MWV, CS)
@@ -115,7 +112,6 @@ RTC_DATA_ATTR int bootCount = 0;
 RTC_DATA_ATTR uint loraCount = 0;
 
 const int STATE_DELAY = 1000;
-int randomState = 0;
 
 bool reboot = false;
 
@@ -131,41 +127,13 @@ long timezone = 1;
 byte daysavetime = 1;
 
 hw_timer_t *My_timer = NULL;
+int fpscounter = 0;
 
 File root;
 bool opened = false;
 
 void IRAM_ATTR onTimer(){
-  //digitalWrite(LED, !digitalRead(LED));
-  //Serial.println("onTimer()");
-  //Serial.println(xPortGetCoreID());
   sendLoraQueue = true;
-}
-
-/*
- *  States:
- *  S0 = Standby (WiFi off, Lora send every x minutes)
- *  S1 = Battery On (Wifi on)
- */
-
-void UBLOX_GPS_Wakeup()
-{
-  Serial2.println();                                   //send some characters to GPS to wake it up
-}
-
-void UBLOX_GPS_Shutdown()
-{
-  //sends command over serial interface to GPS to put it in PMREQ backup mode
-  uint8_t index;
-  uint8_t UBLOX_GPSStandby[] = {0xB5, 0x62, 0x02, 0x41, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x4D, 0x3B}; 
-
-  for (index = 0; index < sizeof(UBLOX_GPSStandby); index++)
-  {
-    //Serial2.write(UBLOX_GPSStandby[index]);
-    Serial2.write(UBLOX_GPSStandby[index]);
-    //Serial.print(UBLOX_GPSStandby[index], HEX);
-  }
-  Serial.println("Shutdown GPS...");
 }
 
 void enableWiFi(){
@@ -198,14 +166,14 @@ void enableWiFi(){
       DebugPrintln(3, actconf.cssid);
 
       // Load connection timeout from configuration (maxccount = (timeout[s] * 1000) / 500[ms])
-      maxccounter = (actconf.timeout * 1000) / 500;
+      maxccounter = (((actconf.timeout * 1000) / 500) / 10);
 
       // Wait until is connected otherwise abort connection after x connection trys
       WiFi.begin(actconf.cssid, actconf.cpassword);
       ccounter = 0;
       boolean toggleWifiConnectionStatus = false;
       while ((WiFi.status() != WL_CONNECTED) && (ccounter <= maxccounter)) {
-        delay(500);
+        delay(200);
         DebugPrint(3, ".");
         if (toggleWifiConnectionStatus) {
           u8x8.drawString(0,4,".");
@@ -249,7 +217,6 @@ void enableWiFi(){
       Serial.println("Contacting Time Server");
 	    configTime(3600*timezone, daysavetime*3600, "time.nist.gov", "0.pool.ntp.org", "1.pool.ntp.org");
 	    struct tm tmstruct ;
-      //delay(2000);
       tmstruct.tm_year = 0;
       getLocalTime(&tmstruct, 5000);
 	    Serial.printf("\nNow is : %d-%02d-%02d %02d:%02d:%02d\n",(tmstruct.tm_year)+1900,( tmstruct.tm_mon)+1, tmstruct.tm_mday,tmstruct.tm_hour , tmstruct.tm_min, tmstruct.tm_sec);
@@ -391,8 +358,13 @@ void VEdirectRead()
   }
 }
 
+/*
+ *  States:
+ *  S0 = Standby (WiFi off, Lora send every x minutes)
+ *  S1 = Battery On (Wifi on)
+ */
+
 void state0(){
-  //Serial.println(F("State0"));
   if (alarm1 == true) {
     return;
   }
@@ -404,7 +376,7 @@ void state0(){
   if(machine.executeOnce){
     if (alarm1 == false) {
       // disable gps
-      //Timer1.detach();
+
       u8x8.clearDisplay();
       u8x8.setFont(u8x8_font_chroma48medium8_r);
       u8x8.drawString(0,0,"State 0   ");
@@ -427,11 +399,6 @@ void state0(){
   }
   else if (lastPrintTime + 2000 < millis())
   {
-    //Serial.print(F("Cannot sleep "));
-    //Serial.print(F("TimeCriticalJobs: "));
-    //Serial.print(timeCriticalJobs);
-    //Serial.print(", ");
-
     if (toggleDisplayStatus) {
       u8x8.drawString(0,4,".");
       toggleDisplayStatus = false;
@@ -440,7 +407,6 @@ void state0(){
       toggleDisplayStatus = true;
     }
 
-    //PrintRuntime();
     lastPrintTime = millis();
     long seconds = millis() / 1000;
     if (seconds >= 50) {  // Abord sending, after 50 seconds
@@ -476,9 +442,8 @@ void state1(){
     } else {
       timerAlarmDisable(My_timer);
     }
+    writeDisplay();
   }
-
-  Serial.println(F("loop anfang."));
 
   //readValues();
   //delay(20);
@@ -507,16 +472,23 @@ void state1(){
 
   VEdirectSend();
 
+  if(millis() > starttime3 + 250){
+    starttime3 = millis();        // Read actual time
+    Serial.println("fpscounter: " + String(fpscounter));
+    fpscounter = 0;
+    readValues();
+  }
+  fpscounter++;
+
   // Read measuring data and display on OLED all 1s
   if(millis() > starttime1 + 1000){
-    starttime1 = millis();        // Read actual time	
+    starttime1 = millis();        // Read actual time
 
     // BME280 measuerement
     if (String(actconf.envSensor) == "BME280") {
       bme.takeForcedMeasurement(); // has no effect in normal mode
     }
-    readValues();
-    writeDisplay();
+    writeDisplayValues();
   }
 
   VEdirectRead();
@@ -621,13 +593,9 @@ void state1(){
   }*/
   //___________________________
 
-  Serial.println(F("nach while."));
-
   if (flag2 == true) {
     //readGPSValues();
   }
-
-  Serial.println(F("nach read gps."));
 
   if (runDownloadingFiles) {
     runDownloadingFilesStatus = true;
@@ -738,7 +706,7 @@ void setup() {
 
   //##### Start OLED #####
   u8x8.clearDisplay();
-  u8x8.drawString(0,0,"NoWa(C)OBP");
+  u8x8.drawString(0,0,"NoWa(C)OBP (mod by Gunni)");
   u8x8.drawString(11,0,actconf.fversion);
   u8x8.drawString(0,2,"Connecting to:");
   u8x8.drawString(0,3,actconf.cssid);
@@ -944,14 +912,14 @@ void setup() {
   S1->addTransition(&transitionS1S0,S0);  // S1 transition to S0
 
   if (String(actconf.standbyMode) == "On") {
-    Serial.println(F("Zeile 863"));
     rtc_gpio_pullup_en(GPIO_NUM_39);
     esp_sleep_enable_ext0_wakeup(GPIO_NUM_39,0);
   }
   
   My_timer = timerBegin(0, 80, true);
   timerAttachInterrupt(My_timer, &onTimer, true);
-  timerAlarmWrite(My_timer, (60000000 * actconf.standbySleepDuration), true);
+  //timerAlarmWrite(My_timer, (60000000 * actconf.standbySleepDuration), true);
+  timerAlarmWrite(My_timer, (60000000 * TX_INTERVAL), true);
 
   readValues();     // initial read after boot, to get the status of alarm pin.
 

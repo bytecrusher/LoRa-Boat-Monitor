@@ -4,11 +4,11 @@
 // Default configuration
 // Types 'byte' und 'word' doesn't work!
 typedef struct {
-  int valid = 8;                            // Number of configuration (Please change when the structure or values are changed)
+  int valid = 9;                            // Number of configuration (Please change when the structure or values are changed)
   int crypt = 0;                            // Activate for critical webside a password query [0 = off|1 = on]
   char password[31] = "12345678";           // Password for critical websides (settings, update and reboot)
   char devname[21] = "LoRa Boat Monitor";   // Device name for web configuration
-  char crights[14] = "NoWa (C) 2023";       // Copy rights
+  char crights[29] = "NoWa (C) (mod by Gunni) 2023";       // Copy rights
   char fversion[6] = "V1.0x";               // Firmware version
   char license[12] = "GPL3";                // License type
   int debug = 3;                            // Debug mode 0=off 1=Errors 2=Errors + Warnings 3=Errors + Warnings + Messages
@@ -70,6 +70,9 @@ typedef struct {
   char standbyMode[4] = "Off";              // Select Standby mode [Off|On]
   int standbySleepDuration = 15;            // Time to sleep in Standby in minutes.
   char loraStandbyMode[8] = "Standby";      // Select is Lora only sends in Standby mode [Standby|Always]
+
+  // Web configs
+  int cssStyle = 0;                         // css Style: 0 = black, 1 = red, 2 = white
 } configData;
 
 #endif

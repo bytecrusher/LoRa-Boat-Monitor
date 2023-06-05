@@ -34,7 +34,7 @@
             document.getElementById("myping").innerHTML = "<div style='margin-left:20px;'>Offline</div>";
             }, 3000);
         }
-        xmlhttpheader.open('GET', '/ping', true);
+        xmlhttpheader.open('GET', '/getdata', true);
         xmlhttpheader.send();
     }
     setInterval(function () { startping(); }, 1000);

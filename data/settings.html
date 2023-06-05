@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>Settings %devname%</title>
+    <title>Settings - %devname%</title>
     <link rel='stylesheet' type='text/css' href='/styles.css'>
     <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
     <meta name=viewport content='width=device-width, initial-scale=1'>
@@ -65,6 +65,7 @@
             document.SetForm.standbyMode.selectedIndex = %standbyMode%;
             document.SetForm.standbyMode.standbySleepDuration = %standbySleepDuration%;
             document.SetForm.loraStandbyMode.selectedIndex = %loraStandbyMode%;
+            document.SetForm.cssStyle.selectedIndex = %cssStyle%;
         }
 
         function showPage() {
@@ -267,6 +268,18 @@
                         <option value='500'>500x500 pix</option>
                         <option value='550'>550x550 pix</option>
                         <option value='600'>600x600 pix</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>cssStyle</td>
+                <td>
+                    <select name='cssStyle' size='1'>
+                        <option value='0'>Black</option>
+                        <option value='1'>Red</option>
+                        <option value='2'>White</option>
                     </select>
                 </td>
                 <td></td>
@@ -793,36 +806,9 @@
         <input type="file" id="file" accept=".json" style="width:270px;">
         <button>Upload Config</button>
     </form>
-    <br>
-    <hr>
-    <br>
-    
-    <!--form id='form2' action='http://192.168.4.1/settings'>
-<input hidden type='text' name='itype' value='simple'>  
-<input hidden type='text' name='isize' value='200'>  
-<input hidden type='text' name='cssid' value='MyBoat'>
-<input hidden type='text' name='cpasswd' value='S6587rr94P'>
-<input hidden type='text' name='sssid' value='NoWa'>
-<input hidden type='text' name='spasswd' value='12345678'>
-<input hidden type='text' name='servermode' value='0'>
-<input hidden type='text' name='debugmode' value='3'>
-<input hidden type='text' name='serspeed' value='115200'>
-<input hidden type='text' name='sensorid' value='0'>
-<input hidden type='text' name='wstype' value='NoWa1000'>
-<input hidden type='text' name='sendwsdata' value='1'>
-<input hidden type='text' name='windtype' value='R'>
-<input hidden type='text' name='average' value='1'>
-<input hidden type='text' name='speedunit' value='kn'>
-<input hidden type='text' name='dwsensor' value='1'>
-<input hidden type='text' name='dwrange' value='50'>
-<input hidden type='text' name='tstype' value='Off'>
-<input hidden type='text' name='sendtsd' value='0'>
-<input hidden type='text' name='tempunit' value='C'>    
-<button type='submit'>Set Defaults</button></form-->
+    <hr style="margin-top:20px">
 
-    <br>
-    <form id='form3' action='/'><button type='submit'>Back</button></form>
-    <br><br>
+    <form id='form3' action='/'><button type='submit' style="margin-top:20px; margin-bottom:20px">Back</button></form>
 </div>
 </body>
 

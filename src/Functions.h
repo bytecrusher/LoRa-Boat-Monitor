@@ -1242,6 +1242,75 @@ void writeDisplay() {
   u8x8.refreshDisplay();    // Only required for SSD1606/7 
 }
 
+// Display sensor values on OLED
+void writeDisplayValues() {
+  // Formating display data
+  char cnt[10];
+  //dtostrf(int(counter16), 5, 0, cnt);
+  dtostrf(int(LMIC.seqnoUp), 5, 0, cnt);
+  char tmp[10];      
+  dtostrf(temperature, 5, 1, tmp);
+  char pres[10];
+  dtostrf(pressure, 5, 0, pres);
+  char hum[10];
+  dtostrf(humidity, 5, 1, hum);
+  char dew[10];
+  dtostrf(dewp, 5, 1, dew);
+  char dt[10];
+  dtostrf(float(TX_INTERVAL), 4, 0, dt);
+  char vol[10];
+  dtostrf(voltage, 5, 1, vol);
+  char tmp2[10];
+  dtostrf(temp1wire, 5, 1, tmp2);
+  char lat[10];
+  dtostrf(latitude, 5, 3, lat);
+  char lon[10];
+  dtostrf(longitude, 6, 4, lon);
+  char tnk1[10];
+  dtostrf(tank1p, 5, 1, tnk1);
+  char tnk2[10];
+  dtostrf(tank2p, 5, 1, tnk2);
+  char alm[10];
+  dtostrf(int(alarm1), 5, 0, alm);
+  char rel[10];
+  dtostrf(int(actconf.relay), 5, 0, rel);
+  
+  // Refresh OLED data
+  //u8x8.setFont(u8x8_font_chroma48medium8_r);
+  //u8x8.drawString(0,0,"NoWa(C)OBP");
+  //u8x8.drawString(11,0,actconf.fversion);
+  //u8x8.drawString(0,1,"C:");
+  u8x8.drawString(2,1,cnt);
+  //u8x8.drawString(0,2,"T:");
+  u8x8.drawString(2,2,tmp);
+  //u8x8.drawString(0,3,"P:");
+  u8x8.drawString(2,3,pres);
+  //u8x8.drawString(0,4,"H:");
+  u8x8.drawString(2,4,hum);
+  //u8x8.drawString(0,5,"D:");
+  u8x8.drawString(2,5, dew);
+  //u8x8.drawString(8,1,"dT:");
+  u8x8.drawString(11,1, dt);
+  //u8x8.drawString(15,1, "s");
+  //u8x8.drawString(9,2,"V:");
+  u8x8.drawString(11,2, vol);
+  //u8x8.drawString(8,3,"T2:");
+  u8x8.drawString(11,3, tmp2);
+  //u8x8.drawString(8,4,"Y:");
+  u8x8.drawString(10,4, lat);
+  //u8x8.drawString(8,5,"X:");
+  u8x8.drawString(10,5, lon);
+  //u8x8.drawString(0,6,"L:");
+  u8x8.drawString(2,6, tnk1);
+  //u8x8.drawString(8,6,"L2:");
+  u8x8.drawString(11,6, tnk2);
+  //u8x8.drawString(0,7,"A:");
+  u8x8.drawString(2,7, alm);
+  //u8x8.drawString(8,7,"R:");
+  u8x8.drawString(11,7, rel);
+  u8x8.refreshDisplay();    // Only required for SSD1606/7
+}
+
 // Timer 1 interrupt Read and print GPS values
 void readGPSValuesFlag() {
   flag2 = true;

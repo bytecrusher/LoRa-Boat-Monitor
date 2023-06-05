@@ -1,6 +1,6 @@
 const char initialsetup_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html><head>
-    <title>LoRa Boat Monitor</title>
+    <title>Filesystem - %devname%</title>
     <link rel='stylesheet' type='text/css' href='/styles.css'>
     <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -413,7 +413,7 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
             document.getElementById("myping").innerHTML = "<div style='margin-left:20px;'>Offline</div>";
             }, 3000);
         }
-        xmlhttpheader.open('GET', '/ping', true);
+        xmlhttpheader.open('GET', '/getdata', true);
         xmlhttpheader.send();
     }
     setInterval(function () { startping(); }, 1000);
