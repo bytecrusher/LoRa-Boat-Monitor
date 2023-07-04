@@ -1474,7 +1474,7 @@ void relayTimer(){
     relaytimer = 0;
     digitalWrite(relayPin, LOW); // Relay off
     actconf.relay = 0;
-    saveEEPROMConfig(actconf);
+    //saveEEPROMConfig(actconf);
   }
   else{
     digitalWrite(relayPin, HIGH); // Relay on

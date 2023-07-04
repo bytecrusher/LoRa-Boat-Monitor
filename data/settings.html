@@ -130,6 +130,19 @@
             }
         }
 
+        function check_username(iname) {
+            var valuestring = "";
+            if (iname == "username") { valuestring = document.SetForm.username.value; }
+            var reguexp = /[^A-z0-9\-]/;
+            if (reguexp.exec(valuestring) || valuestring < 4 || valuestring > 20) {
+                document.getElementById('sub').disabled = true;
+                alert('Error!\\nUse only a-z, A-Z, 0-9, ' - '\\nPassword Length 4-20');
+            }
+            else {
+                document.getElementById('sub').disabled = false;
+            }
+        }
+
         function check_passwd(iname) {
             var valuestring = "";
             if (iname == "pagepasswd") { valuestring = document.SetForm.sidepasswd.value; }
@@ -241,6 +254,13 @@
             </tr>
 
             <tr>
+                <td>Page Username</td>
+                <td><input type='text' required name='username' size='20' value='%username%' maxlength='20'
+                        onchange='check_username("username")'></td>
+                <td></td>
+            </tr>
+
+            <tr>
                 <td>Page Password</td>
                 <td><input type='text' required name='pagepasswd' size='20' value='%password%' maxlength='20'
                         onchange='check_passwd("pagepasswd")'></td>
@@ -274,7 +294,7 @@
             </tr>
 
             <tr>
-                <td>cssStyle</td>
+                <td>Color Theme</td>
                 <td>
                     <select name='cssStyle' size='1'>
                         <option value='0'>Black</option>
@@ -294,8 +314,41 @@
             </tr>
 
             <tr>
-                <td>base Hostname ("-Device ID" will be added)</td>
+                <td>Base Hostname ("-Device ID" will be added)</td>
                 <td><input type='text' required name='hostname' size='20' value='%hostname%' maxlength='20'></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>Server Mode</td>
+                <td>
+                    <select name='servermode' size='1'>
+                        <option value='0'>HTTP (JSON, NMEA)</option>
+                        <option value='1'>NMEA Serial</option>
+                        <option value='2'>MQTT</option>
+                        <option value='3'>Diagnostic</option>
+                        <option value='4'>Demo Mode</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>mDNS Service</td>
+                <td>
+                    <select name='mdnsservice' size='1'>
+                        <option value='0'>Off</option>
+                        <option value='1'>On</option>
+                    </select>
+                </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>
+                    <h5 style="margin:0px">Station Settings</h5>
+                </td>
+                <td></td>
                 <td></td>
             </tr>
 
@@ -315,6 +368,7 @@
                 <td>Connection Timeout</td>
                 <td>
                     <select name='timeout' size='1'>
+                        <option value='5'>5s</option>
                         <option value='30'>30s</option>
                         <option value='60'>1 min</option>
                         <option value='90'>1.5 min</option>
@@ -327,6 +381,14 @@
                         <option value='300'>5 min</option>
                     </select>
                 </td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>
+                    <h5 style="margin:0px">AccessPoint Settings</h5>
+                </td>
+                <td></td>
                 <td></td>
             </tr>
 
@@ -361,31 +423,6 @@
                         <option value='11'>11</option>
                         <option value='12'>12</option>
                         <option value='13'>13</option>
-                    </select>
-                </td>
-                <td></td>
-            </tr>
-
-            <tr>
-                <td>Server Mode</td>
-                <td>
-                    <select name='servermode' size='1'>
-                        <option value='0'>HTTP (JSON, NMEA)</option>
-                        <option value='1'>NMEA Serial</option>
-                        <option value='2'>MQTT</option>
-                        <option value='3'>Diagnostic</option>
-                        <option value='4'>Demo Mode</option>
-                    </select>
-                </td>
-                <td></td>
-            </tr>
-
-            <tr>
-                <td>mDNS Service</td>
-                <td>
-                    <select name='mdnsservice' size='1'>
-                        <option value='0'>Off</option>
-                        <option value='1'>On</option>
                     </select>
                 </td>
                 <td></td>
@@ -808,7 +845,18 @@
     </form>
     <hr style="margin-top:20px">
 
-    <form id='form3' action='/'><button type='submit' style="margin-top:20px; margin-bottom:20px">Back</button></form>
+    <form id='form3' action='/'>
+        <button type='submit' style="margin-top:20px; margin-bottom:20px">Back</button>
+    </form>
+    <button onclick="logoutButton()">Logout</button>
+    <script>
+        function logoutButton() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "logout", true);
+            xhr.send();
+            setTimeout(function(){ window.open("/logged-out","_self"); }, 1000);
+        }
+    </script>
 </div>
 </body>
 

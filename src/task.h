@@ -1,6 +1,8 @@
 
 //Task1code LoRa
 void Task1code( void * pvParameters ){
+  //#define LMIC_PRINTF_TO Serial
+  //#define LMIC_DEBUG_LEVEL 2 /* 0, 1, or 2 */
   // LMIC init
   os_init();
   // Reset the MAC state. Session and pending data transfers will be discarded.
@@ -83,8 +85,8 @@ void Task1code( void * pvParameters ){
     }
     // Execute the LMIC scheduler
     os_runloop_once();
-    delay(200);
+    //delay(200);
     // Let other tasks run
-    vTaskDelay(1);
+    vTaskDelay(200);
   }
 }

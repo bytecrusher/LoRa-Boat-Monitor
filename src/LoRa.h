@@ -235,6 +235,7 @@ void do_send(osjob_t *j)
     }
 
     //        flashLED(100);  // Flash white LED on LoRa board
+    loraSendDurationTime = millis();
     LMIC_setTxData2(1, mydata, sizeof(mydata) - 1, 0);
     DebugPrintln(3, F("Packet queued"));
 
@@ -421,6 +422,17 @@ void onEvent(ev_t ev)
     break;
   case EV_TXSTART:
     DebugPrintln(3, F("EV_TXSTART"));
+    break;
+  case EV_TXCANCELED:
+    //Serial.println(F("EV_TXCANCELED"));
+    DebugPrintln(3, F("EV_TXCANCELED"));
+    break;
+  case EV_RXSTART:
+    /* do not print anything -- it wrecks timing */
+    break;
+  case EV_JOIN_TXCOMPLETE:
+    //Serial.println(F("EV_JOIN_TXCOMPLETE: no JoinAccept"));
+    DebugPrintln(3, F("EV_JOIN_TXCOMPLETE: no JoinAccept"));
     break;
   default:
     DebugPrintln(3, F("Unknown event: "));

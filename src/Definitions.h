@@ -37,7 +37,8 @@ byte rpayload[200];                 // Received LoRa payload over downlink (arra
 long starttime0 = millis();         // Timer0 value for measuring loop
 unsigned long starttime1 = millis();         // Timer1 value for measuring loop
 long starttime2 = millis();         // Timer2 value for measuring loop
-unsigned long starttime3 = millis();         // Timer1 value for measuring loop
+unsigned long starttime3 = millis();         // Timer3 value for measuring loop
+unsigned long loraSendDurationTime = 0;
 float fieldstrength;                // WLAN field strength
 float quality;                      // WLAN quality
 float temperature;                  // Temperature in [°C]
@@ -198,7 +199,7 @@ int resetESP = 0;                 // Global marker for reset the ESP32
 String usepassword[2] = {"0", "1"};
 String itype[2] = {"simple", "complex"};
 String isize[9] = {"200", "250", "300", "350", "400", "450", "500", "550", "600"};
-String timeout[10] = {"30", "60", "90", "120", "150", "180", "210", "240", "270", "300"};
+String timeout[11] = {"5", "30", "60", "90", "120", "150", "180", "210", "240", "270", "300"};
 String apchannel[13] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"};
 String servermode[5] = {"0", "1", "2", "3", "4"};
 String mdnsservice[2] = {"0", "1"};

@@ -69,54 +69,29 @@ httpServer.on("/gettable", HTTP_GET, [](AsyncWebServerRequest *request) {
 });
 
 httpServer.on("/filesystem.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-
-  // Read all received get arguments and save in a array
-  int num = request->args();
-  String vname[num];
-  String value[num];
-  for (int i = 0; i < num; i++) {
-    vname[i] = request->argName(i);
-    value[i] = request->arg(i);  
-  } 
-
-  String hash = "";
-  // Print all received get arguments
-  for(int i = 0; i < num; i++)
-  {
-    String out = vname[i] + " : " + value[i];
-    DebugPrintln(3, out);
-    
-    if(vname[i] == "password"){
-      hash = value[i];
+  if (actconf.crypt == 1) {
+    if(!request->authenticate(actconf.username, actconf.password)) {
+      request->requestAuthentication();
     }
   }
 
   String content = "";
-  if(actconf.crypt == 1 && (hash.length() == 0 || hash != cryptPassword(String(actconf.password)))){
-    // Generate a new transaction ID
-    transID();
-    content = readFile2(LittleFS, "/password.html");
-    content.replace("%header%", getheader());
-    content.replace("%devname%", String(actconf.devname));
-    content.replace("%action%", "filesystem.html");
-  } else {
-    content = initialsetup_html;
-    content.replace("%devname%", String(actconf.devname));
-    content.replace("%crights%", String(actconf.crights));
-    content.replace("%fversion%", String(actconf.fversion));
-    content.replace("%cssid%", String(actconf.cssid));
-    content.replace("%cpassword%", String(actconf.cpassword));
-    content.replace("%quality%", String(int(quality)));
+  content = initialsetup_html;
+  content.replace("%devname%", String(actconf.devname));
+  content.replace("%crights%", String(actconf.crights));
+  content.replace("%fversion%", String(actconf.fversion));
+  content.replace("%cssid%", String(actconf.cssid));
+  content.replace("%cpassword%", String(actconf.cpassword));
+  content.replace("%quality%", String(int(quality)));
 
-    content.replace("%wificonfig%", "");
-    //content.replace("%tabelle%", getMyDirAsString(LittleFS, "/", 0));
+  content.replace("%wificonfig%", "");
+  //content.replace("%tabelle%", getMyDirAsString(LittleFS, "/", 0));
 
-    content.replace("%FREESPIFFS%", humanReadableSize((LittleFS.totalBytes() - LittleFS.usedBytes())));
-    content.replace("%USEDSPIFFS%", humanReadableSize(LittleFS.usedBytes()));
-    content.replace("%TOTALSPIFFS%", humanReadableSize(LittleFS.totalBytes()));
-    content.replace("%USEDSPIFFSvalue%", String(LittleFS.usedBytes()));
-    content.replace("%TOTALSPIFFSvalue%", String(LittleFS.totalBytes()));
-  }
+  content.replace("%FREESPIFFS%", humanReadableSize((LittleFS.totalBytes() - LittleFS.usedBytes())));
+  content.replace("%USEDSPIFFS%", humanReadableSize(LittleFS.usedBytes()));
+  content.replace("%TOTALSPIFFS%", humanReadableSize(LittleFS.totalBytes()));
+  content.replace("%USEDSPIFFSvalue%", String(LittleFS.usedBytes()));
+  content.replace("%TOTALSPIFFSvalue%", String(LittleFS.totalBytes()));
 
   request->send(200, "text/html", content);
 });
@@ -484,242 +459,167 @@ httpServer.on("/savesettings", HTTP_GET, [](AsyncWebServerRequest *request) {
 
 httpServer.on("/settings.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   // Send page
-  String hash = "";
   String content = "";
 
-  String inputMessage;
-  String inputParam;
-
-  if (request->hasParam("password")) {
-    inputMessage = request->getParam("password")->value();
-    inputParam = "password";
-    hash = inputMessage;
-    DebugPrintln(3, hash);
-  }
-
   // Check page password
-  if(actconf.crypt == 1 && (hash.length() == 0 || hash != cryptPassword(String(actconf.password)))){
-    // Generate a new transaction ID
-    transID();
-    DebugPrintln(3, "in pw schleife");
-    DebugPrintln(3, (String(actconf.password)));
-    DebugPrintln(3, cryptPassword(String(actconf.password)));
-    content = readFile2(LittleFS, "/password.html");
-    content.replace("%header%", getheader());
-    content.replace("%devname%", String(actconf.devname));
-    content.replace("%action%", "settings.html");
-
-  } else{
-    // Generate a new transaction ID
-    transID();
-    content = readFile2(LittleFS, "/settings.html");
-    content.replace("%header%", getheader());
-    content.replace("%devname%", String(actconf.devname));
-    content.replace("%cssid%", String(actconf.cssid));
-    content.replace("%cpassword%", String(actconf.cpassword));
-    content.replace("%password%", String(actconf.password));
-
-    content.replace("%hostname%", String(actconf.hostname));
-    content.replace("%sssid%", String(actconf.sssid));
-    content.replace("%spassword%", String(actconf.spassword));
-
-    content.replace("%crypt%", String(getindex(usepassword, String(actconf.crypt))));
-    content.replace("%instrumentSize%", String(getindex(isize, String(actconf.instrumentSize))));
-
-    content.replace("%timeout%", String(getindex(timeout, String(actconf.timeout))));
-    content.replace("%apchannel%", String(getindex(apchannel, String(actconf.apchannel))));
-    content.replace("%serverMode%", String(getindex(servermode, String(actconf.serverMode))));
-    content.replace("%mDNS%", String(getindex(mdnsservice, String(actconf.mDNS))));
-
-    content.replace("%lorafrequency%", String(getindex(lorafrequencys, String(actconf.lorafrequency))));
-    content.replace("%lchannel%", String(getindex(lchannel, String(actconf.lchannel))));
-    content.replace("%spreadf%", String(getindex(spreadf, String(actconf.spreadf))));
-    content.replace("%dynsf%", String(getindex(dynsf, String(actconf.dynsf))));
-    content.replace("%tinterval%", String(actconf.tinterval));
-    content.replace("%relay%", String(getindex(relay, String(actconf.relay))));
-
-    String mystring = String(actconf.devaddr, HEX);
-    mystring.toUpperCase();
-    String devaddr = mystring;
-    content.replace("%devaddr%", String(devaddr));
-
-    String nskey = "";
-    Serial.print("nskey: ");
-    for (int i = 0; i < 16; i++){
-      String mystring = String(actconf.nskey[i], HEX);
-      Serial.print(mystring);
-      if(mystring.length() == 1){
-        mystring = "0" + mystring;
-      }
-      mystring.toUpperCase();
-      nskey += mystring;
+  if (actconf.crypt == 1) {
+    if(!request->authenticate(actconf.username, actconf.password)) {
+      return request->requestAuthentication();
     }
-    Serial.print(", komplett: ");
-    Serial.println(nskey);
-    content.replace("%nskey%", String(nskey));
-
-    String appkey = "";
-    for (int i = 0; i < 16; i++){
-      String mystring = String(actconf.appkey[i], HEX);
-      if(mystring.length() == 1){
-        mystring = "0" + mystring;
-      }
-      mystring.toUpperCase();
-      appkey += mystring;
-    }
-    content.replace("%appkey%", String(appkey));
-
-    char a1t1slope[20];
-    sprintf(a1t1slope, "%.5f", actconf.a1t1slope);
-    content.replace("%a1t1slope%", String(a1t1slope));
-
-    char a2t1slope[20];
-    sprintf(a2t1slope, "%.5f", actconf.a2t1slope);
-    content.replace("%a2t1slope%", String(a2t1slope));
-
-    char t1offset[20];
-    sprintf(t1offset, "%.5f", actconf.t1offset);
-    content.replace("%t1offset%", String(t1offset));
-
-    char a2t2slope[20];
-    sprintf(a2t2slope, "%.5f", actconf.a2t2slope);
-    content.replace("%a2t2slope%", String(a2t2slope));
-
-    char a1t2slope[20];
-    sprintf(a1t2slope, "%.5f", actconf.a1t2slope);
-    content.replace("%a1t2slope%", String(a1t2slope));
-
-    char t2offset[20];
-    sprintf(t2offset, "%.5f", actconf.t2offset);
-    content.replace("%t2offset%", String(t2offset));
-
-    content.replace("%userpassword%", String(cryptPassword(String(actconf.password))));
-
-    char voffset[20];
-    sprintf(voffset, "%.5f", actconf.voffset);
-    content.replace("%voffset%", String(voffset));
-
-    char a2vslope[20];
-    sprintf(a2vslope, "%.5f", actconf.a2vslope);
-    content.replace("%a2vslope%", String(a2vslope));
-
-    char a1vslope[20];
-    sprintf(a1vslope, "%.5f", actconf.a1vslope);
-    content.replace("%a1vslope%", String(a1vslope));
-
-    content.replace("%debug%", String(getindex(debugmode, String(actconf.debug))));
-    content.replace("%serspeed%", String(getindex(serspeed, String(actconf.serspeed))));
-    content.replace("%deviceID%", String(getindex(deviceid, String(actconf.deviceID))));
-    content.replace("%sendlora%", String(getindex(sendlora, String(actconf.sendlora))));
-    content.replace("%senddata%", String(getindex(senddata, String(actconf.senddata))));
-    content.replace("%vaverage%", String(getindex(vaverage, String(actconf.vaverage))));
-    content.replace("%t1average%", String(getindex(t1average, String(actconf.t1average))));
-    content.replace("%t2average%", String(getindex(t2average, String(actconf.t2average))));
-    content.replace("%tempSensorType%", String(getindex(tstype, String(actconf.tempSensorType))));
-    content.replace("%tempUnit%", String(getindex(tempunits, String(actconf.tempUnit))));
-    content.replace("%envSensor%", String(getindex(envSensor, String(actconf.envSensor))));
-    content.replace("%standbyMode%", String(getindex(standbyMode, String(actconf.standbyMode))));
-    content.replace("%standbySleepDuration%", String(actconf.standbySleepDuration));
-    content.replace("%loraStandbyMode%", String(getindex(loraStandbyMode, String(actconf.loraStandbyMode))));
-    content.replace("%cssStyle%", String(getindex(cssStyle, String(actconf.cssStyle))));
   }
+
+  // Generate a new transaction ID
+  transID();
+  content = readFile2(LittleFS, "/settings.html");
+  content.replace("%header%", getheader());
+  content.replace("%devname%", String(actconf.devname));
+  content.replace("%cssid%", String(actconf.cssid));
+  content.replace("%cpassword%", String(actconf.cpassword));
+  content.replace("%username%", String(actconf.username));
+  content.replace("%password%", String(actconf.password));
+
+  content.replace("%hostname%", String(actconf.hostname));
+  content.replace("%sssid%", String(actconf.sssid));
+  content.replace("%spassword%", String(actconf.spassword));
+
+  content.replace("%crypt%", String(getindex(usepassword, String(actconf.crypt))));
+  content.replace("%instrumentSize%", String(getindex(isize, String(actconf.instrumentSize))));
+
+  content.replace("%timeout%", String(getindex(timeout, String(actconf.timeout))));
+  content.replace("%apchannel%", String(getindex(apchannel, String(actconf.apchannel))));
+  content.replace("%serverMode%", String(getindex(servermode, String(actconf.serverMode))));
+  content.replace("%mDNS%", String(getindex(mdnsservice, String(actconf.mDNS))));
+
+  content.replace("%lorafrequency%", String(getindex(lorafrequencys, String(actconf.lorafrequency))));
+  content.replace("%lchannel%", String(getindex(lchannel, String(actconf.lchannel))));
+  content.replace("%spreadf%", String(getindex(spreadf, String(actconf.spreadf))));
+  content.replace("%dynsf%", String(getindex(dynsf, String(actconf.dynsf))));
+  content.replace("%tinterval%", String(actconf.tinterval));
+  content.replace("%relay%", String(getindex(relay, String(actconf.relay))));
+
+  String mystring = String(actconf.devaddr, HEX);
+  mystring.toUpperCase();
+  String devaddr = mystring;
+  content.replace("%devaddr%", String(devaddr));
+
+  String nskey = "";
+  Serial.print("nskey: ");
+  for (int i = 0; i < 16; i++){
+    String mystring = String(actconf.nskey[i], HEX);
+    Serial.print(mystring);
+    if(mystring.length() == 1){
+      mystring = "0" + mystring;
+    }
+    mystring.toUpperCase();
+    nskey += mystring;
+  }
+  Serial.print(", komplett: ");
+  Serial.println(nskey);
+  content.replace("%nskey%", String(nskey));
+
+  String appkey = "";
+  for (int i = 0; i < 16; i++){
+    String mystring = String(actconf.appkey[i], HEX);
+    if(mystring.length() == 1){
+      mystring = "0" + mystring;
+    }
+    mystring.toUpperCase();
+    appkey += mystring;
+  }
+  content.replace("%appkey%", String(appkey));
+
+  char a1t1slope[20];
+  sprintf(a1t1slope, "%.5f", actconf.a1t1slope);
+  content.replace("%a1t1slope%", String(a1t1slope));
+
+  char a2t1slope[20];
+  sprintf(a2t1slope, "%.5f", actconf.a2t1slope);
+  content.replace("%a2t1slope%", String(a2t1slope));
+
+  char t1offset[20];
+  sprintf(t1offset, "%.5f", actconf.t1offset);
+  content.replace("%t1offset%", String(t1offset));
+
+  char a2t2slope[20];
+  sprintf(a2t2slope, "%.5f", actconf.a2t2slope);
+  content.replace("%a2t2slope%", String(a2t2slope));
+
+  char a1t2slope[20];
+  sprintf(a1t2slope, "%.5f", actconf.a1t2slope);
+  content.replace("%a1t2slope%", String(a1t2slope));
+
+  char t2offset[20];
+  sprintf(t2offset, "%.5f", actconf.t2offset);
+  content.replace("%t2offset%", String(t2offset));
+
+  content.replace("%userpassword%", String(cryptPassword(String(actconf.password))));
+
+  char voffset[20];
+  sprintf(voffset, "%.5f", actconf.voffset);
+  content.replace("%voffset%", String(voffset));
+
+  char a2vslope[20];
+  sprintf(a2vslope, "%.5f", actconf.a2vslope);
+  content.replace("%a2vslope%", String(a2vslope));
+
+  char a1vslope[20];
+  sprintf(a1vslope, "%.5f", actconf.a1vslope);
+  content.replace("%a1vslope%", String(a1vslope));
+
+  content.replace("%debug%", String(getindex(debugmode, String(actconf.debug))));
+  content.replace("%serspeed%", String(getindex(serspeed, String(actconf.serspeed))));
+  content.replace("%deviceID%", String(getindex(deviceid, String(actconf.deviceID))));
+  content.replace("%sendlora%", String(getindex(sendlora, String(actconf.sendlora))));
+  content.replace("%senddata%", String(getindex(senddata, String(actconf.senddata))));
+  content.replace("%vaverage%", String(getindex(vaverage, String(actconf.vaverage))));
+  content.replace("%t1average%", String(getindex(t1average, String(actconf.t1average))));
+  content.replace("%t2average%", String(getindex(t2average, String(actconf.t2average))));
+  content.replace("%tempSensorType%", String(getindex(tstype, String(actconf.tempSensorType))));
+  content.replace("%tempUnit%", String(getindex(tempunits, String(actconf.tempUnit))));
+  content.replace("%envSensor%", String(getindex(envSensor, String(actconf.envSensor))));
+  content.replace("%standbyMode%", String(getindex(standbyMode, String(actconf.standbyMode))));
+  content.replace("%standbySleepDuration%", String(actconf.standbySleepDuration));
+  content.replace("%loraStandbyMode%", String(getindex(loraStandbyMode, String(actconf.loraStandbyMode))));
+  content.replace("%cssStyle%", String(getindex(cssStyle, String(actconf.cssStyle))));
 
   request->send(200, "text/html", content);
 });
 
 httpServer.on("/restart.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-  // Read all received get arguments and save in a array
-  /*int num = request->args();
-  String vname[num];
-  String value[num];
-  for (int i = 0; i < num; i++) {
-    vname[i] = request->argName(i);
-    value[i] = request->arg(i);
-  } */
-
   // Send page
-  String hash = "";
-  // Print all received get arguments
-  /*for(int i = 0; i < num; i++)
-  {
-    String out = vname[i] + " : " + value[i];
-    DebugPrintln(3, out);
-    if(vname[i] == "password"){
-      hash = value[i];
-    }
-  }*/
   String content = "";
 
-  String inputMessage;
-  String inputParam;
-  if (request->hasParam("password")) {
-    inputMessage = request->getParam("password")->value();
-    inputParam = "password";
-    hash = inputMessage;
-    DebugPrintln(3, hash);
+  if (actconf.crypt == 1) {
+    if(!request->authenticate(actconf.username, actconf.password)) {
+      return request->requestAuthentication();
+    }
   }
-
-  // Check page password
-  if(actconf.crypt == 1 && (hash.length() == 0 || hash != cryptPassword(String(actconf.password)))){
-    // Generate a new transaction ID
-    transID();
-    content = readFile2(LittleFS, "/password.html");
-    content.replace("%header%", getheader());
-    content.replace("%devname%", String(actconf.devname));
-    content.replace("%action%", "restart.html");
-  }
-  else
-  {
-    // Generate a new transaction ID
-    transID();
-    content = readFile2(LittleFS, "/restart.html");
-    content.replace("%header%", getheader());
-    content.replace("%devname%", String(actconf.devname));
-  }
+  // Generate a new transaction ID
+  transID();
+  content = readFile2(LittleFS, "/restart.html");
+  content.replace("%header%", getheader());
+  content.replace("%devname%", String(actconf.devname));
 
   request->send(200, "text/html", content);
 });
 
 httpServer.on("/firmware.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-  // Read all received get arguments and save in a array
-  int num = request->args();
-  String vname[num];
-  String value[num];
-  for (int i = 0; i < num; i++) {
-    vname[i] = request->argName(i);
-    value[i] = request->arg(i);  
-  } 
-
-  String hash = "";
-  // Print all received get arguments
-  for(int i = 0; i < num; i++)
-  {
-    String out = vname[i] + " : " + value[i];
-    DebugPrintln(3, out);
-    
-    if(vname[i] == "password"){
-      hash = value[i];
+  // Check page password
+  if (actconf.crypt == 1) {
+    if(!request->authenticate(actconf.username, actconf.password)) {
+      request->requestAuthentication();
     }
   }
 
   String content = "";
-  if(actconf.crypt == 1 && (hash.length() == 0 || hash != cryptPassword(String(actconf.password)))){
-    // Generate a new transaction ID
-    transID();
-    content = readFile2(LittleFS, "/password.html");
-    content.replace("%header%", getheader());
-    content.replace("%devname%", String(actconf.devname));
-    content.replace("%action%", "firmware.html");
-  } else {
-    transID();
-    content = readFile2(LittleFS, "/firmware.html");
-    content.replace("%header%", getheader());
-    content.replace("%devname%", String(actconf.devname));
-    content.replace("%fversion%", String(actconf.fversion));
-    content.replace("%getSdkVersion%", String(ESP.getSdkVersion()));
-    content.replace("%chipId%", String(chipId));
-    content.replace("%getCpuFreqMHz%", String(String(ESP.getCpuFreqMHz())));
-  }
+  transID();
+  content = readFile2(LittleFS, "/firmware.html");
+  content.replace("%header%", getheader());
+  content.replace("%devname%", String(actconf.devname));
+  content.replace("%fversion%", String(actconf.fversion));
+  content.replace("%getSdkVersion%", String(ESP.getSdkVersion()));
+  content.replace("%chipId%", String(chipId));
+  content.replace("%getCpuFreqMHz%", String(String(ESP.getCpuFreqMHz())));
 
   request->send(200, "text/html", content);
 });
@@ -1142,4 +1042,12 @@ httpServer.onNotFound([](AsyncWebServerRequest *request){
   content.replace("%header%", getheader());
   content.replace("%devname%", String(actconf.devname));
   request->send(404, "text/html", content);
+});
+
+httpServer.on("/logout", HTTP_GET, [](AsyncWebServerRequest *request){
+  request->send(401);
+});
+
+httpServer.on("/logged-out", HTTP_GET, [](AsyncWebServerRequest *request){
+  request->send_P(200, "text/html", logout_html);
 });

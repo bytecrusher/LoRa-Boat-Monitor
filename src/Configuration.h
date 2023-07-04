@@ -6,6 +6,7 @@
 typedef struct {
   int valid = 9;                            // Number of configuration (Please change when the structure or values are changed)
   int crypt = 0;                            // Activate for critical webside a password query [0 = off|1 = on]
+  char username[31] = "admin";
   char password[31] = "12345678";           // Password for critical websides (settings, update and reboot)
   char devname[21] = "LoRa Boat Monitor";   // Device name for web configuration
   char crights[29] = "NoWa (C) (mod by Gunni) 2023";       // Copy rights

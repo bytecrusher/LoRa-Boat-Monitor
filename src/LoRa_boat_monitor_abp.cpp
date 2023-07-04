@@ -47,7 +47,7 @@
 #include <ArduinoJson.h>        // JSON lib
 
 #include <U8x8lib.h>            // OLED Lib
-#include <lmic.h>               // LoRa Lib
+#include <arduino_lmic.h>       // LoRa Lib, previous lmic.h
 #include <hal/hal.h>            // LoRa Lib
 #include <Wire.h>
 #include <SPI.h>                // SPI/I2C Lib for OLED and BME280
@@ -105,6 +105,7 @@ char result[70] = "0";  //string for NMEA-assembly (dollar symbol, MWV, CS)
 Ticker Timer1;                  // Declare Timer for GPS data reading
 Ticker Timer2;                  // Declare Timer for relay ontime
 Ticker Timer3;                  // Declare Timer for NMEA sending
+Ticker Timer4;                  // Declare Timer for Lora sending
 
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP  actconf.standbySleepDuration       /* Time ESP32 will go to sleep */
@@ -126,13 +127,29 @@ boolean runDownloadingFilesStatus = false;
 long timezone = 1; 
 byte daysavetime = 1;
 
-hw_timer_t *My_timer = NULL;
+//hw_timer_t *My_timer = NULL;
 int fpscounter = 0;
 
 File root;
 bool opened = false;
 
+const char* http_username = "admin";
+const char* http_password = "admin";
+
+const char logout_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE HTML><html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+  <p>Logged out or <a href="/">return to homepage</a>.</p>
+  <p><strong>Note:</strong> close all web browser tabs to complete the logout process.</p>
+</body>
+</html>
+)rawliteral";
+
 void IRAM_ATTR onTimer(){
+  DebugPrintln(3, "onTimer reached");
   sendLoraQueue = true;
 }
 
@@ -166,7 +183,7 @@ void enableWiFi(){
       DebugPrintln(3, actconf.cssid);
 
       // Load connection timeout from configuration (maxccount = (timeout[s] * 1000) / 500[ms])
-      maxccounter = (((actconf.timeout * 1000) / 500) / 10);
+      maxccounter = ((actconf.timeout * 1000) / 500);
 
       // Wait until is connected otherwise abort connection after x connection trys
       WiFi.begin(actconf.cssid, actconf.cpassword);
@@ -408,8 +425,12 @@ void state0(){
     }
 
     lastPrintTime = millis();
+    unsigned long difference = (lastPrintTime - loraSendDurationTime) / 1000;
+    Serial.print(F("difference: "));
+    Serial.println(F(difference));
     long seconds = millis() / 1000;
-    if (seconds >= 50) {  // Abord sending, after 50 seconds
+    //if (seconds >= 50) {  // Abord sending, after 50 seconds
+    if (difference >= 50) {  // Abord sending, after 50 seconds
       Serial.println(F("seconds >= 50"));
       SaveLMICToRTC(TX_INTERVAL);
       delay(500);
@@ -426,9 +447,9 @@ void state1(){
     u8x8.setPowerSave(0);
     u8x8.clearDisplay();
     u8x8.setFont(u8x8_font_chroma48medium8_r);
-    u8x8.drawString(0,0,"State 1   ");
-    u8x8.drawString(0,1,"Batt switch on");
-    u8x8.drawString(0,2,"WiFI mode");
+    //u8x8.drawString(0,0,"State 1   ");
+    //u8x8.drawString(0,1,"Batt switch on");
+    //u8x8.drawString(0,2,"WiFI mode");
     u8x8.refreshDisplay();    // Only required for SSD1606/7
 
     if (actconf.relay == 1) {
@@ -438,47 +459,36 @@ void state1(){
     }
 
     if (String(actconf.loraStandbyMode) == "Always") {
-      timerAlarmEnable(My_timer);
+      Timer4.attach_ms((1000 * TX_INTERVAL), &onTimer);      // Start timer4 for sending Lora
+      sendLoraQueue = true;
     } else {
-      timerAlarmDisable(My_timer);
+      Timer4.detach();
     }
     writeDisplay();
   }
 
-  //readValues();
-  //delay(20);
-
   if (String(actconf.loraStandbyMode) == "Always") {
     static unsigned long lastPrintTime = 0;
     const bool timeCriticalJobs = os_queryTimeCriticalJobs(ms2osticksRound((TX_INTERVAL * 1000)));
-    //u8x8.drawString(0,4,"Sending Lora");
     if (!timeCriticalJobs && GOTO_DEEPSLEEP == true && !(LMIC.opmode & OP_TXRXPEND)) {
       Serial.println(F("Lora send done."));
       GOTO_DEEPSLEEP = false;
     }
-    /*else if (lastPrintTime + 2000 < millis())
-    {
-      if (toggleDisplayStatus) {
-        u8x8.drawString(0,5,".");
-        toggleDisplayStatus = false;
-      } else {
-        u8x8.drawString(0,5," ");
-        toggleDisplayStatus = true;
-      }
-    }*/
   }
   //httpServer.handleClient();   // HTTP Server-handler for HTTP update server
-  delay(20);
+  //delay(20);
+
+  //old Voltage Offset: 6.47301
 
   VEdirectSend();
 
   if(millis() > starttime3 + 250){
     starttime3 = millis();        // Read actual time
-    Serial.println("fpscounter: " + String(fpscounter));
+    //Serial.println("fpscounter (read): " + String(fpscounter));
     fpscounter = 0;
     readValues();
   }
-  fpscounter++;
+  
 
   // Read measuring data and display on OLED all 1s
   if(millis() > starttime1 + 1000){
@@ -489,7 +499,11 @@ void state1(){
       bme.takeForcedMeasurement(); // has no effect in normal mode
     }
     writeDisplayValues();
+    //Serial.println("fpscounter: " + String(fpscounter));
+    //fpscounter = 0;
   }
+
+  fpscounter++;
 
   VEdirectRead();
   
@@ -916,17 +930,17 @@ void setup() {
     esp_sleep_enable_ext0_wakeup(GPIO_NUM_39,0);
   }
   
-  My_timer = timerBegin(0, 80, true);
-  timerAttachInterrupt(My_timer, &onTimer, true);
+  //My_timer = timerBegin(0, 80, true);
+  //timerAttachInterrupt(My_timer, &onTimer, true);
   //timerAlarmWrite(My_timer, (60000000 * actconf.standbySleepDuration), true);
-  timerAlarmWrite(My_timer, (60000000 * TX_INTERVAL), true);
+  //timerAlarmWrite(My_timer, (60000000 * TX_INTERVAL), true);
 
   readValues();     // initial read after boot, to get the status of alarm pin.
 
   if(!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED)){
-        Serial.println("LittleFS Mount Failed");
-        return;
-    }
+    Serial.println("LittleFS Mount Failed");
+    return;
+  }
 }
 
 void loop() {
