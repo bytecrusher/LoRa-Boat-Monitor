@@ -29,7 +29,7 @@ httpServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
 });
 
 httpServer.on("/index.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-  String content = readFile2(LittleFS, "/main.html");
+  String content = readFile2(LittleFS, "/index.html");
   //content.replace("%header%", String(readFile2(LittleFS, "/header.html")));
   content.replace("%header%", getheader());
   content.replace("%devname%", String(actconf.devname));

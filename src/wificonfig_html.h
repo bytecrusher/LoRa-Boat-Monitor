@@ -1,5 +1,6 @@
 const char wificonfig_html[] PROGMEM = R"rawliteral(
-    <br><h3>Please enter the Wifi Network informations.</h3><br>
+    <h3 style="color:Red;">Error in Filesystem or missing Files. Please Format Filesystem and get Files from server.</h3>
+    <h3>Please enter the Wifi Network informations.</h3><br>
   <form name="wifiform" action="/savesettings" method="GET">
     WLAN Client SSID: <input type='text' required name='cssid' size='20' value='%cssid%' maxlength='20' onchange='check_ssid("cssid")'>
     <br>

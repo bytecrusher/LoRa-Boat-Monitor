@@ -27,7 +27,7 @@ void DownloadFilesFromFtp(char *fversion)
   getFileFromFtp("header.html");
   getFileFromFtp("app.js");
   getFileFromFtp("lora.html");
-  getFileFromFtp("main.html");
+  getFileFromFtp("index.html");
   getFileFromFtp("md5.js");
   getFileFromFtp("password.html");
   getFileFromFtp("restart.html");

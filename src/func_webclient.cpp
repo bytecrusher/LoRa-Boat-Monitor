@@ -19,7 +19,7 @@ void DownloadFilesFromWeb(char *fversion)
     testDownload("header.html", fversion);
     testDownload("app.js", fversion);
     testDownload("lora.html", fversion);
-    testDownload("main.html", fversion);
+    testDownload("index.html", fversion);
     testDownload("md5.js", fversion);
     testDownload("md5.min.js", fversion);
     testDownload("md5.min.js.map", fversion);

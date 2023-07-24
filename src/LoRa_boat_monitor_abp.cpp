@@ -131,10 +131,10 @@ byte daysavetime = 1;
 int fpscounter = 0;
 
 File root;
-bool opened = false;
+//bool opened = false;
 
-const char* http_username = "admin";
-const char* http_password = "admin";
+//const char* http_username = "admin";
+//const char* http_password = "admin";
 
 const char logout_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html>

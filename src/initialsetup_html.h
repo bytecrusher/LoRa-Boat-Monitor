@@ -117,6 +117,23 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
             /*text-align: center;*/
         }
 
+        button {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 14px;
+            color: #000000;
+            padding: 10px 20px;
+            background: -moz-linear-gradient(top,
+                    #ffffff 0%,
+                    #ffffff 50%,
+                    #bdbbbd);
+            background: -webkit-gradient(linear, left top, left bottom,
+                    from(#ffffff),
+                    color-stop(0.50, #ffffff),
+                    to(#bdbbbd));
+            border-radius: 10px;
+            border: 3px solid #dedcd5;
+        }
+
         select {
             width: 150px;
         }
@@ -142,6 +159,46 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
             box-shadow: #000 0 -1px 6px 1px, inset #460 0 -1px 8px, #80FF00 0 3px 11px;
         }
 
+        progress {
+            display:inline-block;
+            width:190px;
+            /*height:20px;
+            padding:15px 0 0 0;*/
+            margin:0;
+            background:none;
+            border: 0;
+            border-radius: 15px;
+            text-align: left;
+            position:relative;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 0.8em;
+        }
+
+        progress::-webkit-progress-bar {
+            height:11px;
+            width:150px;
+            margin:0 auto;
+            background-color: #CCC;
+            border-radius: 15px;
+            box-shadow:0px 0px 6px #777 inset;
+        }
+        progress::-webkit-progress-value {
+            display:inline-block;
+            float:left;
+            height:11px;
+            margin:0px -10px 0 0;
+            background: #0A0;
+            border-radius: 15px;
+            box-shadow:0px 0px 6px #666 inset;
+        }
+        progress:after {
+            margin:-26px 0 0 -7px;
+            padding:0;
+            display:inline-block;
+            float:left;
+            content: attr(value) '%';
+        }
+
         .box { float: left; }
         .box:last-child { margin-right: 0; }
     </style>
@@ -164,9 +221,9 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
         <button type='button' style='margin: 20px' value='Format FS' onclick='FormatFS()'>Format Filesystem</button>
         <button type='button' value='Update Files' onclick='UpdateFiles()'>Get Files from Server</button>
         <button type='button' style='margin: 20px' value='Format FS' onclick='getTable()'>Show Files</button>
-        <div id='status' style="border: 1px solid white; padding: 5px;">Status: </div>
+        <!--div id='status' style="border: 1px solid white; padding: 5px;">Status: </div-->
         <br>
-        <div style="border: 1px solid white; padding: 5px;">
+        <div style="display: inline-block; border: 1px solid white; padding: 5px; margin-bottom: 10px;">
             Upload single file:
             <form method='POST' action='/upload' enctype='multipart/form-data' id='upload_form'>
                 <input type='file' name='upload' style='width: 300px'>
@@ -246,7 +303,7 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
                         clearInterval(meinIntervall);
                         document.getElementById('loader').style.display = 'none';
                         document.getElementById('myDiv').style.display = 'block';
-                        document.getElementById('status').innerHTML = ('Status: Updated Files successfull.');
+                        //document.getElementById('status').innerHTML = ('Status: Updated Files successfull.');
                         alert('Files successfully downloaded.');
                         location.reload();
                     } else if (result == 1) {
@@ -256,13 +313,16 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
                 }
                 else if (http.status == 400) {
                     alert('There was an error 400');
-                    document.getElementById('status').innerHTML = ('Status: Error while updatefilesstatus GET.');
+                    //document.getElementById('status').innerHTML = ('Status: Error while updatefilesstatus GET.');
                     document.getElementById('loader').style.display = 'none';
                     document.getElementById('myDiv').style.display = 'block';
+                    alert('Files not successfully downloaded.');
                     }
                 else {
                     alert('something else other than 200 was returned');
-                    document.getElementById('status').innerHTML = ('Status: Error while updatefilesstatus GET.');
+                    //document.getElementById('status').innerHTML = ('Status: Error while updatefilesstatus GET.');
+                    document.getElementById('loader').style.display = 'none';
+                    document.getElementById('myDiv').style.display = 'block';
                 }
             }
         }
@@ -297,14 +357,16 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
                         location.reload();
                     }
                     else if (http.status == 400) {
-                        alert('There was an error 400');
-                        document.getElementById('status').innerHTML = ('Status: Error while Formating Filesystem.');
+                        //alert('There was an error 400');
+                        //document.getElementById('status').innerHTML = ('Status: Error while Formating Filesystem.');
                         document.getElementById('loader').style.display = 'none';
                         document.getElementById('myDiv').style.display = 'block';
+                        alert('Error while Formating Filesystem. (Error 400)');
                     }
                     else {
-                        alert('something else other than 200 was returned');
-                        document.getElementById('status').innerHTML = ('Status: Error while Formating Filesystem.');
+                        //alert('something else other than 200 was returned');
+                        //document.getElementById('status').innerHTML = ('Status: Error while Formating Filesystem.');
+                        alert('Error while Formating Filesystem. (Error 200)');
                     }
                 }
             }
@@ -332,17 +394,19 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
                 if (http.status == 200) {
                     //document.getElementById("myDiv").innerHTML = xmlhttp.responseText;
                     console.log('Update Files requested...');
-                    document.getElementById('status').innerHTML = ('Status: Update Files requested...');
+                    //document.getElementById('status').innerHTML = ('Status: Update Files requested...');
                 }
                 else if (http.status == 400) {
-                    alert('There was an error 400');
-                    document.getElementById('status').innerHTML = ('Status: Error while Downlaoding Files from server.');
+                    //alert('There was an error 400');
+                    //document.getElementById('status').innerHTML = ('Status: Error while Downlaoding Files from server.');
                     document.getElementById('loader').style.display = 'none';
                     document.getElementById('myDiv').style.display = 'block';
+                    alert('Error while Downlaoding Files from server. (Error 400)');
                 }
                 else {
                     alert('something else other than 200 was returned');
-                    document.getElementById('status').innerHTML = ('Status: Error while Downlaoding Files from server.');
+                    //document.getElementById('status').innerHTML = ('Status: Error while Downlaoding Files from server.');
+                    alert('Error while Downlaoding Files from server. (Error 200)');
                 }
             }
         }
@@ -371,17 +435,18 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
                     document.getElementById('myDiv').style.display = 'block';
                     document.getElementById("table").innerHTML = http.responseText;
                     console.log('getTable successfull.');
-                    document.getElementById('status').innerHTML = ('Status: getTable successfull');
+                    //document.getElementById('status').innerHTML = ('Status: getTable successfull');
                 }
                 else if (http.status == 400) {
-                    alert('There was an error 400');
-                    document.getElementById('status').innerHTML = ('Status: Error while getTable.');
+                    //document.getElementById('status').innerHTML = ('Status: Error while getTable.');
                     document.getElementById('loader').style.display = 'none';
                     document.getElementById('myDiv').style.display = 'block';
+                    alert('Error while getTable. (Error 400)');
                 }
                 else {
                     alert('something else other than 200 was returned');
-                    document.getElementById('status').innerHTML = ('Status: Error while getTable.');
+                    //document.getElementById('status').innerHTML = ('Status: Error while getTable.');
+                    alert('Error while getTable. (Error 200)');
                 }
             }
         }
