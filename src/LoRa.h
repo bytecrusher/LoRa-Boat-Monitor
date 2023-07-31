@@ -57,8 +57,6 @@ void do_send(osjob_t *j)
     readValues();
 
     // int -> bytes
-    //byte counterLow = lowByte(counter16);
-    //byte counterHigh = highByte(counter16);
     byte counterLow = lowByte(LMIC.seqnoUp);
     byte counterHigh = highByte(LMIC.seqnoUp);
     // place the bytes into the payload
@@ -66,7 +64,6 @@ void do_send(osjob_t *j)
     mydata[1] = counterHigh;
     if (debug) {
       DebugPrint(3, F("Packet: "));
-      //DebugPrintln(3, counter16);
       DebugPrintln(3, LMIC.seqnoUp);
     }
 
@@ -238,8 +235,6 @@ void do_send(osjob_t *j)
     loraSendDurationTime = millis();
     LMIC_setTxData2(1, mydata, sizeof(mydata) - 1, 0);
     DebugPrintln(3, F("Packet queued"));
-
-    //counter16++;
   }
   // Next TX is scheduled after TX_COMPLETE event.
 
@@ -431,7 +426,6 @@ void onEvent(ev_t ev)
     /* do not print anything -- it wrecks timing */
     break;
   case EV_JOIN_TXCOMPLETE:
-    //Serial.println(F("EV_JOIN_TXCOMPLETE: no JoinAccept"));
     DebugPrintln(3, F("EV_JOIN_TXCOMPLETE: no JoinAccept"));
     break;
   default:

@@ -92,8 +92,11 @@ xmlhttp.onreadystatechange = function () {
     standbyMode = document.getElementById('standbyMode');
     standbyMode.value = myObj.Device.MeasuringValues.standbyMode.Value;
 
-    loraStandbyMode = document.getElementById('loraStandbyMode');
-    loraStandbyMode.value = myObj.Device.MeasuringValues.loraStandbyMode.Value;
+    loraOperationMode = document.getElementById('loraOperationMode');
+    loraOperationMode.value = myObj.Device.MeasuringValues.loraOperationMode.Value;
+
+    WifiStandbyMode = document.getElementById('WifiStandbyMode');
+    WifiStandbyMode.value = myObj.Device.MeasuringValues.WifiStandbyMode.Value;
 
     // If Demo Mode active the give out a message
     servermode = myObj.Device.NetworkParameter.ServerMode;
@@ -111,8 +114,8 @@ xmlhttpStaticData.onreadystatechange = function () {
   if (this.readyState == 4 && this.status == 200) {
     var myObj = JSON.parse(this.responseText);
 
-    cssid = document.getElementById('cssid');
-    cssid.value = myObj.Device.NetworkParameter.WLANClientSSID;
+    cssid1 = document.getElementById('cssid1');
+    cssid1.value = myObj.Device.NetworkParameter.WLANClientSSID;
     sssid = document.getElementById('sssid');
     sssid.value = myObj.Device.NetworkParameter.WLANServerSSID;
 
@@ -130,8 +133,8 @@ xmlhttpStaticData.onreadystatechange = function () {
     standbyMode = document.getElementById('standbyMode');
     standbyMode.value = myObj.Device.MeasuringValues.standbyMode.Value;
 
-    loraStandbyMode = document.getElementById('loraStandbyMode');
-    loraStandbyMode.value = myObj.Device.MeasuringValues.loraStandbyMode.Value;
+    loraOperationMode = document.getElementById('loraOperationMode');
+    loraOperationMode.value = myObj.Device.MeasuringValues.loraOperationMode.Value;
 
     // If Demo Mode active the give out a message
     servermode = myObj.Device.NetworkParameter.ServerMode;

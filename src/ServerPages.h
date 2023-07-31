@@ -33,6 +33,7 @@ httpServer.on("/index.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   //content.replace("%header%", String(readFile2(LittleFS, "/header.html")));
   content.replace("%header%", getheader());
   content.replace("%devname%", String(actconf.devname));
+
   if (content == "- failed to open file for reading"){
     request->redirect("/initialsetup.html");
   } else {
@@ -46,8 +47,12 @@ httpServer.on("/initialsetup.html", HTTP_GET, [](AsyncWebServerRequest *request)
   content.replace("%crights%", String(actconf.crights));
   content.replace("%fversion%", String(actconf.fversion));
   content.replace("%wificonfig%", wificonfig_html);
-  content.replace("%cssid%", String(actconf.cssid));
-  content.replace("%cpassword%", String(actconf.cpassword));
+  content.replace("%cssid1%", String(actconf.cssid1));
+  content.replace("%cpassword1%", String(actconf.cpassword1));
+  content.replace("%cssid2%", String(actconf.cssid2));
+  content.replace("%cpassword2%", String(actconf.cpassword2));
+  content.replace("%cssid3%", String(actconf.cssid3));
+  content.replace("%cpassword3%", String(actconf.cpassword3));
   content.replace("%quality%", String(int(quality)));
   //content.replace("%tabelle%", getMyDirAsString(LittleFS, "/", 0));
 
@@ -80,8 +85,12 @@ httpServer.on("/filesystem.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   content.replace("%devname%", String(actconf.devname));
   content.replace("%crights%", String(actconf.crights));
   content.replace("%fversion%", String(actconf.fversion));
-  content.replace("%cssid%", String(actconf.cssid));
-  content.replace("%cpassword%", String(actconf.cpassword));
+  content.replace("%cssid1%", String(actconf.cssid1));
+  content.replace("%cpassword1%", String(actconf.cpassword1));
+  content.replace("%cssid2%", String(actconf.cssid2));
+  content.replace("%cpassword2%", String(actconf.cpassword2));
+  content.replace("%cssid3%", String(actconf.cssid3));
+  content.replace("%cpassword3%", String(actconf.cpassword3));
   content.replace("%quality%", String(int(quality)));
 
   content.replace("%wificonfig%", "");
@@ -257,11 +266,23 @@ httpServer.on("/savesettings", HTTP_GET, [](AsyncWebServerRequest *request) {
     }
     // Network Settings
     //*****************
-    if (vname[i] == "cssid") {
-      value[i].toCharArray(actconf.cssid, 31);
+    if (vname[i] == "cssid1") {
+      value[i].toCharArray(actconf.cssid1, 31);
     }
-    if (vname[i] == "cpasswd") {
-      value[i].toCharArray(actconf.cpassword, 31);
+    if (vname[i] == "cpasswd1") {
+      value[i].toCharArray(actconf.cpassword1, 31);
+    }
+    if (vname[i] == "cssid2") {
+      value[i].toCharArray(actconf.cssid2, 31);
+    }
+    if (vname[i] == "cpasswd2") {
+      value[i].toCharArray(actconf.cpassword2, 31);
+    }
+    if (vname[i] == "cssid3") {
+      value[i].toCharArray(actconf.cssid3, 31);
+    }
+    if (vname[i] == "cpasswd3") {
+      value[i].toCharArray(actconf.cpassword3, 31);
     }
     if (vname[i] == "timeout") {
       actconf.timeout = toInteger(value[i]);
@@ -280,6 +301,16 @@ httpServer.on("/savesettings", HTTP_GET, [](AsyncWebServerRequest *request) {
     }
     if (vname[i] == "mdnsservice") {
       actconf.mDNS = toInteger(value[i]);
+    }
+    if (vname[i] == "SendDataViaWifi") {
+      //actconf.SendDataViaWifi = toInteger(value[i]);
+      value[i].toCharArray(actconf.SendDataViaWifi, 4);
+    }
+    if (vname[i] == "MdsUrl") {
+      value[i].toCharArray(actconf.MdsUrl, 100);
+    }
+    if (vname[i] == "MdsApiKey") {
+      value[i].toCharArray(actconf.MdsApiKey, 30);
     }
     // LoRa Settings
     //**************
@@ -344,9 +375,9 @@ httpServer.on("/savesettings", HTTP_GET, [](AsyncWebServerRequest *request) {
         reboot = true; // Need a reboot
       }
     }
-    if (vname[i] == "sendlora") {
-      actconf.sendlora = toInteger(value[i]);
-    }
+    //if (vname[i] == "sendlora") {
+    //  actconf.sendlora = toInteger(value[i]);
+    //}
     if (vname[i] == "relay") {
       actconf.relay = toInteger(value[i]);
       if(actconf.relay == 0){
@@ -368,12 +399,6 @@ httpServer.on("/savesettings", HTTP_GET, [](AsyncWebServerRequest *request) {
     }
     if (vname[i] == "deviceid") {
       actconf.deviceID = toInteger(value[i]);
-    }
-    if (vname[i] == "devicetype") {
-      value[i].toCharArray(actconf.deviceType, 10);
-    }
-    if (vname[i] == "sendlora") {
-      actconf.sendlora = toInteger(value[i]);
     }
     if (vname[i] == "senddata") {
       actconf.senddata = toInteger(value[i]);
@@ -405,8 +430,11 @@ httpServer.on("/savesettings", HTTP_GET, [](AsyncWebServerRequest *request) {
       //value[i].toInteger(actconf.standbySleepDuration);
       actconf.standbySleepDuration = toInteger(value[i]);
     }
-    if (vname[i] == "loraStandbyMode") {
-      value[i].toCharArray(actconf.loraStandbyMode, 8);
+    if (vname[i] == "loraOperationMode") {
+      value[i].toCharArray(actconf.loraOperationMode, 8);
+    }
+    if (vname[i] == "WifiStandbyMode") {
+      value[i].toCharArray(actconf.WifiStandbyMode, 8);
     }
     // Calibration Settings
     //*********************    
@@ -473,10 +501,18 @@ httpServer.on("/settings.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   content = readFile2(LittleFS, "/settings.html");
   content.replace("%header%", getheader());
   content.replace("%devname%", String(actconf.devname));
-  content.replace("%cssid%", String(actconf.cssid));
-  content.replace("%cpassword%", String(actconf.cpassword));
+  content.replace("%cssid1%", String(actconf.cssid1));
+  content.replace("%cpassword1%", String(actconf.cpassword1));
+  content.replace("%cssid2%", String(actconf.cssid2));
+  content.replace("%cpassword2%", String(actconf.cpassword2));
+  content.replace("%cssid3%", String(actconf.cssid3));
+  content.replace("%cpassword3%", String(actconf.cpassword3));
   content.replace("%username%", String(actconf.username));
   content.replace("%password%", String(actconf.password));
+  content.replace("%SendDataViaWifi%", String(getindex(SendDataViaWifi, String(actconf.SendDataViaWifi))));
+
+  content.replace("%MdsUrl%", String(actconf.MdsUrl));
+  content.replace("%MdsApiKey%", String(actconf.MdsApiKey));
 
   content.replace("%hostname%", String(actconf.hostname));
   content.replace("%sssid%", String(actconf.sssid));
@@ -569,7 +605,7 @@ httpServer.on("/settings.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   content.replace("%debug%", String(getindex(debugmode, String(actconf.debug))));
   content.replace("%serspeed%", String(getindex(serspeed, String(actconf.serspeed))));
   content.replace("%deviceID%", String(getindex(deviceid, String(actconf.deviceID))));
-  content.replace("%sendlora%", String(getindex(sendlora, String(actconf.sendlora))));
+  //content.replace("%sendlora%", String(getindex(sendlora, String(actconf.sendlora))));
   content.replace("%senddata%", String(getindex(senddata, String(actconf.senddata))));
   content.replace("%vaverage%", String(getindex(vaverage, String(actconf.vaverage))));
   content.replace("%t1average%", String(getindex(t1average, String(actconf.t1average))));
@@ -579,7 +615,8 @@ httpServer.on("/settings.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   content.replace("%envSensor%", String(getindex(envSensor, String(actconf.envSensor))));
   content.replace("%standbyMode%", String(getindex(standbyMode, String(actconf.standbyMode))));
   content.replace("%standbySleepDuration%", String(actconf.standbySleepDuration));
-  content.replace("%loraStandbyMode%", String(getindex(loraStandbyMode, String(actconf.loraStandbyMode))));
+  content.replace("%loraOperationMode%", String(getindex(loraOperationMode, String(actconf.loraOperationMode))));
+  content.replace("%WifiStandbyMode%", String(getindex(WifiStandbyMode, String(actconf.WifiStandbyMode))));
   content.replace("%cssStyle%", String(getindex(cssStyle, String(actconf.cssStyle))));
 
   request->send(200, "text/html", content);
@@ -645,7 +682,9 @@ httpServer.on("/devinfo.html", HTTP_GET, [](AsyncWebServerRequest *request) {
   content.replace("%sssid%", String(actconf.sssid));
   content.replace("%softAPIP%", WiFi.softAPIP().toString());
   content.replace("%WiFichannel%", String(WiFi.channel()));
-  content.replace("%cssid%", String(actconf.cssid));
+  content.replace("%cssid1%", String(actconf.cssid1));
+  content.replace("%cssid2%", String(actconf.cssid2));
+  content.replace("%cssid3%", String(actconf.cssid3));
   content.replace("%localIP%", WiFi.localIP().toString());
   String mystring = String(actconf.devaddr, HEX);
   mystring.toUpperCase();
@@ -683,6 +722,8 @@ httpServer.on("/devinfo.html", HTTP_GET, [](AsyncWebServerRequest *request) {
 });
 
 httpServer.serveStatic("/favicon.ico", LittleFS, "/favicon.ico").setCacheControl("max-age=600");
+
+httpServer.serveStatic("/settings.js", LittleFS, "/settings.js").setCacheControl("max-age=600");
 
 httpServer.on("/styles.css", HTTP_GET, [](AsyncWebServerRequest *request) {
   long int t1 = millis();
@@ -732,7 +773,9 @@ httpServer.on("/staticdata.json", HTTP_GET, [](AsyncWebServerRequest *request) {
   json_Device["Device"]["ESP32"]["CPUSpeed"]["Value"] = String(ESP.getCpuFreqMHz());
   json_Device["Device"]["ESP32"]["CPUSpeed"]["Unit"] = "MHz";
 
-  json_Device["Device"]["NetworkParameter"]["WLANClientSSID"] = String(actconf.cssid);
+  json_Device["Device"]["NetworkParameter"]["WLANClientSSID1"] = String(actconf.cssid1);
+  json_Device["Device"]["NetworkParameter"]["WLANClientSSID2"] = String(actconf.cssid2);
+  json_Device["Device"]["NetworkParameter"]["WLANClientSSID3"] = String(actconf.cssid3);
   json_Device["Device"]["NetworkParameter"]["WLANClientIP"] = WiFi.localIP().toString();
 
   json_Device["Device"]["NetworkParameter"]["WLANServerSSID"] = String(actconf.sssid);
@@ -740,11 +783,13 @@ httpServer.on("/staticdata.json", HTTP_GET, [](AsyncWebServerRequest *request) {
   json_Device["Device"]["NetworkParameter"]["ServerMode"] = String(actconf.serverMode);
   json_Device["Device"]["NetworkParameter"]["ServerHostName"] = String(actconf.hostname);
 
+  json_Device["Device"]["NetworkParameter"]["MdsUrl"] = String(actconf.MdsUrl);
+  json_Device["Device"]["NetworkParameter"]["MdsApiKey"] = String(actconf.MdsApiKey);
+
   // Unused ?
   //json_Device["Device"]["DeviceSettings"]["SerialDebugMode"] = String(actconf.debug);
   //json_Device["Device"]["DeviceSettings"]["SerialSpeed"] = String(actconf.serspeed);
   //json_Device["Device"]["DeviceSettings"]["DeviceID"] = String(actconf.deviceID);
-  //json_Device["Device"]["DeviceSettings"]["DeviceType"] = String(actconf.deviceType);
   //json_Device["Device"]["DeviceSettings"]["SendData"] = String(actconf.senddata);
   //json_Device["Device"]["DeviceSettings"]["VoltageOffset"] = String(actconf.voffset);
   //json_Device["Device"]["DeviceSettings"]["VoltageSlopeA1"] = String(actconf.a1vslope);
@@ -852,8 +897,14 @@ httpServer.on("/data.json", HTTP_GET, [](AsyncWebServerRequest *request) {
   json_Device["Device"]["MeasuringValues"]["standbyMode"]["Value"] = String(actconf.standbyMode);
   json_Device["Device"]["MeasuringValues"]["standbyMode"]["Unit"] = "";  // TODO: bring into staticdata.json
 
-  json_Device["Device"]["MeasuringValues"]["loraStandbyMode"]["Value"] = String(actconf.loraStandbyMode);
-  json_Device["Device"]["MeasuringValues"]["loraStandbyMode"]["Unit"] = "";  // TODO: bring into staticdata.json
+  json_Device["Device"]["MeasuringValues"]["loraOperationMode"]["Value"] = String(actconf.loraOperationMode);
+  json_Device["Device"]["MeasuringValues"]["loraOperationMode"]["Unit"] = "";  // TODO: bring into staticdata.json
+
+  json_Device["Device"]["MeasuringValues"]["WifiStandbyMode"]["Value"] = String(actconf.WifiStandbyMode);
+  json_Device["Device"]["MeasuringValues"]["WifiStandbyMode"]["Unit"] = "";  // TODO: bring into staticdata.json
+
+  json_Device["Device"]["MeasuringValues"]["SendDataViaWifi"]["Value"] = String(actconf.SendDataViaWifi);
+  json_Device["Device"]["MeasuringValues"]["SendDataViaWifi"]["Unit"] = "";  // TODO: bring into staticdata.json
 
   json_Device["Device"]["MeasuringValues"]["VEdirectV"]["Value"] = "%vedirectVoltage%";
   json_Device["Device"]["MeasuringValues"]["VEdirectV"]["Unit"] = "V";  // TODO: bring into staticdata.json
@@ -994,14 +1045,11 @@ AsyncElegantOTA.begin(&httpServer);    // Start ElegantOTA
     httpServer.sendHeader("Connection", "close");
   },[](){  
     HTTPUpload& upload = httpServer.upload();
-    if(opened == false){
-      opened = true;
       root = LittleFS.open((String("/") + upload.filename).c_str(), FILE_WRITE);
       if(!root){
         Serial.println("- failed to open file for writing");
         return;
       }
-    } 
     if(upload.status == UPLOAD_FILE_WRITE){
       if(root.write(upload.buf, upload.currentSize) != upload.currentSize){
         Serial.println("- failed to write");
@@ -1010,13 +1058,11 @@ AsyncElegantOTA.begin(&httpServer);    // Start ElegantOTA
     } else if(upload.status == UPLOAD_FILE_END){
       root.close();
       Serial.println("UPLOAD_FILE_END");
-      opened = false;
     }
   });*/
 
 httpServer.on("/formatfs", HTTP_POST, [](AsyncWebServerRequest *request) {
   formatfs(LittleFS);
-
   request->send(200, "text/html", "done");
 });
 
@@ -1038,10 +1084,18 @@ httpServer.on("/updatefilesstatus", HTTP_GET, [](AsyncWebServerRequest *request)
 });
 
 httpServer.onNotFound([](AsyncWebServerRequest *request){
-  String content = readFile2(LittleFS, "/error.html");
-  content.replace("%header%", getheader());
-  content.replace("%devname%", String(actconf.devname));
-  request->send(404, "text/html", content);
+  if (request->method() == HTTP_OPTIONS) 
+  {
+    request->send(200);
+  } 
+  else 
+  {
+    //request->send(404);
+    String content = readFile2(LittleFS, "/error.html");
+    content.replace("%header%", getheader());
+    content.replace("%devname%", String(actconf.devname));
+    request->send(404, "text/html", content);
+  }
 });
 
 httpServer.on("/logout", HTTP_GET, [](AsyncWebServerRequest *request){

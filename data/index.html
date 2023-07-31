@@ -17,6 +17,33 @@
       height: 55px;
       width: 120px;
     }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    /* Create three equal columns that floats next to each other */
+    .column {
+      float: left;
+      width: 50%;
+      padding: 10px;
+      height: 75px; /* Should be removed. Only for demonstration */
+      text-align: center;
+    }
+
+    /* Clear floats after the columns */
+    .row:after {
+      content: "";
+      display: table;
+      clear: both;
+    }
+
+    /* Responsive layout - makes the three columns stack on top of each other instead of next to each other */
+    @media screen and (max-width: 200px) {
+      .column {
+        width: 100%;
+      }
+    }
   </style>
 </head>
 
@@ -41,7 +68,6 @@
           document.getElementById('lora').disabled = false;
           document.getElementById('restart').disabled = false;
           document.getElementById('devinfo').disabled = false;
-          document.getElementById('style').disabled = false;
         }
         //quality = document.getElementById('quality');
         //quality.value = myObj.Device.NetworkParameter.ConnectionQuality.Value;
@@ -55,52 +81,50 @@
   </script>
   %header%
   <h3><data class="blink" id='info'></data></h3>
-  <table>
-    <tr>
-      <td>
+
+  <div>
+    <div class="row">
+      <div class="column">
         <form action='sensorv.html'><button type='submit' id='sensorv'>Sensor Values</button></form>
-      </td>
-      <td>
+      </div>
+      <div class="column">
         <form action='firmware.html'><button type='submit' id='firmware'>Firmware Update</button></form>
-      </td>
-      <td></td>
-    </tr>
-    <tr>
-      <td>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="column">
         <form action='lora.html'><button type='submit' id='lora'>LoRa Info</button></form>
-      </td>
-      <td>
-        <form action='restart.html'><button type='submit' id='restart'>Restart Device</button></form>
-      </td>
-      <td></td>
-    </tr>
-    <tr>
-      <td>
+      </div>
+      <div class="column">
+          <form action='restart.html'><button type='submit' id='restart'>Restart Device</button></form>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="column">
         <form action='devinfo.html'><button type='submit' id='devinfo'>Device Info</button>
         </form>
-      </td>
-      <td>
-        <!--form action='/'><input type='hidden' name='style' value='1'><button type='submit' id='style'>Style</button>
-        </form-->
+      </div>
+      <div class="column">
         <form action='filesystem.html'><button type='submit' id='filesystem'>Filesystem</button></form>
-      </td>
-      <td></td>
-    </tr>
-    <tr>
-      <td>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="column">
         <form action='settings.html'>
           <button type='submit' id='settings'>Device Settings</button>
         </form>
-      </td>
-      <td>
+      </div>
+      <div class="column">
         <form action='https://norbert-walter.github.io/LoRa-Boat-Monitor/public/index_V1.0x.html'>
           <button type='submit' id='help'>System Help</button>
         </form>
-      </td>
-      <td>
-      </td>
-    </tr>
-  </table>
+      </div>
+    </div>
+  </div>
+
   <br>
   <hr>
 </body>

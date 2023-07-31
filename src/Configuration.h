@@ -1,6 +1,8 @@
 #ifndef Configuration_h
 #define Configuration_h
 
+#include <stdint.h>
+
 // Default configuration
 // Types 'byte' und 'word' doesn't work!
 typedef struct {
@@ -13,9 +15,16 @@ typedef struct {
   char fversion[6] = "V1.0x";               // Firmware version
   char license[12] = "GPL3";                // License type
   int debug = 3;                            // Debug mode 0=off 1=Errors 2=Errors + Warnings 3=Errors + Warnings + Messages
-  char cssid[31] = "MyBoat";                // SSID of WiFi Client
-  char cpassword[31] = "S6587rr94P";        // Password of WiFi Client
-  int timeout = 30;                         // Connection timeout for client in [s] [30|90|120|150|180|210|240|270|300]
+  int corder1 = 1;                          // Set the Order or Priority for connecting to wifi
+  char cssid1[31] = "MyBoat1";                // SSID of WiFi Client
+  char cpassword1[31] = "password1";        // Password of WiFi Client
+  int corder2 = 2;                          // Set the Order or Priority for connecting to wifi
+  char cssid2[31] = "MyBoat2";                // SSID of WiFi Client
+  char cpassword2[31] = "password2";        // Password of WiFi Client
+  int corder3 = 3;                          // Set the Order or Priority for connecting to wifi
+  char cssid3[31] = "MyBoat3";                // SSID of WiFi Client
+  char cpassword3[31] = "password3";        // Password of WiFi Client
+  int timeout = 10;                         // Connection timeout for client in [s] [3|5|10|30|90|120|150|180|210|240]
   char sssid[31] = "LoRaBoatMonitor";       // SSID of WiFi Server
   char spassword[31] = "12345678";          // Password of WiFi Server
   int apchannel = 1;                        // Assess Point channel [1...13]
@@ -30,7 +39,6 @@ typedef struct {
 
   // LoRaWAN device, network and session key
   uint32_t devaddr = 0x12345678;                // LoRa device address
-  //u4_t devaddr = 0x12345678;                // LoRa device address
   uint8_t nskey[16] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00 };  // LoRa Network session key
   uint8_t appkey[16] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00 }; // LoRa Application Key
   
@@ -39,13 +47,11 @@ typedef struct {
   int spreadf = 10;                         // Spreading factor (SF) [7|8|9|10]
   int dynsf = 1;                            // Dynamic spreading factor [0|1] 0=off, 1=on (transmit schema SF SF SF SF SF SF SF SF SF SF SF+1 SF+2)
   int tinterval = 1;                        // LoRa transmit interval x30s, [1...255] (value x 30s, 10 X 30s = 300s = 5min)
-  int sendlora = 1;                         // Send LoRa telegrams [0|1] 0=off 1=on
   int relay = 0;                            // Relay status [0|1|2] 0=off 1=on 2=controll GPS Modul
                                             // Info: see relaytimer [0|1...255] 0=off 1...255= value x 5min on time for relay
 
   int instrumentSize = 400;                 // Instrument size X * Y [pix] [200|250|300|350|400|450|500|550|600]
   int deviceID = 0;                         // ID of LoRa device [0...9]
-  char deviceType[10] = "LoRa1000";         // Type of LoRa boat monitor [LoRa1000]
   int senddata = 1;                         // Send sensor data to NMEA0183 [0|1] 0=off 1=on (WIMWV, WIVWR, WIVPW, PWINF) for Serial or JSON
   int sendubidots = 0;                      // Send telegrams to Ubidots [0|1] 0=off 1=on
 
@@ -70,8 +76,13 @@ typedef struct {
   char envSensor[20] = "Off";               // Select environment sensor [Off|BME280|VEdirect-Read|VEdirect-Send]
   char standbyMode[4] = "Off";              // Select Standby mode [Off|On]
   int standbySleepDuration = 15;            // Time to sleep in Standby in minutes.
-  char loraStandbyMode[8] = "Standby";      // Select is Lora only sends in Standby mode [Standby|Always]
+  char loraOperationMode[8] = "Standby";    // Select if Lora only sends in Standby mode [Off|Standby|PowerOn|Always]
+  char WifiStandbyMode[8] = "No";           // Select if Wifi used in Standby mode [Yes|No] // obsolete?
+  char SendDataViaWifi[8] = "No";           // Select if Wifi sends in Standby mode data to MDS [Yes|No]
 
+  char MdsUrl[100] = "http://yourservername/maritimedataserver/receiver/receivejson.php";
+  char MdsApiKey[30] = "123456789";
+  
   // Web configs
   int cssStyle = 0;                         // css Style: 0 = black, 1 = red, 2 = white
 } configData;

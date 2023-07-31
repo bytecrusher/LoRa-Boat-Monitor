@@ -68,6 +68,8 @@
 #include "func_ftpclient.h"     // my lib for FTP connection (getting files for webserver)
 #include "func_webclient.h"     // my lib for webclient connection (getting files for webserver)
 
+ #include <stdint.h>
+
 #include "Configuration.h"      // Configuration
 
 configData actconf;             // Actual configuration, Global variable
@@ -107,6 +109,8 @@ Ticker Timer2;                  // Declare Timer for relay ontime
 Ticker Timer3;                  // Declare Timer for NMEA sending
 Ticker Timer4;                  // Declare Timer for Lora sending
 
+int state1counter = 0;
+
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP  actconf.standbySleepDuration       /* Time ESP32 will go to sleep */
 RTC_DATA_ATTR int bootCount = 0;
@@ -127,14 +131,9 @@ boolean runDownloadingFilesStatus = false;
 long timezone = 1; 
 byte daysavetime = 1;
 
-//hw_timer_t *My_timer = NULL;
 int fpscounter = 0;
 
 File root;
-//bool opened = false;
-
-//const char* http_username = "admin";
-//const char* http_password = "admin";
 
 const char logout_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html>
@@ -177,47 +176,71 @@ void enableWiFi(){
       
       DebugPrint(3, "Host name: ");
       DebugPrintln(3, hname);
+
+      char cssid[31];
+      char cpassword[31];
       
-      // Connect to WiFi network
-      DebugPrint(3, "Connecting WiFi client to ");
-      DebugPrintln(3, actconf.cssid);
-
-      // Load connection timeout from configuration (maxccount = (timeout[s] * 1000) / 500[ms])
-      maxccounter = ((actconf.timeout * 1000) / 500);
-
-      // Wait until is connected otherwise abort connection after x connection trys
-      WiFi.begin(actconf.cssid, actconf.cpassword);
-      ccounter = 0;
-      boolean toggleWifiConnectionStatus = false;
-      while ((WiFi.status() != WL_CONNECTED) && (ccounter <= maxccounter)) {
-        delay(200);
-        DebugPrint(3, ".");
-        if (toggleWifiConnectionStatus) {
-          u8x8.drawString(0,4,".");
-          toggleWifiConnectionStatus = false;
-        } else {
-          u8x8.drawString(0,4," ");
-          toggleWifiConnectionStatus = true;
+      for (int i=1; i < 4; i++) {
+        if (i == 1) {
+          strncpy(cssid, actconf.cssid1, 31);
+          strncpy(cpassword, actconf.cpassword1, 31);
+        } else if (i == 2) {
+          strncpy(cssid, actconf.cssid2, 31);
+          strncpy(cpassword, actconf.cpassword2, 31);
+        } else if (i == 3) {
+          strncpy(cssid, actconf.cssid3, 31);
+          strncpy(cpassword, actconf.cpassword3, 31);
         }
-        ccounter ++;
-      }
-      u8x8.drawString(0,4," ");
-      DebugPrintln(3, "");
-      if (WiFi.status() == WL_CONNECTED){
-        DebugPrint(3, "WiFi client connected with IP: ");
-        DebugPrintln(3, WiFi.localIP());
-        DebugPrintln(3, "");
-        u8x8.drawString(0,4,"Connected IP:");
-        u8x8.drawString(0,5, WiFi.localIP().toString().c_str());
+
+        // Connect to WiFi network
+        DebugPrint(3, "Connecting WiFi #");
+        DebugPrint(3, i);
+        DebugPrint(3, " client to ");
+        DebugPrintln(3, cssid);
+
+        u8x8.clearLine(4);
+        u8x8.drawString(2,4, cssid);
         u8x8.refreshDisplay();    // Only required for SSD1606/7
-        delay(100);
-      }
-      else{
-        WiFi.disconnect(true);                // Abort connection
-        DebugPrintln(3, "Connection aborted");
+
+        // Load connection timeout from configuration (maxccount = (timeout[s] * 1000) / 200[ms])
+        maxccounter = ((actconf.timeout * 1000) / 200);
+
+        // Wait until is connected otherwise abort connection after x connection trys
+        WiFi.begin(cssid, cpassword);
+        ccounter = 0;
+        boolean toggleWifiConnectionStatus = false;
+        while ((WiFi.status() != WL_CONNECTED) && (ccounter <= maxccounter)) {
+          delay(200);
+          DebugPrint(3, ".");
+          if (toggleWifiConnectionStatus) {
+            u8x8.drawString(0,4,".");
+            toggleWifiConnectionStatus = false;
+          } else {
+            u8x8.drawString(0,4," ");
+            toggleWifiConnectionStatus = true;
+          }
+          ccounter ++;
+        }
+        u8x8.drawString(0,4," ");
         DebugPrintln(3, "");
-        u8x8.drawString(0,3,"Conection aborted");
-        u8x8.refreshDisplay();    // Only required for SSD1606/7
+        if (WiFi.status() == WL_CONNECTED){
+          DebugPrint(3, "WiFi client connected with IP: ");
+          DebugPrintln(3, WiFi.localIP());
+          DebugPrintln(3, "");
+          u8x8.drawString(0,4,"Connected IP:");
+          u8x8.drawString(0,5, WiFi.localIP().toString().c_str());
+          u8x8.refreshDisplay();    // Only required for SSD1606/7
+          delay(100);
+          DebugPrintln(3, "Exit loop");
+          break;
+        }
+        else{
+          WiFi.disconnect(true);                // Abort connection
+          DebugPrintln(3, "Connection aborted");
+          DebugPrintln(3, "");
+          //u8x8.drawString(0,3,"Conection aborted");
+          //u8x8.refreshDisplay();    // Only required for SSD1606/7
+        }
       }
 
       if(actconf.mDNS == 1){
@@ -242,7 +265,10 @@ void enableWiFi(){
       #include "ServerPages.h"    // Webserver pages request functions
 
       // Sart update server
-      DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "http://loraboatmonitorwebserverdata.derguntmar.de");
+      //DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "http://loraboatmonitorwebserverdata.derguntmar.de");
+      DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
+      DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, PUT");
+      DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "content-type");
       httpServer.begin();
       DebugPrint(3, "HTTP Update Server started at port: ");
       DebugPrintln(3, actconf.httpport);
@@ -400,41 +426,54 @@ void state0(){
       u8x8.drawString(0,1,"Batt switch off");
       u8x8.drawString(0,2,"Lora mode");
       u8x8.refreshDisplay();    // Only required for SSD1606/7
-      sendLoraQueue = true;
+
+      if (String(actconf.loraOperationMode) == "Standby" || String(actconf.loraOperationMode) == "Always") {
+        sendLoraQueue = true;
+      }
+
+      if (String(actconf.WifiStandbyMode) == "Yes") {
+        enableWiFi();
+      }
     }
   }
   readValues();
   delay(20);
-  static unsigned long lastPrintTime = 0;
-  const bool timeCriticalJobs = os_queryTimeCriticalJobs(ms2osticksRound((TX_INTERVAL * 1000)));
-  if (!timeCriticalJobs && GOTO_DEEPSLEEP == true && !(LMIC.opmode & OP_TXRXPEND)) {
-    Serial.print(F("Can go sleep "));
-    LoraWANPrintLMICOpmode();
-    SaveLMICToRTC(TX_INTERVAL);
-    delay(500); // give some time to save.
-    GoDeepSleep();
-  }
-  else if (lastPrintTime + 2000 < millis())
-  {
-    if (toggleDisplayStatus) {
-      u8x8.drawString(0,4,".");
-      toggleDisplayStatus = false;
-    } else {
-      u8x8.drawString(0,4," ");
-      toggleDisplayStatus = true;
-    }
-
-    lastPrintTime = millis();
-    unsigned long difference = (lastPrintTime - loraSendDurationTime) / 1000;
-    Serial.print(F("difference: "));
-    Serial.println(F(difference));
-    long seconds = millis() / 1000;
-    //if (seconds >= 50) {  // Abord sending, after 50 seconds
-    if (difference >= 50) {  // Abord sending, after 50 seconds
-      Serial.println(F("seconds >= 50"));
+  if (String(actconf.loraOperationMode) == "Standby" || String(actconf.loraOperationMode) == "Always") {
+    static unsigned long lastPrintTime = 0;
+    const bool timeCriticalJobs = os_queryTimeCriticalJobs(ms2osticksRound((TX_INTERVAL * 1000)));
+    if (!timeCriticalJobs && GOTO_DEEPSLEEP == true && !(LMIC.opmode & OP_TXRXPEND)) {
+      Serial.print(F("Can go sleep "));
+      LoraWANPrintLMICOpmode();
       SaveLMICToRTC(TX_INTERVAL);
-      delay(500);
+      delay(500); // give some time to save.
       GoDeepSleep();
+    } else if (lastPrintTime + 2000 < millis())
+    {
+      if (toggleDisplayStatus) {
+        u8x8.drawString(0,4,".");
+        toggleDisplayStatus = false;
+      } else {
+        u8x8.drawString(0,4," ");
+        toggleDisplayStatus = true;
+      }
+
+      lastPrintTime = millis();
+      unsigned long difference = (lastPrintTime - loraSendDurationTime) / 1000;
+      Serial.print(F("difference: "));
+      Serial.println(F(difference));
+      long seconds = millis() / 1000;
+      //if (seconds >= 50) {  // Abord sending, after 50 seconds
+      if (difference >= 50) {  // Abord sending, after 50 seconds
+        Serial.println(F("seconds >= 50"));
+        SaveLMICToRTC(TX_INTERVAL);
+        delay(500);
+        GoDeepSleep();
+      }
+    }
+  }
+  if (String(actconf.WifiStandbyMode) == "Yes") {
+    if (String(actconf.SendDataViaWifi) == "Yes") {
+      sendToMDS(actconf);
     }
   }
 }
@@ -458,7 +497,7 @@ void state1(){
       digitalWrite(relayPin, HIGH); // Relay on
     }
 
-    if (String(actconf.loraStandbyMode) == "Always") {
+    if (String(actconf.loraOperationMode) == "Always" || String(actconf.loraOperationMode) == "PowerOn") {
       Timer4.attach_ms((1000 * TX_INTERVAL), &onTimer);      // Start timer4 for sending Lora
       sendLoraQueue = true;
     } else {
@@ -467,7 +506,7 @@ void state1(){
     writeDisplay();
   }
 
-  if (String(actconf.loraStandbyMode) == "Always") {
+  if (String(actconf.loraOperationMode) == "Always" || String(actconf.loraOperationMode) == "PowerOn") {
     static unsigned long lastPrintTime = 0;
     const bool timeCriticalJobs = os_queryTimeCriticalJobs(ms2osticksRound((TX_INTERVAL * 1000)));
     if (!timeCriticalJobs && GOTO_DEEPSLEEP == true && !(LMIC.opmode & OP_TXRXPEND)) {
@@ -479,6 +518,14 @@ void state1(){
   //delay(20);
 
   //old Voltage Offset: 6.47301
+
+  if (state1counter >= 300000) {
+    if (String(actconf.SendDataViaWifi) == "Yes") {
+      sendToMDS(actconf);
+    }
+    state1counter = 0;
+  }
+  state1counter++;
 
   VEdirectSend();
 
@@ -720,10 +767,11 @@ void setup() {
 
   //##### Start OLED #####
   u8x8.clearDisplay();
-  u8x8.drawString(0,0,"NoWa(C)OBP (mod by Gunni)");
+  u8x8.drawString(0,0,"NoWa(C)OBP");
+  u8x8.drawString(0,1,"mod. by Gunni");
   u8x8.drawString(11,0,actconf.fversion);
-  u8x8.drawString(0,2,"Connecting to:");
-  u8x8.drawString(0,3,actconf.cssid);
+  u8x8.drawString(0,3,"Connecting to:");
+  //u8x8.drawString(0,4,actconf.cssid1);
   u8x8.refreshDisplay();    // Only required for SSD1606/7
 
   // ESP32 Information Data
@@ -737,12 +785,12 @@ void setup() {
   DebugPrintln(3, "");
   DebugPrintln(3, "Modul Type: Heltec LoRa-32");
   DebugPrint(3, "SDK-Version: ");
-  DebugPrintln(3, ESP.getSdkVersion());
-  DebugPrint(3, "ESP32 Chip-ID: ");
-  DebugPrintln(3, chipId);
-  DebugPrint(3, "ESP32 Speed [MHz]: ");
-  DebugPrintln(3, ESP.getCpuFreqMHz());
-  DebugPrint(3, "Free Heap Size [Bytes]: ");
+  DebugPrint(3, ESP.getSdkVersion());
+  DebugPrint(3, ", ESP32 Chip-ID: ");
+  DebugPrint(3, chipId);
+  DebugPrint(3, ", ESP32 Speed [MHz]: ");
+  DebugPrint(3, ESP.getCpuFreqMHz());
+  DebugPrint(3, ", Free Heap Size [Bytes]: ");
   DebugPrintln(3, ESP.getFreeHeap());
   DebugPrintln(3, "");
 
@@ -929,11 +977,6 @@ void setup() {
     rtc_gpio_pullup_en(GPIO_NUM_39);
     esp_sleep_enable_ext0_wakeup(GPIO_NUM_39,0);
   }
-  
-  //My_timer = timerBegin(0, 80, true);
-  //timerAttachInterrupt(My_timer, &onTimer, true);
-  //timerAlarmWrite(My_timer, (60000000 * actconf.standbySleepDuration), true);
-  //timerAlarmWrite(My_timer, (60000000 * TX_INTERVAL), true);
 
   readValues();     // initial read after boot, to get the status of alarm pin.
 
