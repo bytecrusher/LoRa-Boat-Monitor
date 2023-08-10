@@ -932,6 +932,14 @@ void LoadLMICFromRTC()
     LMIC = RTC_LMIC;
 }
 
+uint8_t getLMICtxChnl() {
+  return LMIC.txChnl;
+}
+
+uint32_t getLMICseqnoUp() {
+  return LMIC.seqnoUp;
+}
+
 void GoDeepSleep()
 {
     Serial.println(F("Go DeepSleep"));

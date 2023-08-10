@@ -2,7 +2,7 @@
 
 #include <AsyncElegantOTA.h>    // OTA lib
 
-const int relayPin = 25;      // Pin GPIO25, Relay is high activ
+//const int relayPin = 25;      // Pin GPIO25, Relay is high activ
 
 const char logout_html2[] PROGMEM = R"rawliteral(
   <!DOCTYPE HTML><html>
@@ -398,11 +398,11 @@ void WebServerHandler()
       if (vname[i] == "relay") {
         actconf.relay = toInteger(value[i]);
         if(actconf.relay == 0){
-          digitalWrite(relayPin, LOW);
+          digitalWrite(relayPin2, LOW);
           relaytimer = 0;
         }
         else{
-          digitalWrite(relayPin, HIGH);
+          digitalWrite(relayPin2, HIGH);
           relaytimer = 288;  // 288 x 5min = 1440min
         }
       }
@@ -852,16 +852,13 @@ void WebServerHandler()
     json_Device["Device"]["LoRaSettings"]["DeviceAddress"] = String(actconf.devaddr);  // TODO: bring into staticdata.json
     json_Device["Device"]["LoRaSettings"]["Frequency"] = String(actconf.lorafrequency);
     json_Device["Device"]["LoRaSettings"]["Channel"] = String(actconf.lchannel);
-    //json_Device["Device"]["LoRaSettings"]["ActualChannel"] = String(LMIC.txChnl);
-    //json_Device["Device"]["LoRaSettings"]["ActualChannel"] = String(getLMICtxChnl());
+    json_Device["Device"]["LoRaSettings"]["ActualChannel"] = String(getLMICtxChnl());
     json_Device["Device"]["LoRaSettings"]["SpreadingFactor"] = String(actconf.spreadf);
     json_Device["Device"]["LoRaSettings"]["ActualSF"] = String(sf);
     json_Device["Device"]["LoRaSettings"]["DynamicSF"] = String(actconf.dynsf);
     json_Device["Device"]["LoRaSettings"]["TXInterval"] = String(actconf.tinterval);
     json_Device["Device"]["LoRaSettings"]["TimeSlot"] = String(slot);
-    //json_Device["Device"]["LoRaSettings"]["TXCounter"] = String(LMIC.seqnoUp - 1);
-    //json_Device["Device"]["LoRaSettings"]["TXCounter"] = String(LMIC.seqnoUp);
-    //json_Device["Device"]["LoRaSettings"]["TXCounter"] = String(getLMICseqnoUp());
+    json_Device["Device"]["LoRaSettings"]["TXCounter"] = String(getLMICseqnoUp());
     json_Device["Device"]["LoRaSettings"]["Relay"] = String(actconf.relay);
 
     json_Device["Device"]["DisplaySettings"]["Skin"] = String(actconf.skin);
@@ -1086,14 +1083,14 @@ void WebServerHandler()
   httpServer.onNotFound([](AsyncWebServerRequest *request){
     if (request->method() == HTTP_OPTIONS) 
     {
-        request->send(200);
+      request->send(200);
     } 
     else 
     {
-        String content = readFile2(LittleFS, "/error.html");
-        content.replace("%header%", getheader(actconf));
-        content.replace("%devname%", String(actconf.devname));
-        request->send(404, "text/html", content);
+      String content = readFile2(LittleFS, "/error.html");
+      content.replace("%header%", getheader(actconf));
+      content.replace("%devname%", String(actconf.devname));
+      request->send(404, "text/html", content);
     }
   });
 

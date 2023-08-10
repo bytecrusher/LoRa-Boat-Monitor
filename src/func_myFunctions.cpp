@@ -1,16 +1,6 @@
 #include "func_myFunctions.h"
 
-//#include <arduino_lmic.h>       // LoRa Lib, previous lmic.h
 #include <Configuration.h>
-
-const int ANALOG_IN = 36;     // Analog input GPIO36 Voltage
-const int TANK1_IN = 37;      // Analog input GPIO37 Tank 1
-const int TANK2_IN = 38;      // Analog input GPIO38 Tank 2
-
-// Output Pins
-const int ledPin = 25;        // Pin GPIO25, LED is high activ
-const int relayPin = 25;      // Pin GPIO25, Relay is high activ
-const int alarmPin = 39;      // Pin GPI39, Alarm input
 
 // Debugging functions
 void DebugPrintln(int type, const char* x){
@@ -412,10 +402,10 @@ uint16_t float4int(float value){
 
 // Flash LED for x ms
 void flashLED(int duration){
- digitalWrite(ledPin, HIGH);   // On (High activ)
+ digitalWrite(ledPin2, HIGH);   // On (High activ)
  //delay(duration);
  vTaskDelay(duration);
- digitalWrite(ledPin, LOW);    // Off
+ digitalWrite(ledPin2, LOW);    // Off
 }
 
 // Dewpoint calculation
@@ -602,9 +592,9 @@ void readValues(configData myactconf) {
       if (debugVEdirect) {
         DebugPrint(3, "Voltage = ");
       }
-      voltage = myactconf.a2vslope * myactconf.a2vslope * analogRead(ANALOG_IN) + myactconf.a1vslope * analogRead(ANALOG_IN) + myactconf.voffset;
+      voltage = myactconf.a2vslope * myactconf.a2vslope * analogRead(ANALOG_IN2) + myactconf.a1vslope * analogRead(ANALOG_IN2) + myactconf.voffset;
       if (debugVEdirect) {
-        DebugPrint(3, analogRead(ANALOG_IN));
+        DebugPrint(3, analogRead(ANALOG_IN2));
         DebugPrintln(3, " dig");
       }
     }
@@ -631,8 +621,8 @@ void readValues(configData myactconf) {
       DebugPrint(3, "Tank1 = ");
     }
     // Analog input 0...3.3V => 0...33V => 0...4096
-    tank1 = 3.3 / 4096 * analogRead(TANK1_IN);
-    tank1adc = analogRead(TANK1_IN);  // real adc value
+    tank1 = 3.3 / 4096 * analogRead(TANK1_IN2);
+    tank1adc = analogRead(TANK1_IN2);  // real adc value
     uint16_t sensorMin = 0;
     uint16_t sensorMax = 3674;  // max value without Resistor.
     tank1adc = map(tank1adc, sensorMin, sensorMax, 0, 4096);
@@ -663,8 +653,8 @@ void readValues(configData myactconf) {
       DebugPrint(3, "Tank2 = ");
     }
     // Analog input 0...3.3V => 0...33V => 0...4096
-    tank2 = 3.3 / 4096 * analogRead(TANK2_IN);
-    tank2adc = analogRead(TANK2_IN);  // real adc value
+    tank2 = 3.3 / 4096 * analogRead(TANK2_IN2);
+    tank2adc = analogRead(TANK2_IN2);  // real adc value
     // apply the calibration to the sensor reading
     //uint16_t sensor2Min = 0;
     //uint16_t sensor2Max = 3674;
@@ -697,7 +687,7 @@ void readValues(configData myactconf) {
     }
 
     // Digital input 12V activ via opto coupler
-    alarm1 = !digitalRead(alarmPin);  // Invert for easer logic.
+    alarm1 = !digitalRead(alarmPin2);  // Invert for easer logic.
     if (debugAlarm1) {
       DebugPrint(3, "Alarm = ");
       DebugPrint(3, alarm1);
@@ -1052,12 +1042,12 @@ void relayTimerInterrupt(){
   relaytimer--; // Decrement relay timer
   if(relaytimer <= 0){
     relaytimer = 0;
-    digitalWrite(relayPin, LOW); // Relay off
+    digitalWrite(relayPin2, LOW); // Relay off
     actconf.relay = 0;
     //saveEEPROMConfig(actconf);
   }
   else{
-    digitalWrite(relayPin, HIGH); // Relay on
+    digitalWrite(relayPin2, HIGH); // Relay on
   }
 }
 

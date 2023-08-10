@@ -91,15 +91,21 @@ uint16_t tank2_16 = 0;
 
 // Analog input 0...3.3V => 0...33V => 0...4096
 const int ANALOG_IN = 36;     // Analog input GPIO36 Voltage
+int ANALOG_IN2 = ANALOG_IN;     // Analog input GPIO36 Voltage
 const int TANK1_IN = 37;      // Analog input GPIO37 Tank 1
+int TANK1_IN2 = TANK1_IN;      // Analog input GPIO37 Tank 1
 const int TANK2_IN = 38;      // Analog input GPIO38 Tank 2
+int TANK2_IN2 = TANK2_IN;      // Analog input GPIO38 Tank 2
 
 // Output Pins
 const int ledPin = 25;        // Pin GPIO25, LED is high activ
+int ledPin2 = 25;
 const int relayPin = 25;      // Pin GPIO25, Relay is high activ
+int relayPin2 = 25;      // Pin GPIO25, Relay is high activ
 
 // Input Pins
 const int alarmPin = 39;      // Pin GPI39, Alarm input
+int alarmPin2 = alarmPin;      // Pin GPI39, Alarm input
 
 // 1Wire definitions
 #define OneWIRE_PIN 23        // 1Wire on pin GPIO23

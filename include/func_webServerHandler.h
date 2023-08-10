@@ -19,7 +19,7 @@ extern configData defconf;
 extern int slot;
 extern String getMyDirAsString(fs::FS &fs, const char * dirname, uint8_t levels);
 extern bool reboot;
-//extern const int relayPin;
+extern int relayPin2;
 extern String SendDataViaWifi[2];
 extern String usepassword[2];
 extern String isize[9];
@@ -50,6 +50,8 @@ extern String OledDisplayRotation[2];
 extern uint chipId;
 extern String hname;
 extern AsyncWebServer httpServer;
+extern uint8_t getLMICtxChnl();
+extern uint32_t getLMICseqnoUp();
 
 void WebServerHandler();
 
