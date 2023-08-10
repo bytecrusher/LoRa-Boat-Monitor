@@ -1,5 +1,5 @@
 /* Button style and color */
-button,input::file-selector-button {
+button,input::file-selector-button, .custom-file-upload {
     font-family: Arial, Helvetica, sans-serif;
     font-size: 14px;
     color: #000000;
@@ -28,6 +28,7 @@ button,input::file-selector-button {
     text-shadow:
         0px -1px 0px rgba(000, 000, 000, 0.1),
         0px 1px 0px rgba(255, 255, 255, 1);
+    margin: 5px;
 }
 
 /* Text color definitions for head letters */

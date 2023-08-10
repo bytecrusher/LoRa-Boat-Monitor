@@ -28,31 +28,11 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
             color: rgb(255, 255, 255);
         }
 
-        h1 {
-            color: rgb(255, 255, 255);
-        }
-
         h2 {
             color: rgb(255, 255, 255);
         }
 
         h3 {
-            color: rgb(255, 255, 255);
-        }
-
-        h4 {
-            color: rgb(255, 255, 255);
-        }
-
-        h5 {
-            color: rgb(255, 255, 255);
-        }
-
-        h6 {
-            color: rgb(255, 255, 255);
-        }
-
-        h7 {
             color: rgb(255, 255, 255);
         }
 
@@ -117,7 +97,7 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
             /*text-align: center;*/
         }
 
-        button,input::file-selector-button {
+        button,input::file-selector-button, .custom-file-upload {
             font-family: Arial, Helvetica, sans-serif;
             font-size: 14px;
             color: #000000;
@@ -132,14 +112,6 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
                     to(#bdbbbd));
             border-radius: 10px;
             border: 3px solid #dedcd5;
-        }
-
-        select {
-            width: 150px;
-        }
-
-        input {
-            width: 145px;
         }
 
         .led {
@@ -201,6 +173,10 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
 
         .box { float: left; }
         .box:last-child { margin-right: 0; }
+
+        input[type="file"] {
+            display: none;
+        }
     </style>
   </head><body>
   <div style="float: left; width: 100%">
@@ -221,17 +197,11 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
         <button type='button' style='margin: 20px' value='Format FS' onclick='FormatFS()'>Format Filesystem</button>
         <button type='button' value='Update Files' onclick='UpdateFiles()'>Get Files from Server</button>
         <button type='button' style='margin: 20px' value='Format FS' onclick='getTable()'>Show Files</button>
-        <!--div id='status' style="border: 1px solid white; padding: 5px;">Status: </div-->
-        <br>
-        <div style="display: inline-block; border: 1px solid white; padding: 5px; margin-bottom: 10px;">
-            Upload single file:
-            <form method='POST' action='/upload' enctype='multipart/form-data' id='upload_form'>
-                <input type='file' name='upload' style='width: 300px'>
-                <button type='submit' value='Upload'>Upload</button>
-            </form>
-        </div>
-        <br>
-        <form action='/'><button type='submit'>Back</button></form>
+        <form method='POST' action='/upload' enctype='multipart/form-data' id='upload_form' style="display: -webkit-inline-flex; margin-right: 20px;">
+            <label for='upload' class='custom-file-upload' style='display: block;'>Upload single File</label>
+            <input type='file' id='upload' name='upload' onchange='uploadConfig();'>
+        </form>
+        <button onclick="window.open('/', '_self');">Back</button>
     </div>
 <script>
     function check_ssid(iname) {
@@ -264,7 +234,6 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
         }
     };
     
-    var myVar;
     var meinIntervall = null;
     const Http = new XMLHttpRequest();
     document.addEventListener('DOMContentLoaded', function() {
@@ -295,11 +264,11 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
             document.getElementById('loader').style.display = 'block';
             document.getElementById('myDiv').style.display = 'none';
             http.open("GET", "/updatefilesstatus", true);
-            http.onreadystatechange = ausgeben;
+            http.onreadystatechange = meineFunktionAusgeben;
             http.send(null);
         }
 
-        function ausgeben() {
+        function meineFunktionAusgeben() {
             if (http.readyState == XMLHttpRequest.DONE) {
                 if (http.status == 200) {
                     result = http.responseText;
@@ -345,11 +314,11 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
                 document.getElementById('loader').style.display = 'block';
                 document.getElementById('myDiv').style.display = 'none';
                 http.open("POST", "/formatfs", true);
-                http.onreadystatechange = ausgeben;
+                http.onreadystatechange = FormatFSAusgeben;
                 http.send(null);
             }
 
-            function ausgeben() {
+            function FormatFSAusgeben() {
                 if (http.readyState == XMLHttpRequest.DONE) {
                     if (http.status == 200) {
                         //document.getElementById("myDiv").innerHTML = xmlhttp.responseText;
@@ -389,11 +358,11 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
             document.getElementById('myDiv').style.display = 'none';
             startInterval();
             http.open("POST", "/updatefiles", true);
-            http.onreadystatechange = ausgeben;
+            http.onreadystatechange = UpdateFilesAusgeben;
             http.send(null);
         }
 
-        function ausgeben() {
+        function UpdateFilesAusgeben() {
             if (http.readyState == XMLHttpRequest.DONE) {                
                 if (http.status == 200) {
                     //document.getElementById("myDiv").innerHTML = xmlhttp.responseText;
@@ -428,11 +397,11 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
             document.getElementById('myDiv').style.display = 'none';
             //startInterval();
             http.open("GET", "/gettable", true);
-            http.onreadystatechange = ausgeben;
+            http.onreadystatechange = getTableAusgeben;
             http.send(null);
         }
 
-        function ausgeben() {
+        function getTableAusgeben() {
             if (http.readyState == XMLHttpRequest.DONE) {                
                 if (http.status == 200) {
                     document.getElementById('loader').style.display = 'none';
@@ -486,6 +455,10 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
         xmlhttpheader.send();
     }
     setInterval(function () { startping(); }, 1000);
+
+    function uploadConfig() {
+        document.getElementById('upload_form').submit();
+    }
 </script>
 </body></html>
 )rawliteral";

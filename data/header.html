@@ -1,7 +1,8 @@
 <div style="float: left; width: 100%">
     <div class="box"><h2>%devname%</h2></div>
-    <div class="box" style="margin-top: 30px; margin-left: 20px;">
+    <div class="box" style="margin-top: 30px; margin-left: 20px; display:flex;">
         <div id='myping' class="led"></div>
+        <div id='mypingtxt' style="margin-left: 10px; margin-top: -4px;"></div>
     </div>
 </div>
 <div>%crights%, %fversion%, CQ: <data id='quality'>%quality%</data>%</div>
@@ -17,7 +18,7 @@
             offlineTimer = 0;
             document.getElementById("myping").classList.add('led-green');
             document.getElementById("myping").classList.remove('led-red');
-            document.getElementById("myping").innerHTML = "";
+            document.getElementById("mypingtxt").innerHTML = "Online";
             // Turn off the green led.
             setTimeout(function () { 
                 document.getElementById("myping").classList.remove('led-green');
@@ -27,12 +28,12 @@
     function startping() {
         // avoid more than one instance of "offlineTimer".
         if (offlineTimer == 0) {
-            // When after 3 seconds no response.
+            // When after 1,1 seconds no response.
             offlineTimer = setTimeout(function () { 
             document.getElementById("myping").classList.add('led-red');
             document.getElementById("myping").classList.remove('led-green');
-            document.getElementById("myping").innerHTML = "<div style='margin-left:20px;'>Offline</div>";
-            }, 3000);
+            document.getElementById("mypingtxt").innerHTML = "Offline";
+            }, 1100);
         }
         xmlhttpheader.open('GET', '/getdata', true);
         xmlhttpheader.send();

@@ -6,7 +6,7 @@
 // Default configuration
 // Types 'byte' und 'word' doesn't work!
 typedef struct {
-  int valid = 9;                            // Number of configuration (Please change when the structure or values are changed)
+  int valid = 10;                            // Number of configuration (Please change when the structure or values are changed)
   int crypt = 0;                            // Activate for critical webside a password query [0 = off|1 = on]
   char username[31] = "admin";
   char password[31] = "12345678";           // Password for critical websides (settings, update and reboot)
@@ -85,6 +85,7 @@ typedef struct {
   
   // Web configs
   int cssStyle = 0;                         // css Style: 0 = black, 1 = red, 2 = white
+  int OledDisplayRotation = 0;              // OLED Display Rotation: 0 = 0°, 1 = 180°
 } configData;
 
 #endif

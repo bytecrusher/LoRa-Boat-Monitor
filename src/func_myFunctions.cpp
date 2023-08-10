@@ -1,5 +1,16 @@
-#ifndef Functions_h
-#define Functions_h
+#include "func_myFunctions.h"
+
+//#include <arduino_lmic.h>       // LoRa Lib, previous lmic.h
+#include <Configuration.h>
+
+const int ANALOG_IN = 36;     // Analog input GPIO36 Voltage
+const int TANK1_IN = 37;      // Analog input GPIO37 Tank 1
+const int TANK2_IN = 38;      // Analog input GPIO38 Tank 2
+
+// Output Pins
+const int ledPin = 25;        // Pin GPIO25, LED is high activ
+const int relayPin = 25;      // Pin GPIO25, Relay is high activ
+const int alarmPin = 39;      // Pin GPI39, Alarm input
 
 // Debugging functions
 void DebugPrintln(int type, const char* x){
@@ -156,7 +167,7 @@ int boolToInt(bool value){
 }
 
 // Converting string to int
- int toInteger(String settingValue){
+int toInteger(String settingValue){
    char intbuf[settingValue.length()+1];
    settingValue.toCharArray(intbuf, sizeof(intbuf));
    int f = atof(intbuf);
@@ -421,11 +432,11 @@ float dewpoint(float temp, float humidity) {
 }
 
 // Checksum calculation over binary array
-byte BinCheckSum(byte Data[]) {
+byte BinCheckSum(byte *Data[]) {
   byte checksum = 0;
   // Iterate over the string, ADD each byte with the total sum
-  for (int c = 0; c < sizeof(Data); c++) {
-    checksum += Data[c];
+  for (int c = 0; c < sizeof(*Data); c++) {
+    checksum += *Data[c];
   } 
   // Return the result
   return checksum;
@@ -466,439 +477,8 @@ bool CheckNMEA(String NMEAstring) {
   return check;
 }
 
-// Enable the used LoRa channels
-void setChannel(int channel){
-  switch (channel) {
-  case 0:
-    // Single channel 0
-    LMIC_disableChannel (1);
-    LMIC_disableChannel (2);
-    LMIC_disableChannel (3);
-    LMIC_disableChannel (4);
-    LMIC_disableChannel (5);
-    LMIC_disableChannel (6);
-    LMIC_disableChannel (7);
-    break;
-  case 1:
-    // Single channel 1
-    LMIC_disableChannel (0);
-    LMIC_disableChannel (2);
-    LMIC_disableChannel (3);
-    LMIC_disableChannel (4);
-    LMIC_disableChannel (5);
-    LMIC_disableChannel (6);
-    LMIC_disableChannel (7);
-    break;
-  case 2:
-    // Single channel 2
-    LMIC_disableChannel (0);
-    LMIC_disableChannel (1);
-    LMIC_disableChannel (3);
-    LMIC_disableChannel (4);
-    LMIC_disableChannel (5);
-    LMIC_disableChannel (6);
-    LMIC_disableChannel (7);
-    break;
-  case 3:
-    // Single channel 3
-    LMIC_disableChannel (0);
-    LMIC_disableChannel (1);
-    LMIC_disableChannel (2);
-    LMIC_disableChannel (4);
-    LMIC_disableChannel (5);
-    LMIC_disableChannel (6);
-    LMIC_disableChannel (7);
-    break;
-  case 4:
-    // Single channel 4
-    LMIC_disableChannel (0);
-    LMIC_disableChannel (1);
-    LMIC_disableChannel (2);
-    LMIC_disableChannel (3);
-    LMIC_disableChannel (5);
-    LMIC_disableChannel (6);
-    LMIC_disableChannel (7);
-    break;
-  case 5:
-    // Single channel 5
-    LMIC_disableChannel (0);
-    LMIC_disableChannel (1);
-    LMIC_disableChannel (2);
-    LMIC_disableChannel (3);
-    LMIC_disableChannel (4);
-    LMIC_disableChannel (6);
-    LMIC_disableChannel (7);
-    break;
-  case 6:
-    // Single channel 6
-    LMIC_disableChannel (0);
-    LMIC_disableChannel (1);
-    LMIC_disableChannel (2);
-    LMIC_disableChannel (3);
-    LMIC_disableChannel (4);
-    LMIC_disableChannel (5);
-    LMIC_disableChannel (7);
-    break;
-  case 7:
-    // Single channel 7
-    LMIC_disableChannel (0);
-    LMIC_disableChannel (1);
-    LMIC_disableChannel (2);
-    LMIC_disableChannel (3);
-    LMIC_disableChannel (4);
-    LMIC_disableChannel (5);
-    LMIC_disableChannel (6);
-    break;
-  case 8:
-    // Multi channel 0...7
-    break;
-  case 9:
-    // Multi channel 0...2
-    LMIC_disableChannel (3);
-    LMIC_disableChannel (4);
-    LMIC_disableChannel (5);
-    LMIC_disableChannel (6);
-    LMIC_disableChannel (7);
-    break;        
-  default:
-    // Channel 0
-    LMIC_disableChannel (1);
-    LMIC_disableChannel (2);
-    LMIC_disableChannel (3);
-    LMIC_disableChannel (4);
-    LMIC_disableChannel (5);
-    LMIC_disableChannel (6);
-    LMIC_disableChannel (7);
-    break;
-  }
-}
-
-// Set dynamically the spreading factor depends from time slot
-void setSF(int tslot, int spreadingfactor, int dynamicsf){
-  // If dynamic spreading factor active
-  if(dynamicsf == 1){
-    switch (spreadingfactor) {
-    case 7:
-      // SF7
-      switch (tslot) {
-        case 0:
-          LMIC_setDrTxpow(DR_SF7,14);  // SF7
-          sf = 7;
-          break;
-        case 1:
-          LMIC_setDrTxpow(DR_SF7,14);
-          sf = 7;
-          break;
-        case 2:
-          LMIC_setDrTxpow(DR_SF7,14);
-          sf = 7;
-          break;
-        case 3:
-          LMIC_setDrTxpow(DR_SF7,14);
-          sf = 7;
-          break;
-        case 4:
-          LMIC_setDrTxpow(DR_SF7,14);
-          sf = 7;
-          break;
-        case 5:
-          LMIC_setDrTxpow(DR_SF7,14);
-          sf = 7;
-          break;
-        case 6:
-          LMIC_setDrTxpow(DR_SF7,14);
-          sf = 7;
-          break;
-        case 7:
-          LMIC_setDrTxpow(DR_SF7,14);
-          sf = 7;
-          break;
-        case 8:
-          LMIC_setDrTxpow(DR_SF7,14);
-          sf = 7;
-          break;
-        case 9:
-          LMIC_setDrTxpow(DR_SF7,14);
-          sf = 7;
-          break;
-        case 10:
-          LMIC_setDrTxpow(DR_SF8,14);  // SF8
-          sf = 8;
-          break;
-        case 11:
-          LMIC_setDrTxpow(DR_SF9,14);  // SF9
-          sf = 9;
-          break;         
-        default:
-          LMIC_setDrTxpow(DR_SF7,14);  // Default
-          sf = 7;
-          break;
-      }
-      break;
-    case 8:
-      // SF8
-      switch (tslot) {
-        case 0:
-          LMIC_setDrTxpow(DR_SF8,14);  // SF8
-          sf = 8;
-          break;
-        case 1:
-          LMIC_setDrTxpow(DR_SF8,14);
-          sf = 8;
-          break;
-        case 2:
-          LMIC_setDrTxpow(DR_SF8,14);
-          sf = 8;
-          break;
-        case 3:
-          LMIC_setDrTxpow(DR_SF8,14);
-          sf = 8;
-          break;
-        case 4:
-          LMIC_setDrTxpow(DR_SF8,14);
-          sf = 8;
-          break;
-        case 5:
-          LMIC_setDrTxpow(DR_SF8,14);
-          sf = 8;
-          break;
-        case 6:
-          LMIC_setDrTxpow(DR_SF8,14);
-          sf = 8;
-          break;
-        case 7:
-          LMIC_setDrTxpow(DR_SF8,14);
-          sf = 8;
-          break;
-        case 8:
-          LMIC_setDrTxpow(DR_SF8,14);
-          sf = 8;
-          break;
-        case 9:
-          LMIC_setDrTxpow(DR_SF8,14);
-          sf = 8;
-          break;
-        case 10:
-          LMIC_setDrTxpow(DR_SF9,14);  // SF9
-          sf = 9;
-          break;
-        case 11:
-          LMIC_setDrTxpow(DR_SF10,14); // SF10
-          sf = 10;
-          break;         
-        default:
-          LMIC_setDrTxpow(DR_SF8,14);  // Default
-          sf = 8;
-          break;
-      }
-      break;
-    case 9:
-      // SF9
-      switch (tslot) {
-        case 0:
-          LMIC_setDrTxpow(DR_SF9,14);  // SF9
-          sf = 9;
-          break;
-        case 1:
-          LMIC_setDrTxpow(DR_SF9,14);
-          sf = 9;
-          break;
-        case 2:
-          LMIC_setDrTxpow(DR_SF9,14);
-          sf = 9;
-          break;
-        case 3:
-          LMIC_setDrTxpow(DR_SF9,14);
-          sf = 9;
-          break;
-        case 4:
-          LMIC_setDrTxpow(DR_SF9,14);
-          sf = 9;
-          break;
-        case 5:
-          LMIC_setDrTxpow(DR_SF9,14);
-          sf = 9;
-          break;
-        case 6:
-          LMIC_setDrTxpow(DR_SF9,14);
-          sf = 9;
-          break;
-        case 7:
-          LMIC_setDrTxpow(DR_SF9,14);
-          sf = 9;
-          break;
-        case 8:
-          LMIC_setDrTxpow(DR_SF9,14);
-          sf = 9;
-          break;
-        case 9:
-          LMIC_setDrTxpow(DR_SF9,14);
-          sf = 9;
-          break;
-        case 10:
-          LMIC_setDrTxpow(DR_SF10,14); // SF10
-          sf = 10;
-          break;
-        case 11:
-          LMIC_setDrTxpow(DR_SF11,14); // SF11
-          sf = 11;
-          break;         
-        default:
-          LMIC_setDrTxpow(DR_SF9,14);  // Default
-          sf = 9;
-          break;
-      }
-      break;
-    case 10:
-      // SF10
-      switch (tslot) {
-        case 0:
-          LMIC_setDrTxpow(DR_SF10,14);  // SF10
-          sf = 10;
-          break;
-        case 1:
-          LMIC_setDrTxpow(DR_SF10,14);
-          sf = 10;
-          break;
-        case 2:
-          LMIC_setDrTxpow(DR_SF10,14);
-          sf = 10;
-          break;
-        case 3:
-          LMIC_setDrTxpow(DR_SF10,14);
-          sf = 10;
-          break;
-        case 4:
-          LMIC_setDrTxpow(DR_SF10,14);
-          sf = 10;
-          break;
-        case 5:
-          LMIC_setDrTxpow(DR_SF10,14);
-          sf = 10;
-          break;
-        case 6:
-          LMIC_setDrTxpow(DR_SF10,14);
-          sf = 10;
-          break;
-        case 7:
-          LMIC_setDrTxpow(DR_SF10,14);
-          sf = 10;
-          break;
-        case 8:
-          LMIC_setDrTxpow(DR_SF10,14);
-          sf = 10;
-          break;
-        case 9:
-          LMIC_setDrTxpow(DR_SF10,14);
-          sf = 10;
-          break;
-        case 10:
-          LMIC_setDrTxpow(DR_SF11,14);  // SF11
-          sf = 11;
-          break;
-        case 11:
-          LMIC_setDrTxpow(DR_SF12,14);  // SF12
-          sf = 12;
-          break;         
-        default:
-          LMIC_setDrTxpow(DR_SF10,14);  // Default
-          sf = 10;
-          break;
-      }
-      break;
-    default:
-      // SF7
-      switch (tslot) {
-        case 0:
-          LMIC_setDrTxpow(DR_SF7,14);  // SF7
-          sf = 7;
-          break;
-        case 1:
-          LMIC_setDrTxpow(DR_SF7,14);
-          sf = 7;
-          break;
-        case 2:
-          LMIC_setDrTxpow(DR_SF7,14);
-          sf = 7;
-          break;
-        case 3:
-          LMIC_setDrTxpow(DR_SF7,14);
-          sf = 7;
-          break;
-        case 4:
-          LMIC_setDrTxpow(DR_SF7,14);
-          sf = 7;
-          break;
-        case 5:
-          LMIC_setDrTxpow(DR_SF7,14);
-          sf = 7;
-          break;
-        case 6:
-          LMIC_setDrTxpow(DR_SF7,14);
-          sf = 7;
-          break;
-        case 7:
-          LMIC_setDrTxpow(DR_SF7,14);
-          sf = 7;
-          break;
-        case 8:
-          LMIC_setDrTxpow(DR_SF7,14);
-          sf = 7;
-          break;
-        case 9:
-          LMIC_setDrTxpow(DR_SF7,14);
-          sf = 7;
-          break;
-        case 10:
-          LMIC_setDrTxpow(DR_SF8,14);  // SF8
-          sf = 8;
-          break;
-        case 11:
-          LMIC_setDrTxpow(DR_SF9,14);  // SF9
-          sf = 9;
-          break;         
-        default:
-          LMIC_setDrTxpow(DR_SF7,14);  // Default
-          sf = 7;
-          break;
-      }
-      break;  
-    }
-  }
-  // If dynamic spreading factor not active
-  else{
-    switch (spreadingfactor) {
-    case 7:
-      // SF7
-      LMIC_setDrTxpow(DR_SF7,14);
-      sf = 7;
-      break;
-    case 8:
-      // SF8
-      LMIC_setDrTxpow(DR_SF8,14);
-      sf = 8;
-      break;
-    case 9:
-      // SF9
-      LMIC_setDrTxpow(DR_SF9,14);
-      sf = 9;
-      break;
-    case 10:
-      // SF10
-      LMIC_setDrTxpow(DR_SF10,14);
-      sf = 10;
-      break;  
-    default:
-      // SF7
-      LMIC_setDrTxpow(DR_SF7,14);
-      sf = 7;
-      break;
-    }
-  }
-}
-
 // Read and print sensor values
-void readValues() {
+void readValues(configData myactconf) {
     boolean debugBME280 = false;
     boolean debugVEdirect = false;
     boolean debugADC = false;
@@ -926,7 +506,7 @@ void readValues() {
     }
     
     // Read BME280 sensor values
-    if (String(actconf.envSensor) == "BME280") {
+    if (String(myactconf.envSensor) == "BME280") {
       if (debugBME280) {
         DebugPrint(3, "Temperature = ");
       }
@@ -992,7 +572,7 @@ void readValues() {
     }
 
     // Show and copy BMV-712 battery monitor values
-    if (String(actconf.envSensor) == "VEdirect-Read") {
+    if (String(myactconf.envSensor) == "VEdirect-Read") {
       if (debugVEdirect) {
         DebugPrint(3, "VE.direct Voltage = ");
         DebugPrint(3, vedirectVoltage);
@@ -1018,11 +598,11 @@ void readValues() {
     }
     
     // Analog input 0...3.3V => 0...33V => 0...4096
-    if (String(actconf.envSensor) != "VEdirect-Read") {
+    if (String(myactconf.envSensor) != "VEdirect-Read") {
       if (debugVEdirect) {
         DebugPrint(3, "Voltage = ");
       }
-      voltage = actconf.a2vslope * actconf.a2vslope * analogRead(ANALOG_IN) + actconf.a1vslope * analogRead(ANALOG_IN) + actconf.voffset;
+      voltage = myactconf.a2vslope * myactconf.a2vslope * analogRead(ANALOG_IN) + myactconf.a1vslope * analogRead(ANALOG_IN) + myactconf.voffset;
       if (debugVEdirect) {
         DebugPrint(3, analogRead(ANALOG_IN));
         DebugPrintln(3, " dig");
@@ -1062,7 +642,7 @@ void readValues() {
       DebugPrint(3, " V ");
     }
     if(tank1 < 1){
-      tank1p = (tank1 * actconf.a2t1slope * actconf.a2t1slope) + (tank1 * actconf.a1t1slope) + actconf.t1offset;
+      tank1p = (tank1 * myactconf.a2t1slope * myactconf.a2t1slope) + (tank1 * myactconf.a1t1slope) + myactconf.t1offset;
     }
     else{
       tank1p = 0;
@@ -1099,7 +679,7 @@ void readValues() {
       DebugPrint(3, " V ");
     }
      if(tank2 < 1){
-      tank2p = (tank2 * actconf.a2t2slope * actconf.a2t2slope) + (tank2 * actconf.a1t2slope) + actconf.t2offset;
+      tank2p = (tank2 * myactconf.a2t2slope * myactconf.a2t2slope) + (tank2 * myactconf.a1t2slope) + myactconf.t2offset;
     }
     else{
       tank2p = 0;
@@ -1127,18 +707,18 @@ void readValues() {
     if (debugRelay) {
       DebugPrint(3, "Relay = ");
       // Digital relay output high activ 
-      DebugPrint(3, actconf.relay);
+      DebugPrint(3, myactconf.relay);
       DebugPrintln(3, "  ");
     }
 
     if (debugEnvSensor) {
       DebugPrint(3, "envSensor = ");
-      DebugPrint(3, String(actconf.envSensor));
+      DebugPrint(3, String(myactconf.envSensor));
       DebugPrintln(3, "  ");
     }
 
     // Read 1Wire sensor values for battery temperature
-    if (String(actconf.tempSensorType) == "DS18B20") {
+    if (String(myactconf.tempSensorType) == "DS18B20") {
       sensors.requestTemperatures();            // Send the command to get temperatures
       temp1wire = sensors.getTempCByIndex(0);   // Read 1Wire sensor 0
       // Error correction for wrong 1Wire values (-127)
@@ -1157,7 +737,7 @@ void readValues() {
     if (debugTemp1wire) {
       DebugPrint(3, "BattTemp = ");
     }
-    if(String(actconf.tempUnit) == "C"){
+    if(String(myactconf.tempUnit) == "C"){
       if (debugTemp1wire) {
         DebugPrint(3, temp1wire);
         DebugPrintln(3, " *C");
@@ -1178,7 +758,7 @@ void writeDisplay() {
   // Formating display data
   char cnt[10];
   //dtostrf(int(counter16), 5, 0, cnt);
-  dtostrf(int(LMIC.seqnoUp), 5, 0, cnt);
+  //dtostrf(int(LMIC.seqnoUp), 5, 0, cnt);
   char tmp[10];      
   dtostrf(temperature, 5, 1, tmp);
   char pres[10];
@@ -1243,11 +823,11 @@ void writeDisplay() {
 }
 
 // Display sensor values on OLED
-void writeDisplayValues() {
+void writeDisplayValues(configData myactconf) {
   // Formating display data
   char cnt[10];
   //dtostrf(int(counter16), 5, 0, cnt);
-  dtostrf(int(LMIC.seqnoUp), 5, 0, cnt);
+  //dtostrf(int(LMIC.seqnoUp), 5, 0, cnt);
   char tmp[10];      
   dtostrf(temperature, 5, 1, tmp);
   char pres[10];
@@ -1273,7 +853,7 @@ void writeDisplayValues() {
   char alm[10];
   dtostrf(int(alarm1), 5, 0, alm);
   char rel[10];
-  dtostrf(int(actconf.relay), 5, 0, rel);
+  dtostrf(int(myactconf.relay), 5, 0, rel);
   
   // Refresh OLED data
   //u8x8.setFont(u8x8_font_chroma48medium8_r);
@@ -1317,7 +897,7 @@ void readGPSValuesFlag() {
 }
 
 // Timer 1 interrupt Read and print GPS values
-void readGPSValues() {
+void readGPSValues(configData myactconf) {
   boolean debugGPS = false;
   if (debugGPS) {
     DebugPrintln(3, "Timer1");
@@ -1441,7 +1021,7 @@ void readGPSValues() {
 
           if (debugGPS) {
             DebugPrint(3, "Env Sensor ");
-            DebugPrintln(3, String(actconf.envSensor));
+            DebugPrintln(3, String(myactconf.envSensor));
             DebugPrintln(3, "");
           }
 
@@ -1468,7 +1048,7 @@ void readGPSValues() {
 }
 
 // Timer2 Interrupt relay timer
-void relayTimer(){
+void relayTimerInterrupt(){
   relaytimer--; // Decrement relay timer
   if(relaytimer <= 0){
     relaytimer = 0;
@@ -1526,14 +1106,12 @@ String humanReadableSize(const size_t bytes) {
   else return String(bytes / 1024.0 / 1024.0 / 1024.0) + " GB";
 }
 
-String getheader() {
+String getheader(configData myactconf) {
   String content = readFile2(LittleFS, "/header.html");
   //content.replace("%header%", String(readFile2(LittleFS, "/header.html")));
-  content.replace("%devname%", String(actconf.devname));
-  content.replace("%crights%", String(actconf.crights));
-  content.replace("%fversion%", String(actconf.fversion));
+  content.replace("%devname%", String(myactconf.devname));
+  content.replace("%crights%", String(myactconf.crights));
+  content.replace("%fversion%", String(myactconf.fversion));
   content.replace("%quality%", String(int(quality)));
   return content;
 }
-
-#endif

@@ -38,6 +38,7 @@
 
         .row {
             display: flex;
+            margin-top: 5px;
         }
 
         h3 {
@@ -61,13 +62,22 @@
             margin: 5px;
         }
 
-        input {
-            margin-top: 1rem;
+        input[type="file"] {
+            display: none;
         }
+        /*.custom-file-upload {
+            border: 1px solid #ccc;
+            display: inline-block;
+            padding: 6px 12px;
+            cursor: pointer;
+        }*/
     </style>
     <script>
         function setSelections() {
             document.SetForm.usepassword.selectedIndex = %crypt%;
+            if (%crypt% == 1) {
+                document.getElementById('logoutBtn').style.display = "block";
+            } 
             document.SetForm.timeout.selectedIndex = %timeout%;
             document.SetForm.apchannel.selectedIndex = %apchannel%;
             document.SetForm.servermode.selectedIndex = %serverMode%;
@@ -96,6 +106,7 @@
             document.SetForm.loraOperationMode.selectedIndex = %loraOperationMode%;
             document.SetForm.WifiStandbyMode.selectedIndex = %WifiStandbyMode%;
             document.SetForm.cssStyle.selectedIndex = %cssStyle%;
+            document.SetForm.OledDisplayRotation.selectedIndex = %OledDisplayRotation%;
             document.SetForm.SendDataViaWifi.selectedIndex = %SendDataViaWifi%;
         }
     </script>
@@ -136,9 +147,9 @@
 
         <div><div class="mydiv">
             <h3>
-                <input class="myToggleButton" type="button" value="+" id="btDisplaySettingsPage" onclick="ToggleSection(this, 'DisplaySettingsPage')">Display Settings
+                <input class="myToggleButton" type="button" value="+" id="btWebInterfaceSettingsPage" onclick="ToggleSection(this, 'WebInterfaceSettingsPage')">Web Interface Settings
             </h3>
-            <div class="collapsible" style="display:none;" id="DisplaySettingsPage" >
+            <div class="collapsible" style="display:none;" id="WebInterfaceSettingsPage" >
                 <div class="row">
                     <div class="firstColumn">Color Theme</div>
                     <div class="secondColumn">
@@ -146,6 +157,23 @@
                             <option value='0'>Black</option>
                             <option value='1'>Red</option>
                             <option value='2'>White</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div></div>
+
+        <div><div class="mydiv">
+            <h3>
+                <input class="myToggleButton" type="button" value="+" id="btOledDisplaySettingsPage" onclick="ToggleSection(this, 'OledDisplaySettingsPage')">OLED Display Settings
+            </h3>
+            <div class="collapsible" style="display:none;" id="OledDisplaySettingsPage" >
+                <div class="row">
+                    <div class="firstColumn">Rotate Display</div>
+                    <div class="secondColumn">
+                        <select name='OledDisplayRotation' size='1'>
+                            <option value='0'>0°</option>
+                            <option value='1'>180°</option>
                         </select>
                     </div>
                 </div>
@@ -682,6 +710,8 @@
 
         <div class="row" style="padding-top: 10px;">
             <button id='sub' type='submit'>Save Settings</button>
+            <button type='button' onclick="window.open('/', '_self');">Back</button>
+            <button type='button' id="logoutBtn" onclick="logoutButton()" style="display:none">Logout</button>
         </div>
         <input type='hidden' required name='password' size='20' value='%userpassword%' maxlength='20'>
     </form>
@@ -690,20 +720,12 @@
     <div class="mydiv">
         <form id='form4' action='/reseteeprom'>
             <button type="button" onclick="downloadConfigAsJson()">Download Config</button>
-            <button type='submit' style="margin-left: 20px;">Factory Settings</button>
+            <button type='submit' style="margin-left: 20px;">Reset to Factory Settings</button>
+            <label for="file" class="custom-file-upload" style="margin-left: 20px;">Upload Config</label>
+            <input type="file" id="file" accept=".json" onchange="uploadConfig();">
         </form>
-        <br>
-        <form id="upload">
-            <input type="file" id="file" accept=".json" style="width:270px;">
-            <button>Upload Config</button>
-        </form>
-    </div>
-    <hr style="margin-top:20px">
 
-    <form id='form3' action='/'>
-        <button type='submit' style="margin-top:20px; margin-bottom:20px">Back</button>
-    </form>
-    <button onclick="logoutButton()">Logout</button>
+    </div>
     <script src='/settings.js' type='text/javascript'></script>
 </div>
 </body>

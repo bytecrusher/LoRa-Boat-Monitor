@@ -38,8 +38,6 @@
 #include <WiFi.h>               // WiFi lib with TCP server and client
 #include <WiFiClient.h>         // WiFi lib for clients
 #include <AsyncTCP.h>           // asynchron TCP lib
-#include <ESPAsyncWebServer.h>  // asynchron webserver lib
-#include <AsyncElegantOTA.h>    // OTA lib
 
 #include <ESPmDNS.h>            // mDNS lib
 #include <Update.h>             // Web Update server
@@ -68,7 +66,7 @@
 #include "func_ftpclient.h"     // my lib for FTP connection (getting files for webserver)
 #include "func_webclient.h"     // my lib for webclient connection (getting files for webserver)
 
- #include <stdint.h>
+#include <stdint.h>
 
 #include "Configuration.h"      // Configuration
 
@@ -77,16 +75,14 @@ configData actconf;             // Actual configuration, Global variable
                                 // Don't change the position!
 
 #include "Definitions.h"        // Global definitions
+#include "func_myFunctions.h"
+#include "func_webServerHandler.h"   // my lib for handle web server (deliver websites)
 #include "GPS.h"                // GPS parsing functions
 #include "vedirect.h"           // VE.direct lib
 #include "filesystem.h"         // Function for filesystem
-#include "Functions.h"          // Function lib
 #include "NMEATelegrams.h"      // Function library for NMEA telegrams
 #include "LoRa.h"               // LoRa Lib
 #include "task.h"               // Task for LoRa code
-
-#include "initialsetup_html.h"  // HTML file for initial setup of the devide (if filesystem is formated)
-#include "wificonfig_html.h"    // HTML file for wifi config. (obsolete)
 
 // Declarations
 int value;                      // Value from first byte in EEPROM
@@ -135,18 +131,6 @@ int fpscounter = 0;
 
 File root;
 
-const char logout_html[] PROGMEM = R"rawliteral(
-<!DOCTYPE HTML><html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-</head>
-<body>
-  <p>Logged out or <a href="/">return to homepage</a>.</p>
-  <p><strong>Note:</strong> close all web browser tabs to complete the logout process.</p>
-</body>
-</html>
-)rawliteral";
-
 void IRAM_ATTR onTimer(){
   DebugPrintln(3, "onTimer reached");
   sendLoraQueue = true;
@@ -156,8 +140,7 @@ void enableWiFi(){
   //adc_power_on();
   WiFi.disconnect(false);  // Reconnect the network
   WiFi.hostname(hname);   // Provide the hostname
-  String hostname = "boatmonitor-3"; /*New Host name defined*/
-  WiFi.setHostname (hostname.c_str()); /*ESP32 hostname set*/
+  //WiFi.setHostname (hname.c_str()); /*ESP32 hostname set*/
 
   //*****************************************************************************************
       // Starting access point for update server
@@ -262,7 +245,7 @@ void enableWiFi(){
 	    Serial.printf("\nNow is : %d-%02d-%02d %02d:%02d:%02d\n",(tmstruct.tm_year)+1900,( tmstruct.tm_mon)+1, tmstruct.tm_mday,tmstruct.tm_hour , tmstruct.tm_min, tmstruct.tm_sec);
       Serial.println("");
 
-      #include "ServerPages.h"    // Webserver pages request functions
+      WebServerHandler();
 
       // Sart update server
       //DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "http://loraboatmonitorwebserverdata.derguntmar.de");
@@ -436,7 +419,7 @@ void state0(){
       }
     }
   }
-  readValues();
+  readValues(actconf);
   delay(20);
   if (String(actconf.loraOperationMode) == "Standby" || String(actconf.loraOperationMode) == "Always") {
     static unsigned long lastPrintTime = 0;
@@ -533,7 +516,7 @@ void state1(){
     starttime3 = millis();        // Read actual time
     //Serial.println("fpscounter (read): " + String(fpscounter));
     fpscounter = 0;
-    readValues();
+    readValues(actconf);
   }
   
 
@@ -545,7 +528,7 @@ void state1(){
     if (String(actconf.envSensor) == "BME280") {
       bme.takeForcedMeasurement(); // has no effect in normal mode
     }
-    writeDisplayValues();
+    writeDisplayValues(actconf);
     //Serial.println("fpscounter: " + String(fpscounter));
     //fpscounter = 0;
   }
@@ -680,7 +663,6 @@ bool transitionS0S1(){
     //if (String(actconf.standbyMode) == "Off") {
 
   if ((alarm1 == true) || (String(actconf.standbyMode) == "Off")) {
-    Serial.println(F("Zeile 570"));
     return true;
   } else {
     return false;
@@ -718,15 +700,6 @@ void print_wakeup_reason(){
 }
 
 void setup() {
-  //##### Start OLED #####
-  u8x8.begin();
-  u8x8.setPowerSave(0);
-  u8x8.setFlipMode(1);    // ToDo: config via webinterface.
-
-  u8x8.setFont(u8x8_font_chroma48medium8_r);
-  u8x8.drawString(0,0,"Booting...");
-  u8x8.refreshDisplay();    // Only required for SSD1606/7  
-
   // Read the first byte from the EEPROM
   EEPROM.begin(sizeEEPROM);
   value = EEPROM.read(cfgStart);
@@ -751,9 +724,18 @@ void setup() {
     saveEEPROMConfig(actconf);
   }
 
+  //##### Start OLED #####
+  u8x8.begin();
+  u8x8.setPowerSave(0);
+  u8x8.setFlipMode(actconf.OledDisplayRotation);
+
+  u8x8.setFont(u8x8_font_chroma48medium8_r);
+  u8x8.drawString(0,0,"Booting...");
+  u8x8.refreshDisplay();    // Only required for SSD1606/7  
+
   //##### Start serial 0 and serial 2 connections #####
   Serial.begin(actconf.serspeed);               // NMEA0183 an debug messages
-  delay(200);
+  //delay(200);
   if(String(actconf.envSensor) == "VEdirect-Read" || String(actconf.envSensor) == "VEdirect-Send"){
     Serial1.begin(19200, SERIAL_8N1, RXD1, TXD1); // VE.direct Victron interface (read and write)
   }
@@ -775,6 +757,8 @@ void setup() {
   u8x8.refreshDisplay();    // Only required for SSD1606/7
 
   // ESP32 Information Data
+  DebugPrintln(3, "******************************************");
+  DebugPrintln(3, "******************************************");
   DebugPrintln(3, "Booting Sketch...");
   DebugPrintln(3, "");
   DebugPrint(3, actconf.devname);
@@ -793,6 +777,9 @@ void setup() {
   DebugPrint(3, ", Free Heap Size [Bytes]: ");
   DebugPrintln(3, ESP.getFreeHeap());
   DebugPrintln(3, "");
+
+  DebugPrint(3, "Config Size [Bytes] (max is 2kB - 32B): ");
+  DebugPrintln(3, sizeof(actconf));
 
   // Debug info for initialize the EEPROM
   if(empty == 1){
@@ -872,7 +859,7 @@ void setup() {
 
   //##### Cyclic timer #####
   Timer1.attach_ms(5000, readGPSValuesFlag);     // Start timer 1 all 5s cyclic GPS data reading
-  Timer2.attach_ms(300000, relayTimer);      // Start timer 2 all 5min cyclic counter increment
+  Timer2.attach_ms(300000, relayTimerInterrupt);      // Start timer 2 all 5min cyclic counter increment
   //Timer3.attach_ms(SendPeriod, sendNMEA);    // Data transmission timer for NMEA
 
   //####### Starting BME280 ######
@@ -978,7 +965,7 @@ void setup() {
     esp_sleep_enable_ext0_wakeup(GPIO_NUM_39,0);
   }
 
-  readValues();     // initial read after boot, to get the status of alarm pin.
+  readValues(actconf);     // initial read after boot, to get the status of alarm pin.
 
   if(!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED)){
     Serial.println("LittleFS Mount Failed");

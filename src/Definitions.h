@@ -223,6 +223,7 @@ String standbyMode[2] = {"Off", "On"};
 String loraOperationMode[4] = {"Off", "Standby", "PowerOn", "Always"};    // [Off|Standby|PowerOn|Always] rename from "loraStandbyMode" to "loraSendingMode" to "loraOperationMode"
 String WifiStandbyMode[2] = {"Yes", "No"};
 String cssStyle[3] = {"0", "1", "2"};
+String OledDisplayRotation[2] = {"0", "1"};
 String SendDataViaWifi[2] = {"Yes", "No"};
 
 boolean sendLoraQueue = false;

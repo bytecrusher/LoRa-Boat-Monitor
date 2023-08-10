@@ -33,6 +33,7 @@ void DownloadFilesFromFtp(char *fversion)
   getFileFromFtp("restart.html");
   getFileFromFtp("sensorv.html");
   getFileFromFtp("settings.html");
+  getFileFromFtp("settings.js");
   closeFtpConnection();
 }
 

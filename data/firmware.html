@@ -108,7 +108,7 @@
       }
     };
 
-    function check_internet() {
+    function check_NorbertWalterGithubVersion() {
       xmlhttp.open('GET', 'https://norbert-walter.github.io/LoRa-Boat-Monitor/public/firmware/ActualVersion.txt', true);
       xmlhttp.send();
     };
@@ -218,7 +218,7 @@
         document.getElementById('loader').style.display = 'none';
         document.getElementById('myDiv').style.display = 'block';
       };
-      var r = confirm('Download and Install Beta Firmware?');
+      var r = confirm('Please download your config before update the firmware.\nDownload and Install Beta Firmware update?');
       if (r == true) {
         console.log('File uploading started');
         document.getElementById('loader').style.display = 'block';
@@ -252,7 +252,7 @@
   </script>
 </head>
 
-<body onload='check_internet();'>
+<body onload='check_NorbertWalterGithubVersion();'>
   %header%
   <div id="loader"></div>
   <div style="display:none;" id="myDiv" class="animate-bottom">
@@ -277,7 +277,7 @@
     <button type='submit' id='sub2' onclick='send_image()'>Update Firmware</button>
     <hr>
 
-    <form name='upform2' action='/update' method='post' enctype='multipart/form-data'>Use Beta Firmware
+    <form name='upform2' action='/update' method='post' enctype='multipart/form-data'>Beta Firmware from derguntmar.de
       <p>
         <input type='text' name='firmware2' size='20' value='http://loraboatmonitorwebserverdata.derguntmar.de/files_for_esp_webserver/V1.0x/firmware.bin' onchange=''> Version:
         <input type='text' name='version2' size='5' value='' maxlength='20'>
@@ -288,9 +288,7 @@
     <hr>
     <b>Info:</b> A message is displayed afer successful update.
     <hr>
-    <form action='/'>
-      <button type='submit'>Back</button>
-    </form>
+    <button onclick="window.open('/', '_self');">Back</button>
   </div>
 </body>
 

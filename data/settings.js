@@ -5,11 +5,11 @@ document.addEventListener("DOMContentLoaded", function() {
         showPage();
     }, 10)
     // Get the form and file field
-    let myform = document.querySelector('#upload');
+    //let myform = document.querySelector('#upload');
     let file = document.querySelector('#file');
 
     // Listen for submit events
-    myform.addEventListener('submit', handleSubmit);
+    //myform.addEventListener('submit', handleSubmit);
 });
 
 function showPage() {
@@ -168,6 +168,18 @@ function downloadConfigAsJson() {
     download(myjsonString, boardname + '.json', 'text/plain');
 }
 
+function uploadConfig() {
+    // If there's no file, do nothing
+    if (!file.value.length) return;
+    // Create a new FileReader() object
+    let reader = new FileReader();
+    // Setup the callback event to run when the file is read
+    reader.onload = logFile;
+    // Read the file
+    reader.readAsText(file.files[0]);
+    //window.open('/savesettings', '_self');
+}
+
 /**
  * Handle submit events
  * @param  {Event} event The event object
@@ -199,6 +211,8 @@ function logFile (event) {
     });
     //console.log('string', str);
     //console.log('json', json);
+    //window.open('/savesettings', '_self');
+    document.getElementById("form1").submit();
 }
 
 function download(content, fileName, contentType) {

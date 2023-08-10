@@ -23,6 +23,330 @@ void PrintRuntime()
     Serial.println(" seconds");
 }
 
+// Set dynamically the spreading factor depends from time slot
+void setSF(int tslot, int spreadingfactor, int dynamicsf){
+  // If dynamic spreading factor active
+  if(dynamicsf == 1){
+    switch (spreadingfactor) {
+    case 7:
+      // SF7
+      switch (tslot) {
+        case 0:
+          LMIC_setDrTxpow(DR_SF7,14);  // SF7
+          sf = 7;
+          break;
+        case 1:
+          LMIC_setDrTxpow(DR_SF7,14);
+          sf = 7;
+          break;
+        case 2:
+          LMIC_setDrTxpow(DR_SF7,14);
+          sf = 7;
+          break;
+        case 3:
+          LMIC_setDrTxpow(DR_SF7,14);
+          sf = 7;
+          break;
+        case 4:
+          LMIC_setDrTxpow(DR_SF7,14);
+          sf = 7;
+          break;
+        case 5:
+          LMIC_setDrTxpow(DR_SF7,14);
+          sf = 7;
+          break;
+        case 6:
+          LMIC_setDrTxpow(DR_SF7,14);
+          sf = 7;
+          break;
+        case 7:
+          LMIC_setDrTxpow(DR_SF7,14);
+          sf = 7;
+          break;
+        case 8:
+          LMIC_setDrTxpow(DR_SF7,14);
+          sf = 7;
+          break;
+        case 9:
+          LMIC_setDrTxpow(DR_SF7,14);
+          sf = 7;
+          break;
+        case 10:
+          LMIC_setDrTxpow(DR_SF8,14);  // SF8
+          sf = 8;
+          break;
+        case 11:
+          LMIC_setDrTxpow(DR_SF9,14);  // SF9
+          sf = 9;
+          break;         
+        default:
+          LMIC_setDrTxpow(DR_SF7,14);  // Default
+          sf = 7;
+          break;
+      }
+      break;
+    case 8:
+      // SF8
+      switch (tslot) {
+        case 0:
+          LMIC_setDrTxpow(DR_SF8,14);  // SF8
+          sf = 8;
+          break;
+        case 1:
+          LMIC_setDrTxpow(DR_SF8,14);
+          sf = 8;
+          break;
+        case 2:
+          LMIC_setDrTxpow(DR_SF8,14);
+          sf = 8;
+          break;
+        case 3:
+          LMIC_setDrTxpow(DR_SF8,14);
+          sf = 8;
+          break;
+        case 4:
+          LMIC_setDrTxpow(DR_SF8,14);
+          sf = 8;
+          break;
+        case 5:
+          LMIC_setDrTxpow(DR_SF8,14);
+          sf = 8;
+          break;
+        case 6:
+          LMIC_setDrTxpow(DR_SF8,14);
+          sf = 8;
+          break;
+        case 7:
+          LMIC_setDrTxpow(DR_SF8,14);
+          sf = 8;
+          break;
+        case 8:
+          LMIC_setDrTxpow(DR_SF8,14);
+          sf = 8;
+          break;
+        case 9:
+          LMIC_setDrTxpow(DR_SF8,14);
+          sf = 8;
+          break;
+        case 10:
+          LMIC_setDrTxpow(DR_SF9,14);  // SF9
+          sf = 9;
+          break;
+        case 11:
+          LMIC_setDrTxpow(DR_SF10,14); // SF10
+          sf = 10;
+          break;         
+        default:
+          LMIC_setDrTxpow(DR_SF8,14);  // Default
+          sf = 8;
+          break;
+      }
+      break;
+    case 9:
+      // SF9
+      switch (tslot) {
+        case 0:
+          LMIC_setDrTxpow(DR_SF9,14);  // SF9
+          sf = 9;
+          break;
+        case 1:
+          LMIC_setDrTxpow(DR_SF9,14);
+          sf = 9;
+          break;
+        case 2:
+          LMIC_setDrTxpow(DR_SF9,14);
+          sf = 9;
+          break;
+        case 3:
+          LMIC_setDrTxpow(DR_SF9,14);
+          sf = 9;
+          break;
+        case 4:
+          LMIC_setDrTxpow(DR_SF9,14);
+          sf = 9;
+          break;
+        case 5:
+          LMIC_setDrTxpow(DR_SF9,14);
+          sf = 9;
+          break;
+        case 6:
+          LMIC_setDrTxpow(DR_SF9,14);
+          sf = 9;
+          break;
+        case 7:
+          LMIC_setDrTxpow(DR_SF9,14);
+          sf = 9;
+          break;
+        case 8:
+          LMIC_setDrTxpow(DR_SF9,14);
+          sf = 9;
+          break;
+        case 9:
+          LMIC_setDrTxpow(DR_SF9,14);
+          sf = 9;
+          break;
+        case 10:
+          LMIC_setDrTxpow(DR_SF10,14); // SF10
+          sf = 10;
+          break;
+        case 11:
+          LMIC_setDrTxpow(DR_SF11,14); // SF11
+          sf = 11;
+          break;         
+        default:
+          LMIC_setDrTxpow(DR_SF9,14);  // Default
+          sf = 9;
+          break;
+      }
+      break;
+    case 10:
+      // SF10
+      switch (tslot) {
+        case 0:
+          LMIC_setDrTxpow(DR_SF10,14);  // SF10
+          sf = 10;
+          break;
+        case 1:
+          LMIC_setDrTxpow(DR_SF10,14);
+          sf = 10;
+          break;
+        case 2:
+          LMIC_setDrTxpow(DR_SF10,14);
+          sf = 10;
+          break;
+        case 3:
+          LMIC_setDrTxpow(DR_SF10,14);
+          sf = 10;
+          break;
+        case 4:
+          LMIC_setDrTxpow(DR_SF10,14);
+          sf = 10;
+          break;
+        case 5:
+          LMIC_setDrTxpow(DR_SF10,14);
+          sf = 10;
+          break;
+        case 6:
+          LMIC_setDrTxpow(DR_SF10,14);
+          sf = 10;
+          break;
+        case 7:
+          LMIC_setDrTxpow(DR_SF10,14);
+          sf = 10;
+          break;
+        case 8:
+          LMIC_setDrTxpow(DR_SF10,14);
+          sf = 10;
+          break;
+        case 9:
+          LMIC_setDrTxpow(DR_SF10,14);
+          sf = 10;
+          break;
+        case 10:
+          LMIC_setDrTxpow(DR_SF11,14);  // SF11
+          sf = 11;
+          break;
+        case 11:
+          LMIC_setDrTxpow(DR_SF12,14);  // SF12
+          sf = 12;
+          break;         
+        default:
+          LMIC_setDrTxpow(DR_SF10,14);  // Default
+          sf = 10;
+          break;
+      }
+      break;
+    default:
+      // SF7
+      switch (tslot) {
+        case 0:
+          LMIC_setDrTxpow(DR_SF7,14);  // SF7
+          sf = 7;
+          break;
+        case 1:
+          LMIC_setDrTxpow(DR_SF7,14);
+          sf = 7;
+          break;
+        case 2:
+          LMIC_setDrTxpow(DR_SF7,14);
+          sf = 7;
+          break;
+        case 3:
+          LMIC_setDrTxpow(DR_SF7,14);
+          sf = 7;
+          break;
+        case 4:
+          LMIC_setDrTxpow(DR_SF7,14);
+          sf = 7;
+          break;
+        case 5:
+          LMIC_setDrTxpow(DR_SF7,14);
+          sf = 7;
+          break;
+        case 6:
+          LMIC_setDrTxpow(DR_SF7,14);
+          sf = 7;
+          break;
+        case 7:
+          LMIC_setDrTxpow(DR_SF7,14);
+          sf = 7;
+          break;
+        case 8:
+          LMIC_setDrTxpow(DR_SF7,14);
+          sf = 7;
+          break;
+        case 9:
+          LMIC_setDrTxpow(DR_SF7,14);
+          sf = 7;
+          break;
+        case 10:
+          LMIC_setDrTxpow(DR_SF8,14);  // SF8
+          sf = 8;
+          break;
+        case 11:
+          LMIC_setDrTxpow(DR_SF9,14);  // SF9
+          sf = 9;
+          break;         
+        default:
+          LMIC_setDrTxpow(DR_SF7,14);  // Default
+          sf = 7;
+          break;
+      }
+      break;  
+    }
+  }
+  // If dynamic spreading factor not active
+  else{
+    switch (spreadingfactor) {
+    case 7:
+      // SF7
+      LMIC_setDrTxpow(DR_SF7,14);
+      sf = 7;
+      break;
+    case 8:
+      // SF8
+      LMIC_setDrTxpow(DR_SF8,14);
+      sf = 8;
+      break;
+    case 9:
+      // SF9
+      LMIC_setDrTxpow(DR_SF9,14);
+      sf = 9;
+      break;
+    case 10:
+      // SF10
+      LMIC_setDrTxpow(DR_SF10,14);
+      sf = 10;
+      break;  
+    default:
+      // SF7
+      LMIC_setDrTxpow(DR_SF7,14);
+      sf = 7;
+      break;
+    }
+  }
+}
+
 void do_send(osjob_t *j)
 {
   boolean debug = false;
@@ -54,7 +378,7 @@ void do_send(osjob_t *j)
     slotcounter++;
 
     // Read sensor values (BME280, DS18B20, ...)
-    readValues();
+    readValues(actconf);
 
     // int -> bytes
     byte counterLow = lowByte(LMIC.seqnoUp);
@@ -346,7 +670,7 @@ void onEvent(ev_t ev)
 
           // Byte 0, set relay time (Relay on)
           relaytimer = rpayload[0];
-          relayTimer(); // Activate relay timer
+          relayTimerInterrupt(); // Activate relay timer
           actconf.relay = 1;
           DebugPrint(3, F(" Downlink Massage Relay: "));
           DebugPrint(3, relaytimer);
@@ -614,6 +938,113 @@ void GoDeepSleep()
     PrintRuntime();
     Serial.flush();
     esp_deep_sleep_start();
+}
+
+// Enable the used LoRa channels
+void setChannel(int channel){
+  switch (channel) {
+  case 0:
+    // Single channel 0
+    LMIC_disableChannel (1);
+    LMIC_disableChannel (2);
+    LMIC_disableChannel (3);
+    LMIC_disableChannel (4);
+    LMIC_disableChannel (5);
+    LMIC_disableChannel (6);
+    LMIC_disableChannel (7);
+    break;
+  case 1:
+    // Single channel 1
+    LMIC_disableChannel (0);
+    LMIC_disableChannel (2);
+    LMIC_disableChannel (3);
+    LMIC_disableChannel (4);
+    LMIC_disableChannel (5);
+    LMIC_disableChannel (6);
+    LMIC_disableChannel (7);
+    break;
+  case 2:
+    // Single channel 2
+    LMIC_disableChannel (0);
+    LMIC_disableChannel (1);
+    LMIC_disableChannel (3);
+    LMIC_disableChannel (4);
+    LMIC_disableChannel (5);
+    LMIC_disableChannel (6);
+    LMIC_disableChannel (7);
+    break;
+  case 3:
+    // Single channel 3
+    LMIC_disableChannel (0);
+    LMIC_disableChannel (1);
+    LMIC_disableChannel (2);
+    LMIC_disableChannel (4);
+    LMIC_disableChannel (5);
+    LMIC_disableChannel (6);
+    LMIC_disableChannel (7);
+    break;
+  case 4:
+    // Single channel 4
+    LMIC_disableChannel (0);
+    LMIC_disableChannel (1);
+    LMIC_disableChannel (2);
+    LMIC_disableChannel (3);
+    LMIC_disableChannel (5);
+    LMIC_disableChannel (6);
+    LMIC_disableChannel (7);
+    break;
+  case 5:
+    // Single channel 5
+    LMIC_disableChannel (0);
+    LMIC_disableChannel (1);
+    LMIC_disableChannel (2);
+    LMIC_disableChannel (3);
+    LMIC_disableChannel (4);
+    LMIC_disableChannel (6);
+    LMIC_disableChannel (7);
+    break;
+  case 6:
+    // Single channel 6
+    LMIC_disableChannel (0);
+    LMIC_disableChannel (1);
+    LMIC_disableChannel (2);
+    LMIC_disableChannel (3);
+    LMIC_disableChannel (4);
+    LMIC_disableChannel (5);
+    LMIC_disableChannel (7);
+    break;
+  case 7:
+    // Single channel 7
+    LMIC_disableChannel (0);
+    LMIC_disableChannel (1);
+    LMIC_disableChannel (2);
+    LMIC_disableChannel (3);
+    LMIC_disableChannel (4);
+    LMIC_disableChannel (5);
+    LMIC_disableChannel (6);
+    break;
+  case 8:
+    // Multi channel 0...7
+    break;
+  case 9:
+    // Multi channel 0...2
+    LMIC_disableChannel (3);
+    LMIC_disableChannel (4);
+    LMIC_disableChannel (5);
+    LMIC_disableChannel (6);
+    LMIC_disableChannel (7);
+    break;        
+  default:
+    // Channel 0
+    LMIC_disableChannel (1);
+    LMIC_disableChannel (2);
+    LMIC_disableChannel (3);
+    LMIC_disableChannel (4);
+    LMIC_disableChannel (5);
+    LMIC_disableChannel (6);
+    LMIC_disableChannel (7);
+    break;
+  }
 }
 
 #endif

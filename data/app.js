@@ -18,8 +18,14 @@ xmlhttp.onreadystatechange = function () {
 
     quality = document.getElementById('quality');
     quality.value = myObj.Device.NetworkParameter.ConnectionQuality.Value;
-    document.getElementById('qunit').innerHTML = myObj.Device.NetworkParameter.ConnectionQuality.Unit;
+    if (document.getElementById('qunit') != null) {
+      document.getElementById('qunit').innerHTML = myObj.Device.NetworkParameter.ConnectionQuality.Unit;
+    }
     document.getElementById('quality').innerHTML = myObj.Device.NetworkParameter.ConnectionQuality.Value;
+    if (document.getElementById('qunit2') != null) {
+      document.getElementById('qunit2').innerHTML = myObj.Device.NetworkParameter.ConnectionQuality.Unit;
+      document.getElementById('quality2').value = myObj.Device.NetworkParameter.ConnectionQuality.Value;
+    }
 
     actualch = document.getElementById('actualch');
     actualch.value = myObj.Device.LoRaSettings.ActualChannel;

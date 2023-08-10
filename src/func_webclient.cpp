@@ -31,6 +31,7 @@ void DownloadFilesFromWeb(char *fversion)
     DownloadFile("restart.html", fversion);
     DownloadFile("sensorv.html", fversion);
     DownloadFile("settings.html", fversion);
+    DownloadFile("settings.js", fversion);
 }
 
 void DownloadFile(const char *fileName, char *fversion)
