@@ -198,4 +198,22 @@ lon = float(getRMC_LonDeg(s)) + (getRMC_LonMinFloat(s) / 60);
 return lon;
 }
 
+void UBLOX_GPS_Wakeup()
+{
+  Serial2.println();                                   //send some characters to GPS to wake it up
+}
+
+void UBLOX_GPS_Shutdown()
+{
+  //sends command over serial interface to GPS to put it in PMREQ backup mode
+  uint8_t index;
+  uint8_t UBLOX_GPSStandby[] = {0xB5, 0x62, 0x02, 0x41, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x4D, 0x3B}; 
+
+  for (index = 0; index < sizeof(UBLOX_GPSStandby); index++)
+  {
+    Serial2.write(UBLOX_GPSStandby[index]);
+  }
+  DebugPrint(3, "Shutdown GPS...");
+}
+
 #endif

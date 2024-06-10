@@ -24,6 +24,8 @@ int ccounter;                       // Actual connection test counter
 int SendPeriod = 2000;              // SendPeriod in [ms], Attention! Range is limited [2000]
 volatile bool flag1 = false;        // Flag for data sending
 
+volatile bool flag2 = false;        // Flag for data sending
+
 // LoRa timeslot counter for different spreading factors
 long slotcounter = 0;               // Slot counter
 int slot = 0;                       // Actual time slot
@@ -33,8 +35,10 @@ byte rpayload[200];                 // Received LoRa payload over downlink (arra
 
 // Measuring values
 long starttime0 = millis();         // Timer0 value for measuring loop
-long starttime1 = millis();         // Timer1 value for measuring loop
+unsigned long starttime1 = millis();         // Timer1 value for measuring loop
 long starttime2 = millis();         // Timer2 value for measuring loop
+unsigned long starttime3 = millis();         // Timer3 value for measuring loop
+unsigned long loraSendDurationTime = 0;
 float fieldstrength;                // WLAN field strength
 float quality;                      // WLAN quality
 float temperature;                  // Temperature in [°C]
@@ -47,6 +51,8 @@ float tank1;                        // Tank 1 level [V]
 float tank2;                        // Tank 1 level [V]
 float tank1p;                       // Tank 2 level [%]
 float tank2p;                       // Tank 2 level [%]
+uint16_t tank1adc;                        // Tank 1 level [V]
+uint16_t tank2adc;                        // Tank 1 level [V]
 
 int alarm1;                         // Digital Alarm input
 int relaytimer = 0;                 // Relay timer for ontime n x 5min
@@ -84,16 +90,16 @@ uint16_t tank1_16 = 0;
 uint16_t tank2_16 = 0;
 
 // Analog input 0...3.3V => 0...33V => 0...4096
-const int ANALOG_IN = 36;     // Analog input GPIO36 Voltage
-const int TANK1_IN = 37;      // Analog input GPIO37 Tank 1
-const int TANK2_IN = 38;      // Analog input GPIO38 Tank 2
+int ANALOG_IN = 36;     // Analog input GPIO36 Voltage
+int TANK1_IN = 37;      // Analog input GPIO37 Tank 1
+int TANK2_IN = 38;      // Analog input GPIO38 Tank 2
 
 // Output Pins
-const int ledPin = 25;        // Pin GPIO25, LED is high activ
-const int relayPin = 25;      // Pin GPIO25, Relay is high activ
+int ledPin = 25;        // Pin GPIO25, LED is high activ
+int relayPin = 25;      // Pin GPIO25, Relay is high activ
 
 // Input Pins
-const int alarmPin = 39;      // Pin GPI39, Alarm input
+int alarmPin = 39;      // Pin GPI39, Alarm input
 
 // 1Wire definitions
 #define OneWIRE_PIN 23        // 1Wire on pin GPIO23
@@ -118,7 +124,7 @@ int c_counter = 0;            // Number of commata in RMC telegram
 #define I2C_SCL 22            // SCL standard GPIO22
 #define I2C_SPEED 100000      // I2C Speed 100KHz
 uint8_t address = 0x76;       // BME280 I2C address
-TwoWire I2CBME = TwoWire(0);  // Redefinition of I2C because changed pins
+TwoWire I2CBME = TwoWire(1);  // Redefinition of I2C because changed pins
 Adafruit_BME280 bme;          // Instance for BME280
 
 // VE.direct battery monitor (BMV-712) Victron
@@ -136,8 +142,10 @@ String gpsStatus = "";        // GPS status [A fix ok|V no fix]
 
 // OLED SSD1306
 // U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(clock, data, reset);
-U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(15, 4, 16);         // Heltec ESP32 LoRa (V2) pin definitions
+//U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(15, 4, 16);         // Heltec ESP32 LoRa (V2) pin definitions
                                                            // Clock GPIO15, Data GPIO4, Reset GPIO16
+U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(16, 15, 4);
+
 // Pin mapping for lmic LoRa chip SX1276
 const lmic_pinmap lmic_pins = {
     .nss = 18,
@@ -182,6 +190,7 @@ static uint8_t mydata[28];// 13 words + 1 word for array end
 // cycle limitations).
 unsigned TX_INTERVAL = actconf.tinterval * 30;        // Send interval
 bool lora_activ = false;                              // Marker for LoRa is activ
+bool loraEvent_activ = false;
 
 // Style parameter
 int style = 1;                    // Toggle display between day (1) und night (0) illumination
@@ -191,7 +200,7 @@ int resetESP = 0;                 // Global marker for reset the ESP32
 String usepassword[2] = {"0", "1"};
 String itype[2] = {"simple", "complex"};
 String isize[9] = {"200", "250", "300", "350", "400", "450", "500", "550", "600"};
-String timeout[10] = {"30", "60", "90", "120", "150", "180", "210", "240", "270", "300"};
+String timeout[11] = {"3", "5", "10", "30", "60", "90", "120", "150", "180", "210", "240"};
 String apchannel[13] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"};
 String servermode[5] = {"0", "1", "2", "3", "4"};
 String mdnsservice[2] = {"0", "1"};
@@ -199,11 +208,11 @@ String lorafrequencys[2] = {"EU868", "US915"};
 String lchannel[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 String spreadf[4] = {"7", "8", "9", "10"};
 String dynsf[2] = {"0", "1"};
-String relay[2] = {"0", "1"};
+String relay[3] = {"0", "1", "2"};
 String debugmode[4] = {"0", "1", "2", "3"};
 String serspeed[10] = {"300", "1200", "2400", "4800", "9600", "19200", "38400", "57600", "74880", "115200"};
+String WebSerialDebug[2] = {"0", "1"};
 String deviceid[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
-String sendlora[2] = {"0", "1"};
 String senddata[2] = {"0", "1"};
 String vaverage[10] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
 String t1average[10] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
@@ -212,5 +221,12 @@ String dwrange[9] = {"20", "25", "30", "35", "40", "45", "50", "55", "60"};
 String tstype[2] = {"Off", "DS18B20"};
 String tempunits[2] = {"C", "F"};
 String envSensor[4] = {"Off", "BME280", "VEdirect-Read", "VEdirect-Send"};
+String standbyMode[2] = {"Off", "On"};
+String loraOperationMode[4] = {"Off", "Standby", "PowerOn", "Always"};    // [Off|Standby|PowerOn|Always] rename from "loraStandbyMode" to "loraSendingMode" to "loraOperationMode"
+String WifiStandbyMode[2] = {"Yes", "No"};
+String cssStyle[3] = {"0", "1", "2"};
+String OledDisplayRotation[2] = {"0", "1"};
+String SendDataViaWifi[2] = {"Yes", "No"};
 
+boolean sendLoraQueue = false;
 #endif
