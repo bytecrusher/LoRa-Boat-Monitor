@@ -165,13 +165,12 @@ void sendBinaryValue(String type, int value){
   }
   checksum = 85 - checksum;   // 0x55 = 85 dez
   sprintf(cchecksum,"%02X", checksum); // Convert int value in hex value
-/*
+
   // Debug information on Serial output
-  Serial.print("VE.direct Value: ");
-  Serial.print(valueOut);
-  Serial.print(cchecksum);
-  Serial.println("\\n");
-*/
+  DebugPrint(3, "VE.direct Value: ");
+  DebugPrint(3, valueOut);
+  DebugPrint(3, cchecksum);
+  DebugPrintln(3, "");
 
   Serial1.print(valueOut);
   Serial1.print(cchecksum);

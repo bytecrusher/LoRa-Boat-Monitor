@@ -22,7 +22,7 @@ String sendXDR1(int sendmode){
   // Build complete NMEA string
   sendXdr1 = "$" + NMEAXdr1 + "*" + HexCheckSum;
   if((int(actconf.serverMode) == 1 && sendmode == 1) || (int(actconf.debug) >= 3 && sendmode == 1)){
-    Serial.println(sendXdr1);
+    DebugPrintln(3, sendXdr1);
   }
 
   return sendXdr1;
@@ -53,7 +53,7 @@ String sendXDR2(int sendmode){
   // Build complete NMEA string
   sendXDR2 = "$" + NMEAXdr2 + "*" + HexCheckSum;
   if((int(actconf.serverMode) == 1 && sendmode == 1) || (int(actconf.debug) >= 3 && sendmode == 1)){
-    Serial.println(sendXDR2);
+    DebugPrintln(3, sendXDR2);
   }
 
   return sendXDR2;
@@ -78,7 +78,7 @@ String sendXDR3(int sendmode){
   // Build complete NMEA string
   sendXDR3 = "$" + NMEAXdr3 + "*" + HexCheckSum;
   if((int(actconf.serverMode) == 1 && sendmode == 1) || (int(actconf.debug) >= 3 && sendmode == 1)){
-    Serial.println(sendXDR3);
+    DebugPrintln(3, sendXDR3);
   }
 
   return sendXDR3;
@@ -88,7 +88,7 @@ String sendXDR3(int sendmode){
 String sendRMC(int sendmode){
  
   if((int(actconf.serverMode) == 1 && sendmode == 1) || (int(actconf.debug) >= 3 && sendmode == 1)){
-    Serial.println(nmea);
+    DebugPrintln(3, nmea);
   }
 
   return nmea;

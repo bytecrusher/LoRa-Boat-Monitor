@@ -83,7 +83,7 @@ function decodeUplink(input) {
 
 //  data.counter = ((input.bytes[1] << 8) | input.bytes[0]);
   var temperature = (((input.bytes[3] << 8) | input.bytes[2]) / 100) - 50 + toffset;
-//  data.temperature = Math.round(temperature * 10) / 10;
+  data.temperature = Math.round(temperature * 10) / 10;
   data.pressure = ((input.bytes[5] << 8) | input.bytes[4]) / 10 + poffset;
   data.humidity = ((input.bytes[7] << 8) | input.bytes[6]) / 100;
   var dewpoint = (((input.bytes[9] << 8) | input.bytes[8]) / 100) - 50;
