@@ -1,0 +1,96 @@
+/* Button style and color */
+button {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 14px;
+    color: #050505;
+    padding: 10px 20px;
+    background: -moz-linear-gradient(top,
+            #363636 0%,
+            #d95f5f 50%,
+            #ff0000 50%,
+            #f70000);
+    background: -webkit-gradient(linear, left top, left bottom,
+            from(#363636),
+            color-stop(0.50, #d95f5f),
+            color-stop(0.50, #ff0000),
+            to(#f70000));
+    -moz-border-radius: 10px;
+    -webkit-border-radius: 10px;
+    border-radius: 10px;
+    border: 3px solid #eb1717;
+    -moz-box-shadow:
+        0px 1px 3px rgba(000, 000, 000, 0.5),
+        inset 0px 0px 2px rgba(245, 12, 12, 1);
+    -webkit-box-shadow:
+        0px 1px 3px rgba(000, 000, 000, 0.5),
+        inset 0px 0px 2px rgba(245, 12, 12, 1);
+    box-shadow:
+        0px 1px 3px rgba(000, 000, 000, 0.5),
+        inset 0px 0px 2px rgba(245, 12, 12, 1);
+    text-shadow:
+        0px -1px 0px rgba(000, 000, 000, 0.2),
+        0px 1px 0px rgba(71, 68, 71, 0.4);
+}
+
+/* Text color definitions for heat letters */
+a: {
+    color: rgb(255, 0, 0);
+}
+
+h1 {
+    color: rgb(255, 0, 0);
+}
+
+h2 {
+    color: rgb(255, 0, 0);
+}
+
+h3 {
+    color: rgb(255, 0, 0);
+}
+
+h4 {
+    color: rgb(255, 0, 0);
+}
+
+h5 {
+    color: rgb(255, 0, 0);
+}
+
+h6 {
+    color: rgb(255, 0, 0);
+}
+
+h7 {
+    color: rgb(255, 0, 0);
+}
+
+/* General text definitions */
+body {
+    color: rgb(200, 0, 0);
+    font-family: arial;
+}
+
+/* Blinking text definition */
+blink {
+    animation: blinker 0.6s linear infinite;
+}
+
+@keyframes blinker {
+    50% {
+        opacity: 0;
+    }
+}
+
+/* Background definitions */
+body {
+    background-color: rgb(32, 32, 32);
+    background-image: linear-gradient(45deg, black 25%, transparent 25%, transparent 75%, black 75%, black), linear-gradient(45deg, black 25%, transparent 25%, transparent 75%, black 75%, black), linear-gradient(to bottom, rgb(8, 8, 8), rgb(32, 32, 32));
+    background-size: 10px 10px, 10px 10px, 10px 5px;
+    background-position: 0px 0px, 5px 5px, 0px 0px;
+}
+
+/* SVG line colors */
+svg {
+    stroke: #C0C0C0;
+}

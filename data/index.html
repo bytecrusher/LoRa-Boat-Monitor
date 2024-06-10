@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Main - %devname%</title>
+  <link rel='stylesheet' type='text/css' href='/styles.css'>
+  <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
+  <meta name=viewport content='width=device-width, initial-scale=1'>
+  <style>
+    table,
+    th,
+    td {
+      padding: 10px;
+    }
+
+    button {
+      height: 55px;
+      width: 120px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    /* Create three equal columns that floats next to each other */
+    .column {
+      float: left;
+      width: 50%;
+      padding: 10px;
+      height: 75px; /* Should be removed. Only for demonstration */
+      text-align: center;
+    }
+
+    /* Clear floats after the columns */
+    .row:after {
+      content: "";
+      display: table;
+      clear: both;
+    }
+
+    /* Responsive layout - makes the three columns stack on top of each other instead of next to each other */
+    @media screen and (max-width: 200px) {
+      .column {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body onload='read_json()'>
+  <script>
+    var xmlhttp = new XMLHttpRequest();
+    xmlhttp.onreadystatechange = function () {
+      if (this.readyState == 4 && this.status == 200) {
+        var myObj = JSON.parse(this.responseText);
+        servermode = myObj.Device.NetworkParameter.ServerMode;
+        if (servermode == 3) {
+          document.getElementById('info').innerHTML = '(Diagnose Mode)';
+          document.getElementById('sensorv').disabled = true;
+          document.getElementById('firmware').disabled = true;
+          document.getElementById('lora').disabled = true;
+          document.getElementById('restart').disabled = true;
+          document.getElementById('devinfo').disabled = true;
+          document.getElementById('style').disabled = true;
+        } else {
+          document.getElementById('sensorv').disabled = false;
+          document.getElementById('firmware').disabled = false;
+          document.getElementById('lora').disabled = false;
+          document.getElementById('restart').disabled = false;
+          document.getElementById('devinfo').disabled = false;
+        }
+        if (myObj.Device.DeviceSettings.WebSerialDebug == 0) {
+          document.getElementById("webserialRow").style.display = 'none';
+        }
+        
+      }
+    };
+    function read_json() {
+      xmlhttp.open('GET', '/staticdata.json', true);
+      xmlhttp.send();
+    } 
+  </script>
+  %header%
+  <h3><data class="blink" id='info'></data></h3>
+
+  <div>
+    <div class="row">
+      <div class="column">
+        <form action='sensorv.html'><button type='submit' id='sensorv'>Sensor Values</button></form>
+      </div>
+      <div class="column">
+        <form action='firmware.html'><button type='submit' id='firmware'>Firmware Update</button></form>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="column">
+        <form action='lora.html'><button type='submit' id='lora'>LoRa Info</button></form>
+      </div>
+      <div class="column">
+          <form action='restart.html'><button type='submit' id='restart'>Restart Device</button></form>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="column">
+        <form action='devinfo.html'><button type='submit' id='devinfo'>Device Info</button>
+        </form>
+      </div>
+      <div class="column">
+        <form action='filesystem.html'><button type='submit' id='filesystem'>Filesystem</button></form>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="column">
+        <form action='settings.html'>
+          <button type='submit' id='settings'>Device Settings</button>
+        </form>
+      </div>
+      <div class="column">
+        <form action='https://norbert-walter.github.io/LoRa-Boat-Monitor/public/index_V1.0x.html'>
+          <button type='submit' id='help'>System Help</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="row" id="webserialRow">
+      <div class="column invisible">
+        <button class="btn btn-success" id='webserial' onclick=" window.open('webserial','_blank')"> WebSerial Debugger</button>
+      </div>
+      <div class="column">
+        <!--form action='https://norbert-walter.github.io/LoRa-Boat-Monitor/public/index_V1.0x.html'>
+          <button type='submit' id='help'>System Help</button>
+        </form-->
+      </div>
+    </div>
+  </div>
+
+  <br>
+  <hr>
+</body>
+</html>

@@ -1,0 +1,189 @@
+/* Button style and color */
+button,input::file-selector-button, .custom-file-upload {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 14px;
+    color: #000000;
+    padding: 10px 20px;
+    background: -moz-linear-gradient(top,
+            #ffffff 0%,
+            #ffffff 50%,
+            #bdbbbd);
+    background: -webkit-gradient(linear, left top, left bottom,
+            from(#ffffff),
+            color-stop(0.50, #ffffff),
+            to(#bdbbbd));
+    -moz-border-radius: 10px;
+    -webkit-border-radius: 10px;
+    border-radius: 10px;
+    border: 3px solid #dedcd5;
+    -moz-box-shadow:
+        0px 1px 3px rgba(000, 000, 000, 0.5),
+        inset 0px 0px 3px rgba(255, 255, 255, 1);
+    -webkit-box-shadow:
+        0px 1px 3px rgba(000, 000, 000, 0.5),
+        inset 0px 0px 3px rgba(255, 255, 255, 1);
+    box-shadow:
+        0px 1px 3px rgba(000, 000, 000, 0.5),
+        inset 0px 0px 3px rgba(255, 255, 255, 1);
+    text-shadow:
+        0px -1px 0px rgba(000, 000, 000, 0.1),
+        0px 1px 0px rgba(255, 255, 255, 1);
+    margin: 5px;
+}
+
+/* Text color definitions for head letters */
+a {
+    color: rgb(255, 255, 255);
+}
+
+h1 {
+    color: rgb(255, 255, 255);
+}
+
+h2 {
+    color: rgb(255, 255, 255);
+}
+
+h3 {
+    color: rgb(255, 255, 255);
+}
+
+h4 {
+    color: rgb(255, 255, 255);
+}
+
+h5 {
+    color: rgb(255, 255, 255);
+}
+
+h6 {
+    color: rgb(255, 255, 255);
+}
+
+h7 {
+    color: rgb(255, 255, 255);
+}
+
+/* General text definitions */
+body {
+    color: rgb(200, 200, 200);
+    font-family: arial;
+    /*padding: 50px;
+    background-color: #222;*/
+}
+
+
+/* Blinking text definition */
+blink {
+    animation: blinker 0.6s linear infinite;
+}
+
+.blink {
+    animation: blinker 1.5s linear infinite;
+    color: red;
+    font-family: sans-serif;
+}
+@keyframes blinker {
+    50% {
+        opacity: 0;
+    }
+}
+
+/* Background definitions */
+body {
+    background-color: rgb(32, 32, 32);
+    background-image: linear-gradient(45deg, black 25%, transparent 25%, transparent 75%, black 75%, black),
+        linear-gradient(45deg, black 25%, transparent 25%, transparent 75%, black 75%, black),
+        linear-gradient(to bottom, rgb(8, 8, 8), rgb(32, 32, 32));
+    background-size: 10px 10px, 10px 10px, 10px 5px;
+    background-position: 0px 0px, 5px 5px, 0px 0px;
+}
+
+/* SVG line colors */
+svg {
+    stroke: #FFFFFF;
+}
+
+/* Center the loader */
+#loader {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    z-index: 1;
+    width: 120px;
+    height: 120px;
+    margin: -76px 0 0 -76px;
+    border: 16px solid #f3f3f3;
+    border-radius: 50%;
+    border-top: 16px solid #3498db;
+    -webkit-animation: spin 2s linear infinite;
+    animation: spin 2s linear infinite;
+}
+  
+@-webkit-keyframes spin {
+    0% { -webkit-transform: rotate(0deg); }
+    100% { -webkit-transform: rotate(360deg); }
+}
+  
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+  
+/* Add animation to "page content" */
+.animate-bottom {
+    position: relative;
+    -webkit-animation-name: animatebottom;
+    -webkit-animation-duration: 1s;
+    animation-name: animatebottom;
+    animation-duration: 1s
+}
+  
+@-webkit-keyframes animatebottom {
+    from { bottom:-100px; opacity:0 } 
+    to { bottom:0px; opacity:1 }
+}
+  
+@keyframes animatebottom { 
+    from{ bottom:-100px; opacity:0 } 
+    to{ bottom:0; opacity:1 }
+}
+  
+#myDiv {
+    display: none;
+}
+
+.led {
+    /*margin: 20px auto;*/
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.25);
+    box-shadow: #000 0 -1px 6px 1px;
+}
+.led-red {
+    background-color: #F00;
+    box-shadow: #000 0 -1px 6px 1px, inset #600 0 -1px 8px, #F00 0 3px 11px;
+}
+.led-orange {
+    background-color: #FF7000;
+    box-shadow: #000 0 -1px 6px 1px, inset #630 0 -1px 8px, #FF7000 0 3px 11px;
+}
+
+.led-yellow {
+    background-color: #FF0;
+    box-shadow: #000 0 -1px 6px 1px, inset #660 0 -1px 8px, #FF0 0 3px 11px;
+}
+
+.led-green {
+    background-color: #80FF00;
+    box-shadow: #000 0 -1px 6px 1px, inset #460 0 -1px 8px, #80FF00 0 3px 11px;
+}
+
+.led-blue {
+    background-color: #06F;
+    box-shadow: #000 0 -1px 6px 1px, inset #006 0 -1px 8px, #06F 0 3px 11px;
+}
+
+.box { float: left; /*width: 32%;*/ /*margin-right: 2%;*/ /*padding: 20px;*/ /*background: #eee;*/ /*box-sizing: border-box;*/ }
+.box:last-child { margin-right: 0; }

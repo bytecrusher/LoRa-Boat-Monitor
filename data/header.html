@@ -1,0 +1,42 @@
+<div style="float: left; width: 100%">
+    <div class="box"><h2>%devname%</h2></div>
+    <div class="box" style="margin-top: 30px; margin-left: 20px; display:flex;">
+        <div id='myping' class="led"></div>
+        <div id='mypingtxt' style="margin-left: 10px; margin-top: -4px;"></div>
+    </div>
+</div>
+<div>%crights%, %fversion%, CQ: <data id='quality'>%quality%</data>%</div>
+<hr>
+
+<script>
+    var xmlhttpheader = new XMLHttpRequest();
+    let offlineTimer = 0;
+    xmlhttpheader.onreadystatechange = function () {
+        // Turn on the green led.
+        if (this.readyState == 4 && this.status == 200) {
+            clearTimeout(offlineTimer);
+            offlineTimer = 0;
+            document.getElementById("myping").classList.add('led-green');
+            document.getElementById("myping").classList.remove('led-red');
+            document.getElementById("mypingtxt").innerHTML = "Online";
+            // Turn off the green led.
+            setTimeout(function () { 
+                document.getElementById("myping").classList.remove('led-green');
+            }, 400);
+        }
+    };
+    function startping() {
+        // avoid more than one instance of "offlineTimer".
+        if (offlineTimer == 0) {
+            // When after 1,1 seconds no response.
+            offlineTimer = setTimeout(function () { 
+            document.getElementById("myping").classList.add('led-red');
+            document.getElementById("myping").classList.remove('led-green');
+            document.getElementById("mypingtxt").innerHTML = "Offline";
+            }, 1100);
+        }
+        xmlhttpheader.open('GET', '/getdata', true);
+        xmlhttpheader.send();
+    }
+    setInterval(function () { startping(); }, 1000);
+</script>

@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Settings - %devname%</title>
+    <link rel='stylesheet' type='text/css' href='/styles.css'>
+    <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
+    <meta name=viewport content='width=device-width, initial-scale=1'>
+    <style type='text/css'>
+        select {
+            width: 150px;
+        }
+
+        input {
+            width: 145px;
+        }
+
+        .column {
+            float: left;
+            width: 33.33%;
+            padding: 2px;
+        }
+
+        .firstColumn {
+            width: 400px;
+        }
+
+        .secondColumn {
+            float: right;
+        }
+
+        /* Clear floats after the columns */
+        .row:after {
+            content: "";
+            clear: both;
+            padding: 1px;
+        }
+
+        .row {
+            display: flex;
+            margin-top: 5px;
+        }
+
+        h3 {
+            margin-top: 0px;
+            margin-bottom: 0px;
+        }
+
+        .myToggleButton {
+            width: auto;
+            margin-right: 10px;
+        }
+
+        .myAllToggleButton {
+            margin-left: 5px;
+        }
+
+        .mydiv {
+            border: 2px solid #ccc;
+            border-radius: 10px;
+            padding: 5px;
+            margin: 5px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+        /*.custom-file-upload {
+            border: 1px solid #ccc;
+            display: inline-block;
+            padding: 6px 12px;
+            cursor: pointer;
+        }*/
+    </style>
+    <script>
+        function setSelections() {
+            document.SetForm.usepassword.selectedIndex = %crypt%;
+            if (%crypt% == 1) {
+                document.getElementById('logoutBtn').style.display = "block";
+            } 
+            document.SetForm.timeout.selectedIndex = %timeout%;
+            document.SetForm.apchannel.selectedIndex = %apchannel%;
+            document.SetForm.servermode.selectedIndex = %serverMode%;
+            document.SetForm.mdnsservice.selectedIndex = %mDNS%;
+            // LoRa Settings
+            //**************
+            document.SetForm.lorafrequency.selectedIndex = %lorafrequency%;
+            document.SetForm.lchannel.selectedIndex = %lchannel%;
+            document.SetForm.spreadf.selectedIndex = %spreadf%;
+            document.SetForm.dynsf.selectedIndex = %dynsf%;
+            document.SetForm.relay.selectedIndex = %relay%;
+            // Devive Settings
+            //****************
+            document.SetForm.debugmode.selectedIndex = %debug%;
+            document.SetForm.serspeed.selectedIndex = %serspeed%;
+            document.SetForm.WebSerialDebug.selectedIndex = %WebSerialDebug%;
+
+            document.SetForm.deviceid.selectedIndex = %deviceID%;
+            document.SetForm.senddata.selectedIndex = %senddata%;
+            document.SetForm.vaverage.selectedIndex = %vaverage%;
+            document.SetForm.t1average.selectedIndex = %t1average%;
+            document.SetForm.t2average.selectedIndex = %t2average%;
+            document.SetForm.tstype.selectedIndex = %tempSensorType%;
+            document.SetForm.tempunit.selectedIndex = %tempUnit%;
+            document.SetForm.envSensor.selectedIndex = %envSensor%;
+            document.SetForm.standbyMode.selectedIndex = %standbyMode%;
+            document.SetForm.standbyMode.standbySleepDuration = %standbySleepDuration%;
+            document.SetForm.loraOperationMode.selectedIndex = %loraOperationMode%;
+            document.SetForm.WifiStandbyMode.selectedIndex = %WifiStandbyMode%;
+            document.SetForm.cssStyle.selectedIndex = %cssStyle%;
+            document.SetForm.OledDisplayRotation.selectedIndex = %OledDisplayRotation%;
+            document.SetForm.SendDataViaWifi.selectedIndex = %SendDataViaWifi%;
+        }
+    </script>
+</head>
+
+<body onload='setSelections();'>
+    %header%
+    <div id="loader"></div>
+    <div style="display:none;" id="myDiv" class="animate-bottom">
+    <form id='form1' name='SetForm' method='get' action='savesettings'>
+
+        <input class="myToggleButton myAllToggleButton" type="button" value="+" id="btAllSettingsPage" onclick="ToggleAllSections()"> All
+
+        <div><div class="mydiv">
+            <h3>
+                <input class="myToggleButton" type="button" value="+" id="btPasswordSettingsPage" onclick="ToggleSection(this, 'PasswordSettingsPage')">Password Settings
+            </h3>
+            <div class="collapsible" style="display:none;" id="PasswordSettingsPage">
+                <div class="row">
+                    <div class="firstColumn">Use Page Password</div>
+                    <div class="secondColumn">
+                        <select name='usepassword' size='1'>
+                            <option value='0'>Off</option>
+                            <option value='1'>On</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="firstColumn">Page Username</div>
+                    <div class="secondColumn"><input type='text' required name='username' size='20' value='%username%' maxlength='20' onchange='check_username("username")'></div>
+                </div>
+                <div class="row">
+                    <div class="firstColumn">Page Password</div>
+                    <div class="secondColumn"><input type='text' required name='pagepasswd' size='20' value='%password%' maxlength='20' onchange='check_passwd("pagepasswd")'></div>
+                </div>
+            </div>
+        </div></div>
+
+        <div><div class="mydiv">
+            <h3>
+                <input class="myToggleButton" type="button" value="+" id="btWebInterfaceSettingsPage" onclick="ToggleSection(this, 'WebInterfaceSettingsPage')">Web Interface Settings
+            </h3>
+            <div class="collapsible" style="display:none;" id="WebInterfaceSettingsPage" >
+                <div class="row">
+                    <div class="firstColumn">Color Theme</div>
+                    <div class="secondColumn">
+                        <select name='cssStyle' size='1'>
+                            <option value='0'>Black</option>
+                            <option value='1'>Red</option>
+                            <option value='2'>White</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div></div>
+
+        <div><div class="mydiv">
+            <h3>
+                <input class="myToggleButton" type="button" value="+" id="btOledDisplaySettingsPage" onclick="ToggleSection(this, 'OledDisplaySettingsPage')">OLED Display Settings
+            </h3>
+            <div class="collapsible" style="display:none;" id="OledDisplaySettingsPage" >
+                <div class="row">
+                    <div class="firstColumn">Rotate Display</div>
+                    <div class="secondColumn">
+                        <select name='OledDisplayRotation' size='1'>
+                            <option value='0'>0°</option>
+                            <option value='1'>180°</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div></div>
+
+        <div class="mydiv">
+            <h3>
+                <input class="myToggleButton" type="button" value="+" id="btNetworkSettingsPage" onclick="ToggleSection(this, 'NetworkSettingsPage')">Network Settings
+            </h3>
+            <div class="collapsible" style="display:none;" id="NetworkSettingsPage" >
+                <div class="row">
+                    <div class="firstColumn">Base Hostname ("-Device ID" will be added)</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='hostname' size='20' value='%hostname%' maxlength='20'>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="firstColumn">Server Mode</div>
+                    <div class="secondColumn">
+                        <select name='servermode' size='1'>
+                            <option value='0'>HTTP (JSON, NMEA)</option>
+                            <option value='1'>NMEA Serial</option>
+                            <option value='2'>MQTT</option>
+                            <option value='3'>Diagnostic</option>
+                            <option value='4'>Demo Mode</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="firstColumn">mDNS Service</div>
+                    <div class="secondColumn">
+                        <select name='mdnsservice' size='1'>
+                            <option value='0'>Off</option>
+                            <option value='1'>On</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <h5 style="margin:0px">MDS Settings</h5>
+                </div>
+                <div class="row">
+                    <div class="firstColumn">Send Data via Wifi to MDS</div>
+                    <div class="secondColumn">
+                        <select name='SendDataViaWifi' size='1'>
+                            <option value='Yes'>Yes</option>
+                            <option value='No'>No</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">MDS Url</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='MdsUrl' size='20' value='%MdsUrl%' maxlength='100'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">API Key</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='MdsApiKey' size='20' value='%MdsApiKey%' maxlength='30'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <h5 style="margin:0px">Station Settings</h5>
+                </div>
+                <div class="row">
+                    <div class="firstColumn">WLAN #1 Client SSID</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='cssid1' size='20' value='%cssid1%' maxlength='20' onchange='check_ssid("cssid1")'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">WLAN #1 Client Password</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='cpasswd1' size='20' value='%cpassword1%' maxlength='20' onchange='check_passwd("cpasswd1")'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">WLAN #2 Client SSID</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='cssid2' size='20' value='%cssid2%' maxlength='20' onchange='check_ssid("cssid2")'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">WLAN #2 Client Password</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='cpasswd2' size='20' value='%cpassword2%' maxlength='20' onchange='check_passwd("cpasswd2")'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">WLAN #3 Client SSID</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='cssid3' size='20' value='%cssid3%' maxlength='20' onchange='check_ssid("cssid3")'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">WLAN #3 Client Password</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='cpasswd3' size='20' value='%cpassword3%' maxlength='20' onchange='check_passwd("cpasswd3")'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Connection Timeout</div>
+                    <div class="secondColumn">
+                        <select name='timeout' size='1'>
+                            <option value='3'>3s</option>
+                            <option value='5'>5s</option>
+                            <option value='10'>10s</option>
+                            <option value='30'>30s</option>
+                            <option value='60'>1 min</option>
+                            <option value='90'>1.5 min</option>
+                            <option value='120'>2 min</option>
+                            <option value='150'>2.5 min</option>
+                            <option value='180'>3 min</option>
+                            <option value='210'>3.5 min</option>
+                            <option value='240'>4 min</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <h5 style="margin:0px">AccessPoint Settings</h5>
+                </div>
+                <div class="row">
+                    <div class="firstColumn">WLAN Server SSID</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='sssid' size='20' value='%sssid%' maxlength='20' onchange='check_ssid("sssid")'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">WLAN Server Password</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='spasswd' size='20' value='%spassword%' maxlength='20' onchange='check_passwd("spasswd")'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">AP Channel</div>
+                    <div class="secondColumn">
+                        <select name='apchannel' size='1'>
+                            <option value='1'>1</option>
+                            <option value='2'>2</option>
+                            <option value='3'>3</option>
+                            <option value='4'>4</option>
+                            <option value='5'>5</option>
+                            <option value='6'>6</option>
+                            <option value='7'>7</option>
+                            <option value='8'>8</option>
+                            <option value='9'>9</option>
+                            <option value='10'>10</option>
+                            <option value='11'>11</option>
+                            <option value='12'>12</option>
+                            <option value='13'>13</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mydiv">
+            <h3>
+                <input class="myToggleButton" type="button" value="+" id="btLoRaSettingsPage" onclick="ToggleSection(this, 'LoRaSettingsPage')">LoRa Settings (ABP)
+            </h3>
+            <div class="collapsible" style="display:none;" id="LoRaSettingsPage" >
+                <div class="row">
+                    <div class="firstColumn">Lora operation Mode</div>
+                    <div class="secondColumn">
+                        <select name='loraOperationMode' size='1'>
+                            <option value='Off'>Off</option>
+                            <option value='Standby'>Only in Standby</option>
+                            <option value='PowerOn'>Only in PowerOn</option>
+                            <option value='Always'>Always</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Device Address</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='devaddr' size='20' value='%devaddr%' maxlength='20' onchange='check_devaddr("devaddr")'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Network Session Key</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='nskey' size='40' value='%nskey%' maxlength='40' onchange='check_key("nskey")'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Application Key</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='appkey' size='40' value='%appkey%' maxlength='40' onchange='check_key("appkey")'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Frequency Region</div>
+                    <div class="secondColumn">
+                        <select name='lorafrequency' size='1'>
+                            <option value='EU868'>EU868</option>
+                            <option value='US915'>US915</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">LoRa Channel</div>
+                    <div class="secondColumn">
+                        <select name='lchannel' size='1'>
+                            <option value='0'>0</option>
+                            <option value='1'>1</option>
+                            <option value='2'>2</option>
+                            <option value='3'>3</option>
+                            <option value='4'>4</option>
+                            <option value='5'>5</option>
+                            <option value='6'>6</option>
+                            <option value='7'>7</option>
+                            <option value='8'>0...7 dynamic</option>
+                            <option value='9'>0...3 dynamic</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Spreading Factor</div>
+                    <div class="secondColumn">
+                        <select name='spreadf' size='1'>
+                            <option value='7'>7</option>
+                            <option value='8'>8</option>
+                            <option value='9'>9</option>
+                            <option value='10'>10</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Dynamic SF</div>
+                    <div class="secondColumn">
+                        <select name='dynsf' size='1'>
+                            <option value='0'>Off</option>
+                            <option value='1'>On</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">TX Interval [x30s]</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='tinterval' size='20' value='%tinterval%' maxlength='20'
+                            onchange='check_tinterval("tinterval")'>
+                    </div>
+                    <script>//TODO: not able to save this value.</script>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Relay (Mode)</div>
+                    <div class="secondColumn">
+                        <select name='relay' size='1'>
+                            <option value='0'>Off</option>
+                            <option value='1'>On</option>
+                            <option value='2'>Controll GPS Modul</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mydiv">
+            <h3>
+                <input class="myToggleButton" type="button" value="+" id="btDeviceSettingsPage" onclick="ToggleSection(this, 'DeviceSettingsPage')">Device Settings
+            </h3>
+            <div class="collapsible" style="display:none;" id="DeviceSettingsPage" >
+                <div class="row">
+                    <div class="firstColumn">Serial Debug Mode</div>
+                    <div class="secondColumn">
+                        <select name='debugmode' size='1'>
+                            <option value='0'>Off</option>
+                            <option value='1'>Errors</option>
+                            <option value='2'>Errors + Warnings</option>
+                            <option value='3'>Errors + Warnings + Messages</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Serial Speed</div>
+                    <div class="secondColumn">
+                        <select name='serspeed' size='1'>
+                            <option value='300'>300 Bd</option>
+                            <option value='1200'>1200 Bd</option>
+                            <option value='2400'>2400 Bd</option>
+                            <option value='4800'>4800 Bd</option>
+                            <option value='9600'>9600 Bd</option>
+                            <option value='19200'>19200 Bd</option>
+                            <option value='38400'>38400 Bd</option>
+                            <option value='57600'>57600 Bd</option>
+                            <option value='74880'>74880 Bd</option>
+                            <option value='115200'>115200 Bd</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Web Serial Debug</div>
+                    <div class="secondColumn">
+                        <select name='WebSerialDebug' size='1'>
+                            <option value='0'>No</option>
+                            <option value='1'>Yes</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Device ID</div>
+                    <div class="secondColumn">
+                        <select id='deviceid' name='deviceid' size='1'>
+                            <option value='0'>0</option>
+                            <option value='1'>1</option>
+                            <option value='2'>2</option>
+                            <option value='3'>3</option>
+                            <option value='4'>4</option>
+                            <option value='5'>5</option>
+                            <option value='6'>6</option>
+                            <option value='7'>7</option>
+                            <option value='8'>8</option>
+                            <option value='9'>9</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Send NMEA0183</div>
+                    <div class="secondColumn">
+                        <select name='senddata' size='1'>
+                            <option value='0'>Off</option>
+                            <option value='1'>On</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Average Voltage</div>
+                    <div class="secondColumn">
+                        <select name='vaverage' size='1'>
+                            <option value='1'>1</option>
+                            <option value='2'>2</option>
+                            <option value='3'>3</option>
+                            <option value='4'>4</option>
+                            <option value='5'>5</option>
+                            <option value='6'>6</option>
+                            <option value='7'>7</option>
+                            <option value='8'>8</option>
+                            <option value='9'>9</option>
+                            <option value='10'>10</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Average Tank1</div>
+                    <div class="secondColumn">
+                        <select name='t1average' size='1'>
+                            <option value='1'>1</option>
+                            <option value='2'>2</option>
+                            <option value='3'>3</option>
+                            <option value='4'>4</option>
+                            <option value='5'>5</option>
+                            <option value='6'>6</option>
+                            <option value='7'>7</option>
+                            <option value='8'>8</option>
+                            <option value='9'>9</option>
+                            <option value='10'>10</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Average Tank2</div>
+                    <div class="secondColumn">
+                        <select name='t2average' size='1'>
+                            <option value='1'>1</option>
+                            <option value='2'>2</option>
+                            <option value='3'>3</option>
+                            <option value='4'>4</option>
+                            <option value='5'>5</option>
+                            <option value='6'>6</option>
+                            <option value='7'>7</option>
+                            <option value='8'>8</option>
+                            <option value='9'>9</option>
+                            <option value='10'>10</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Temp Sensor Type</div>
+                    <div class="secondColumn">
+                        <select name='tstype' size='1'>
+                            <option value='Off'>Off</option>
+                            <option value='DS18B20'>DS18B20</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Temp Unit</div>
+                    <div class="secondColumn">
+                        <select name='tempunit' size='1'>
+                            <option value='C'>&deg;C</option>
+                            <option value='F'>&deg;F</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Env Sensor Type</div>
+                    <div class="secondColumn">
+                        <select name='envSensor' size='1'>
+                            <option value='Off'>Off</option>
+                            <option value='BME280'>BME280</option>
+                            <option value='VEdirect-Read'>VEdirect-Read</option>
+                            <option value='VEdirect-Send'>VEdirect-Send</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mydiv">
+            <h3>
+                <input class="myToggleButton" type="button" value="+" id="btStandbyModeSettingsPage" onclick="ToggleSection(this, 'StandbyModeSettingsPage')">Standby Mode Settings
+            </h3>
+            <div class="collapsible" style="display:none;" id="StandbyModeSettingsPage" >
+                <div class="row">
+                    <div class="firstColumn">Activate Standby Mode (Alarm Input X1-3)</div>
+                    <div class="secondColumn">
+                        <select name='standbyMode' size='1' onchange='check_alarmState(event)'>
+                            <option value='Off'>Off</option>
+                            <option value='On'>On</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Standby sleep duration (time in Mintues)</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='standbySleepDuration' size='20' value='%standbySleepDuration%' maxlength='20'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Wifi in Standy?</div>
+                    <div class="secondColumn">
+                        <select name='WifiStandbyMode' size='1'>
+                            <option value='Yes'>Yes</option>
+                            <option value='No'>No</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mydiv">
+            <h3>
+                <input class="myToggleButton" type="button" value="+" id="btCalibrationSettingsPage" onclick="ToggleSection(this, 'CalibrationSettingsPage')">Calibration Settings
+            </h3>
+            <div class="collapsible" style="display:none;" id="CalibrationSettingsPage" >
+                <div class="row">
+                    <div class="firstColumn">Voltage A2</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='a2vslope' size='20' value='%a2vslope%' maxlength='20'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Voltage A1</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='a1vslope' size='20' value='%a1vslope%' maxlength='20'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Volatge Offset [V]</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='voffset' size='20' value='%voffset%' maxlength='20'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Tank1 A2</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='a2t1slope' size='20' value='%a2t1slope%' maxlength='20'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Tank1 A1</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='a1t1slope' size='20' value='%a1t1slope%' maxlength='20'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Tank1 Offset [l]</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='t1offset' size='20' value='%t1offset%' maxlength='20'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Tank2 A2</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='a2t2slope' size='20' value='%a2t2slope%' maxlength='20'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Tank2 A1</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='a1t2slope' size='20' value='%a1t2slope%' maxlength='20'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Tank2 Offset [l]</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='t2offset' size='20' value='%t2offset%' maxlength='20'>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row" style="padding-top: 10px;">
+            <button id='sub' type='submit'>Save Settings</button>
+            <button type='button' onclick="window.open('/index.html', '_self');">Back</button>
+            <script>//TODO: change location of back to main.</script>
+            <button type='button' id="logoutBtn" onclick="logoutButton()" style="display:none">Logout</button>
+        </div>
+        <input type='hidden' required name='password' size='20' value='%userpassword%' maxlength='20'>
+    </form>
+    <br>
+    
+    <div class="mydiv">
+        <form id='form4' action='/reseteeprom'>
+            <button type="button" onclick="downloadConfigAsJson()">Download Config</button>
+            <button type='submit' style="margin-left: 20px;">Reset to Factory Settings</button>
+            <label for="file" class="custom-file-upload" style="margin-left: 20px;">Upload Config</label>
+            <input type="file" id="file" accept=".json" onchange="uploadConfig();">
+        </form>
+
+    </div>
+    <script src='/settings.js' type='text/javascript'></script>
+</div>
+</body>
+
+</html>

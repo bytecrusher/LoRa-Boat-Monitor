@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>LoRa Info - %devname%</title>
+    <link rel='stylesheet' type='text/css' href='/styles.css'>
+    <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
+    <meta name=viewport content='width=device-width, initial-scale=1'>
+    <style>
+    </style>
+</head>
+
+<body>
+
+    <script>
+        var xmlhttp = new XMLHttpRequest();
+        xmlhttp.onreadystatechange = function () {
+            if (this.readyState == 4 && this.status == 200) {
+                var myObj = JSON.parse(this.responseText);
+
+                // Fill all values in Page
+                document.getElementById('quality').innerHTML = myObj.Device.NetworkParameter.ConnectionQuality.Value;
+                document.getElementById('region').innerHTML = myObj.Device.LoRaSettings.Frequency;
+                document.getElementById('address').innerHTML = myObj.Device.LoRaSettings.DeviceAddress;
+                document.getElementById('actualch').innerHTML = myObj.Device.LoRaSettings.ActualChannel;
+                document.getElementById('actualsf').innerHTML = myObj.Device.LoRaSettings.ActualSF;
+                document.getElementById('tinterval').innerHTML = myObj.Device.LoRaSettings.TXInterval * 30;
+                document.getElementById('slot').innerHTML = myObj.Device.LoRaSettings.TimeSlot;
+                document.getElementById('counter').innerHTML = myObj.Device.LoRaSettings.TXCounter;
+
+                // If Demo Mode active the give out a message
+                servermode = myObj.Device.NetworkParameter.ServerMode;
+                if (servermode == 4) {
+                    document.getElementById('info').innerHTML = '(Demo Mode)';
+                }
+                else {
+                    document.getElementById('info').innerHTML = '';
+                }
+
+            }
+        };
+        function read_json() {
+            xmlhttp.open('GET', '/data.json', true);
+            xmlhttp.send();
+        }
+        setInterval(function () { read_json(); }, 1000);
+    </script>
+
+    %header%
+
+    <h3>LoRa Info <data class="blink" id='info'></data>
+    </h3>
+    <FONT SIZE='4'>
+        <table>
+
+            <tr>
+                <td>
+                    <div class='svg'>
+                        <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-access-point'
+                            width='30' height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
+                            stroke-linecap='round' stroke-linejoin='round'>
+                            <path stroke='none' d='M0 0h24v24H0z' fill='none' />
+                            <line x1='12' y1='12' x2='12' y2='12.01' />
+                            <path d='M14.828 9.172a4 4 0 0 1 0 5.656' />
+                            <path d='M17.657 6.343a8 8 0 0 1 0 11.314' />
+                            <path d='M9.168 14.828a4 4 0 0 1 0 -5.656' />
+                            <path d='M6.337 17.657a8 8 0 0 1 0 -11.314' />
+                        </svg>
+                    </div>
+                </td>
+
+                <td>Freq Region:</td>
+                <td><data id='region'></data></td>
+                <td></td>
+            </tr>
+            <tr>
+                <td>
+                    <div class='svg'>
+                        <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-medical-cross'
+                            width='30' height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
+                            stroke-linecap='round' stroke-linejoin='round'>
+                            <path stroke='none' d='M0 0h24v24H0z' fill='none' />
+                            <path
+                                d='M13 3a1 1 0 0 1 1 1v4.535l3.928 -2.267a1 1 0 0 1 1.366 .366l1 1.732a1 1 0 0 1 -.366 1.366l-3.927 2.268l3.927 2.269a1 1 0 0 1 .366 1.366l-1 1.732a1 1 0 0 1 -1.366 .366l-3.928 -2.269v4.536a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-4.536l-3.928 2.268a1 1 0 0 1 -1.366 -.366l-1 -1.732a1 1 0 0 1 .366 -1.366l3.927 -2.268l-3.927 -2.268a1 1 0 0 1 -.366 -1.366l1 -1.732a1 1 0 0 1 1.366 -.366l3.928 2.267v-4.535a1 1 0 0 1 1 -1h2z' />
+                        </svg>
+                    </div>
+                </td>
+
+                <td>Device Addr:</td>
+                <td><data id='address'></data></td>
+                <td></td>
+            </tr>
+
+            <tr>
+                <td>
+                    <div class='svg'>
+                        <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-square-x' width='30'
+                            height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
+                            stroke-linecap='round' stroke-linejoin='round'>
+                            <path stroke='none' d='M0 0h24v24H0z' fill='none' />
+                            <rect x='4' y='4' width='16' height='16' rx='2' />
+                            <path d='M10 10l4 4m0 -4l-4 4' />
+                        </svg>
+                    </div>
+                </td>
+
+                <td>Actual Chan:</td>
+                <td><data id='actualch'></data></td>
+                <td></td>
+            </tr>
+            <tr>
+                <td>
+                    <div class='svg'>
+                        <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-separator-vertical'
+                            width='30' height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
+                            stroke-linecap='round' stroke-linejoin='round'>
+                            <path stroke='none' d='M0 0h24v24H0z' fill='none' />
+                            <line x1='12' y1='4' x2='12' y2='20' />
+                            <polyline points='8 8 4 12 8 16' />
+                            <polyline points='16 16 20 12 16 8' />
+                        </svg>
+                    </div>
+                </td>
+                <td>Actual SF:</td>
+                <td><data id='actualsf'></data></td>
+                <td></td>
+            </tr>
+            <tr>
+                <td>
+                    <div class='svg'>
+                        <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-alarm' width='30'
+                            height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
+                            stroke-linecap='round' stroke-linejoin='round'>
+                            <path stroke='none' d='M0 0h24v24H0z' fill='none' />
+                            <circle cx='12' cy='13' r='7' />
+                            <polyline points='12 10 12 13 14 13' />
+                            <line x1='7' y1='4' x2='4.25' y2='6' />
+                            <line x1='17' y1='4' x2='19.75' y2='6' />
+                        </svg>
+                    </div>
+                </td>
+
+                <td>TX Interval:</td>
+                <td><data id='tinterval'></data>s</td>
+                <td></td>
+            </tr>
+            <tr>
+                <td>
+                    <div class='svg'>
+                        <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-square-dot'
+                            width='30' height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
+                            stroke-linecap='round' stroke-linejoin='round'>
+                            <path stroke='none' d='M0 0h24v24H0z' fill='none' />
+                            <rect x='4' y='4' width='16' height='16' rx='2' />
+                            <circle cx='12' cy='12' r='1' />
+                        </svg>
+                    </div>
+                </td>
+
+                <td>Time Slot:</td>
+                <td><data id='slot'></data></td>
+                <td></td>
+            </tr>
+            <tr>
+                <td>
+                    <div class='svg'>
+                        <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-wave-square'
+                            width='30' height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
+                            stroke-linecap='round' stroke-linejoin='round'>
+                            <path stroke='none' d='M0 0h24v24H0z' fill='none' />
+                            <path d='M3 12h5v8h4v-16h4v8h5' />
+                        </svg>
+                    </div>
+                </td>
+
+                <td>TX Counter:</td>
+                <td><data id='counter'></data></td>
+                <td></td>
+            </tr>
+        </table>
+    </FONT><br>
+    <hr>
+
+    <br>
+    <form action='/'><button type='submit'>Back</button></form>
+</body>
+
+</html>

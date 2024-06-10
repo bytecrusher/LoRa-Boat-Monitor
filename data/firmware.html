@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
+  <meta name=viewport content='width=device-width, initial-scale=1'>
+  <title>Update - %devname%</title>
+  <link rel='stylesheet' type='text/css' href='/styles.css'>
+  <style>
+  </style>
+  <script src="md5.min.js"></script>
+  <script type='text/javascript'>
+    var link;
+    var data; // Firmware file as blob
+    var internet = 0;
+    var actualversion = '%fversion%';
+    var xmlhttp = new XMLHttpRequest();
+    var xmlhttp2 = new XMLHttpRequest();
+    var xmlhttp3 = new XMLHttpRequest();
+
+    document.addEventListener("DOMContentLoaded", function() {
+            setTimeout(function() {
+                //document.querySelector("body").classList.add("loaded");
+                showPage();
+            }, 10)
+            // Get the form and file field
+            //let myform = document.querySelector('#upload');
+            //let file = document.querySelector('#file');
+
+            // Listen for submit events
+            //myform.addEventListener('submit', handleSubmit);
+    });
+
+    xmlhttp.onreadystatechange = function () {
+      // If internet connection available            
+      if (this.readyState == 4 && this.status == 200) {
+        internet = 1;
+        // Read link to firmware and firmware version
+        link = this.responseText;
+        var firmware = link.slice(67, 100);
+        var version = link.slice(76, 81);
+        document.upform1.firmware.value = firmware;
+        document.upform1.version.value = version;
+        // New firmware available
+        if (actualversion != version) {
+          document.getElementById('sub2').disabled = false;
+          document.getElementById('sub2').hidden = false;
+          document.getElementById('info').innerHTML = 'New firmware is available.';
+        }
+        // Firmware is actual
+        else {
+          document.getElementById('sub2').disabled = true;
+          document.getElementById('sub2').hidden = true;
+          document.getElementById('info').innerHTML = 'Your firmware is actual.';
+        }
+        xmlhttp2.open('GET', link, true);
+        xmlhttp2.responseType = 'arraybuffer'; // Is a array buffer for binary data
+        xmlhttp2.send();
+
+        // No internet connetion
+      } else {
+        internet = 0;
+        document.getElementById('sub2').disabled = true;
+        document.getElementById('sub2').hidden = true;
+        document.upform1.firmware.value = 'No Internet Connection!';
+        document.upform1.version.value = '---';
+        document.getElementById('info').innerHTML = 'Try later for update.';
+      }
+      // Download new firmware file
+      //xmlhttp2.open('GET', link, true);
+      //xmlhttp2.responseType = 'arraybuffer'; // Is a array buffer for binary data
+      //xmlhttp2.send();
+    };
+
+    xmlhttp2.onreadystatechange = function () {
+      if (this.readyState == 4 && this.status == 200) {
+        // Save file in a blob as octec-stream and create URL
+        data = new Blob([this.response], { type: 'application/octet-stream' });
+      }
+    };
+
+    xmlhttp3.onreadystatechange = function () {
+      if (this.readyState == 4 && this.status == 200) {
+        // Save file in a blob as octec-stream and create URL
+        databeta = new Blob([this.response], { type: 'application/octet-stream' });
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/update', true);
+        var formData = new FormData();
+
+        var hash = md5(databeta)
+        formData.append("MD5",hash);
+        //formData.append('file', data, 'firmware.bin');
+        formData.append('firmware', databeta, 'firmware');
+        // Action after uploading
+        xhr.onload = function (e) {
+          alert('Update successful!');
+          console.log('File uploading completed');
+        };
+        /*var r = confirm('Update firmware?');
+        if (r == true) {
+          console.log('File uploading started');
+          xhr.send(formData);
+        }
+        else {
+          console.log('File uploading stoped');
+        }*/
+      }
+    };
+
+    function check_NorbertWalterGithubVersion() {
+      xmlhttp.open('GET', 'https://norbert-walter.github.io/LoRa-Boat-Monitor/public/firmware/ActualVersion.txt', true);
+      xmlhttp.send();
+    };
+
+    function check_file() {
+      // Load filepaht with filename
+      var filename = document.upform.image.value;
+      // Split file extension
+      var extension = filename.split('.');
+      extension = extension[extension.length - 1];
+      // Enable or disable the submit button depends on file type
+      if (extension == 'bin' || extension == 'bmb') {
+        document.getElementById('sub').disabled = false;
+      } else {
+        alert('Wrong file type!');
+        document.getElementById('sub').disabled = true;
+      }
+    }
+
+    function check_filebeta() {
+      // Load filepaht with filename
+      var filename = document.upform2.image.value;
+      // Split file extension
+      var extension = filename.split('.');
+      extension = extension[extension.length - 1];
+      // Enable or disable the submit button depends on file type
+      if (extension == 'bin' || extension == 'bmb') {
+        document.getElementById('sub').disabled = false;
+      } else {
+        alert('Wrong file type!');
+        document.getElementById('sub').disabled = true;
+      }
+    }
+
+    function send_file() {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/update', true);
+      var formData = new FormData();
+
+      var file = document.upform.image.files[0];
+      var blob = new Blob([file], {type:'text/plain'});
+
+      var hash = md5(blob)
+      formData.append("MD5",hash);
+      //formData.append('file', data, 'firmware.bin');
+      formData.append('firmware', blob, 'firmware');
+      // Action after uploading
+      xhr.onload = function (e) {
+        alert('Update successful!');
+        console.log('File uploading completed');
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('myDiv').style.display = 'block';
+      };
+      var r = confirm('Upload and install Firmware Image?');
+      if (r == true) {
+        console.log('File uploading started');
+        document.getElementById('loader').style.display = 'block';
+        document.getElementById('myDiv').style.display = 'none';
+        xhr.send(formData);
+      }
+      else {
+        console.log('File uploading stoped');
+        alert('Error: File uploading stoped');
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('myDiv').style.display = 'block';
+      }
+    }
+
+    function send_image() {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/update', true);
+      var formData = new FormData();
+
+      var hash = md5(data)
+      formData.append("MD5",hash);
+      //formData.append('file', data, 'firmware.bin');
+      formData.append('firmware', data, 'firmware');
+      // Action after uploading
+      xhr.onload = function (e) {
+        alert('Update successful!');
+        console.log('File uploading completed');
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('myDiv').style.display = 'block';
+      };
+      var r = confirm('Download and Install Firmware from Gitlab?');
+      if (r == true) {
+        console.log('File uploading started');
+        document.getElementById('loader').style.display = 'block';
+        document.getElementById('myDiv').style.display = 'none';
+        xhr.send(formData);
+      }
+      else {
+        console.log('File uploading stoped');
+        alert('Error: File uploading stoped');
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('myDiv').style.display = 'block';
+      }
+    }
+
+    function send_beta() {
+      var link2 =  document.upform2.firmware2.value;
+      xmlhttp3.open('GET', link2, true);
+      // Action after uploading
+      xmlhttp3.onload = function (e) {
+        alert('Update successful!');
+        console.log('File uploading completed');
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('myDiv').style.display = 'block';
+      };
+      var r = confirm('Please download your config before update the firmware.\nDownload and Install Beta Firmware update?');
+      if (r == true) {
+        console.log('File uploading started');
+        document.getElementById('loader').style.display = 'block';
+        document.getElementById('myDiv').style.display = 'none';
+        xmlhttp3.responseType = 'arraybuffer'; // Is a array buffer for binary data
+        xmlhttp3.send();
+      }
+      else {
+        console.log('File uploading stoped');
+        alert('Error: File uploading stoped');
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('myDiv').style.display = 'block';
+      }
+    }
+
+    function calculateMd5(blob, callback) {
+      var reader = new FileReader();
+      reader.readAsBinaryString(blob);
+      reader.onloadend = function () {
+        var  hash = CryptoJS.MD5(reader.result).toString();
+        // or CryptoJS.SHA256(reader.result).toString(); for SHA-2
+        console.log("MD5 Checksum", hash);
+        callback(hash);
+      };
+    }
+
+    function showPage() {
+            document.getElementById("loader").style.display = "none";
+            document.getElementById("myDiv").style.display = "block";
+        }
+  </script>
+</head>
+
+<body onload='check_NorbertWalterGithubVersion();'>
+  %header%
+  <div id="loader"></div>
+  <div style="display:none;" id="myDiv" class="animate-bottom">
+    <h3>Firmware Update</h3>
+    <form name='upform' action='/update' method='post' enctype='multipart/form-data'>Select a local file for firmware
+      upload (firmware_xxxx.bmb):
+      <p>
+        <input type='file' required name='image' onchange='check_file()'>
+        <input type='text' name='md5' size='40' value='' maxlength='40'>
+      <p>
+        <button type='button' id='sub' onclick='send_file()'>Update Firmware</button>
+    </form>
+    <hr>
+    <form name='upform1' action='/update' method='post' enctype='multipart/form-data'>Or use the actual online firmware on
+      GitLab:
+      <p>
+        <input type='text' name='firmware' size='20' value='' onchange='check_file()'> Version:
+        <input type='text' name='version' size='5' value='' maxlength='20'>
+      <p>
+        <font size='2'><data id='info'></data></font>
+    </form>
+    <button type='submit' id='sub2' onclick='send_image()'>Update Firmware</button>
+    <hr>
+
+    <form name='upform2' action='/update' method='post' enctype='multipart/form-data'>Beta Firmware from derguntmar.de
+      <p>
+        <input type='text' name='firmware2' size='20' value='http://loraboatmonitorwebserverdata.derguntmar.de/files_for_esp_webserver/V1.0x/firmware.bin' onchange=''> Version:
+        <input type='text' name='version2' size='5' value='' maxlength='20'>
+      <p>
+        <font size='2'><data id='info'></data></font>
+    </form>
+    <button type='submit' id='sub3' onclick='send_beta()'>Update Beta Firmware</button>
+    <hr>
+    <b>Info:</b> A message is displayed afer successful update.
+    <hr>
+    <button onclick="window.open('/', '_self');">Back</button>
+  </div>
+</body>
+
+</html>

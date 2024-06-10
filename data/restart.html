@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Restart - %devname%</title>
+  <link rel='stylesheet' type='text/css' href='/styles.css'>
+  <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
+  <meta name=viewport content='width=device-width, initial-scale=1'>
+  <style>
+  </style>
+</head>
+
+<body>
+  %header%
+  
+  <div style="display:none;" id="loader"></div>
+  <div style="display:block;" id="myDiv" class="animate-bottom">
+    <h3>Restart</h3>
+    After Restart change the system automatically to the main page.
+    <br><br>
+    <button onclick="httpGetAsync('?restart=1')">Restart</button>
+    <br>
+    <hr>
+    <br>
+    <button onclick="window.open('/', '_self');">Back</button>
+    <br>
+  </div>
+</body>
+
+<script>
+  theUrl = window.location.origin;
+  const myInterval = null;
+
+  function httpGetAsync(param) {
+    const response = confirm("Are you sure you want to restart the Device?");
+    if (response) {
+      var request = new XMLHttpRequest();
+      request.open("GET",theUrl + param);
+      //request.setRequestHeader("X-Test","test1");
+      //request.setRequestHeader("X-Test","test2");
+      request.addEventListener('load', function(event) {
+        if (request.status >= 200 && request.status < 300) {
+            //console.log(request.responseText);
+        } else {
+            console.warn(request.statusText, request.responseText);
+        }
+      });
+      request.send();
+      document.getElementById("loader").style.display = "block";
+      document.getElementById("myDiv").style.display = "none";
+      myInterval = setInterval(function () { 
+        if (document.getElementById("myping").classList.contains("led-green")) {
+          document.getElementById("loader").style.display = "none";
+          document.getElementById("myDiv").style.display = "block";
+          clearInterval(myInterval);
+          window.open("/", "_self");
+        }
+      }, 900);
+    }
+  }
+</script>
+
+</html>

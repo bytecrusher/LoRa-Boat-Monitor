@@ -4,6 +4,28 @@
 
 Image: LoRa Boat Monitor
 
+# LoRa-Boat-Monitor
+Fork of [LoRa Boat Monitor](https://github.com/norbert-walter/LoRa-Boat-Monitor) from GitHub from Norbert Walter
+
+I made several changes to the code:
+- Put the files for the web server (*.html) from linked header files into file system in the flash.
+    You can copy and modify single files, without flashing the hole image.
+- use the "MCCI LoRaWAN LMIC library" instead of "IBM LMIC framework".
+- added the option to bring device into sleep mode.
+- send data via Lora or Wifi.
+-  
+
+Small hardware changes:
+  - cut the +5V line to the GPS module, and wire the GPS +5V pin to one the relay pins (X3-3).
+  - The Other (X3-2) connect to +5V of the Board.
+This gives you the option, to shutdown the GPS Modul in sleep mode.
+
+Another change that i made is the related to the IN1 (alarm1):
+ - connect X1-4 to GND
+ - connect X1-3 to the output of your Batterie switch (turn Main Batterie on, will start the Lora-Boat-Monitor, turn of your switch will turn the Lora-Boat-Monitor into Standby)
+    (I changed the IN1/alarm1 logic from "low active" to "high active")
+This makes ist possible to set the ESP into sleep mode and reduce power consumption.
+
 Project home page: https://open-boat-projects.org/en/lora-bootsmonitor/
 
 The LoRa boat monitor is used to monitor the boat when it is absent. Various measured values are continuously recorded at freely adjustable time intervals and transferred to the [LoRaWAN](https://www.lora-wan.de/) forwarded. The data is from the TTN server ([The Thinks Network](https://thethingsnetwork.org/)) received in Amsterdam and cached and then sent to [Ubidots](https://ubidots.com/) forwarded as a web frontend. The data transmission is secured by encryption up to Ubidots. The measured data is displayed in Ubidots and various notifications can be sent by email when measured values are exceeded.
