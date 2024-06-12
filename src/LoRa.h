@@ -716,10 +716,10 @@ void onEvent(ev_t ev) {
               if (rpayload[2] > 0)
               {
                 actconf.tinterval = rpayload[2];
-                TX_INTERVAL = actconf.tinterval * 30;
+                TX_INTERVAL = actconf.tinterval * 60;
                 DebugPrint(3, " Downlink Massage LoRa Send interval: ");
                 DebugPrint(3, String(actconf.tinterval));
-                DebugPrintln(3, " x 30s");
+                DebugPrintln(3, " x 60s");
               }
               else
               {

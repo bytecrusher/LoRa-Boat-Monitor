@@ -381,7 +381,7 @@ void WebServerHandler()
         if(actconf.tinterval != toInteger(value[i])){
           actconf.tinterval = toInteger(value[i]);
           // Set LoRa transmit interval
-          TX_INTERVAL = actconf.tinterval * 30; // Send interval * 30s
+          TX_INTERVAL = actconf.tinterval * 60; // Send interval * 30s
           reboot = true; // Need a reboot
         }
       }

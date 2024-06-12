@@ -110,7 +110,6 @@ RTC_DATA_ATTR uint loraCount = 0;
 
 const int STATE_DELAY = 1000;
 bool reboot = false;
-int loopcounter = 0;
 bool sendedLoraAfterSleepOneTime = false;
 
 bool toggleDisplayStatus = false;
@@ -120,8 +119,6 @@ boolean runDownloadingFilesStatus = false;
 
 long timezone = 1; 
 byte daysavetime = 1;
-
-int fpscounter = 0;
 
 File root;
 
@@ -175,8 +172,8 @@ void enableWiFi(){
         DebugPrint(3, " client to ");
         DebugPrintln(3, cssid);
 
-        u8x8.clearLine(4);
-        u8x8.drawString(0,4, cssid);
+        u8x8.clearLine(5);
+        u8x8.drawString(0,5, cssid);
         u8x8.refreshDisplay();    // Only required for SSD1606/7
 
         // Load connection timeout from configuration (maxccount = (timeout[s] * 1000) / 200[ms])
@@ -190,22 +187,22 @@ void enableWiFi(){
           delay(200);
           DebugPrint(3, ".");
           if (toggleWifiConnectionStatus) {
-            u8x8.drawString(0,5,".");
+            u8x8.drawString(0,6,".");
             toggleWifiConnectionStatus = false;
           } else {
-            u8x8.drawString(0,5," ");
+            u8x8.drawString(0,6," ");
             toggleWifiConnectionStatus = true;
           }
           ccounter ++;
         }
-        u8x8.drawString(0,5," ");
+        u8x8.drawString(0,6," ");
         DebugPrintln(3, "");
         if (WiFi.status() == WL_CONNECTED){
           DebugPrint(3, "WiFi client connected with IP: ");
           DebugPrintln(3, WiFi.localIP());
           DebugPrintln(3, "");
-          u8x8.drawString(0,4,"Connected IP:");
-          u8x8.drawString(0,5, WiFi.localIP().toString().c_str());
+          u8x8.drawString(0,5,"Connected IP:");
+          u8x8.drawString(0,6, WiFi.localIP().toString().c_str());
           u8x8.refreshDisplay();    // Only required for SSD1606/7
           delay(100);
           DebugPrintln(3, "Exit loop");
@@ -581,17 +578,12 @@ void state1(){
     lora_loop();
     static unsigned long lastPrintTime = 0;
     const bool timeCriticalJobs = os_queryTimeCriticalJobs(ms2osticksRound((TX_INTERVAL * 1000)));
-    //DebugPrintln(3, "timeCriticalJobs: " + String(timeCriticalJobs));
-    //DebugPrintln(3, "GOTO_DEEPSLEEP: " + String(GOTO_DEEPSLEEP));
-    //DebugPrintln(3, "LMIC.opmode: " + String(LMIC.opmode));
     if (!timeCriticalJobs && GOTO_DEEPSLEEP == true && !(LMIC.opmode & OP_TXRXPEND)) {
       DebugPrintln(3, "Lora send done. (state1)");
       GOTO_DEEPSLEEP = false;
     }
   }
   //httpServer.handleClient();   // HTTP Server-handler for HTTP update server
-  //delay(20);
-
   //old Voltage Offset: 6.47301
 
   if (state1counter >= 300000) {
@@ -601,16 +593,7 @@ void state1(){
     state1counter = 0;
   }
   state1counter++;
-
   VEdirectSend();
-
-  if(millis() > starttime3 + 250){
-    starttime3 = millis();        // Read actual time
-    //DebugPrintln(3, "fpscounter (read): " + String(fpscounter));
-    fpscounter = 0;
-    readValues(actconf);
-  }
-  
 
   // Read measuring data and display on OLED all 1s
   if(millis() > starttime1 + 1000){
@@ -625,13 +608,8 @@ void state1(){
       WebSerial.loop();
       //DebugPrintln(3, "Update Display.");
     }
-
-    //DebugPrintln(3, "fpscounter: " + String(fpscounter));
-    //fpscounter = 0;
+    readValues(actconf);
   }
-
-  fpscounter++;
-
   VEdirectRead();
   
   // TCP-Server for NMEA0183
@@ -749,8 +727,6 @@ void state1(){
     DebugPrintln(3, "Reboot");
     ESP.restart(); // Restart ESP32
   }
-
-  loopcounter++;
 }
 
 /*
@@ -825,7 +801,7 @@ void setup() {
 
   //##### Start serial 0 and serial 2 connections #####
   Serial.begin(actconf.serspeed);               // NMEA0183 an debug messages
-  //delay(200);
+  delay(200);
   if(String(actconf.envSensor) == "VEdirect-Read" || String(actconf.envSensor) == "VEdirect-Send"){
     Serial1.begin(19200, SERIAL_8N1, RXD1, TXD1); // VE.direct Victron interface (read and write)
   }
@@ -841,8 +817,8 @@ void setup() {
   u8x8.clearDisplay();
   u8x8.drawString(0,0,"NoWa(C)OBP");
   u8x8.drawString(0,1,"mod. by Gunni");
-  u8x8.drawString(11,0,actconf.fversion);
-  u8x8.drawString(0,3,"Connecting to:");
+  u8x8.drawString(10,2,actconf.fversion);
+  u8x8.drawString(0,4,"Connecting to:");
   //u8x8.drawString(0,4,actconf.cssid1);
   u8x8.refreshDisplay();    // Only required for SSD1606/7
 
@@ -928,7 +904,7 @@ void setup() {
   DebugPrintln(3, actconf.lorafrequency);
   DebugPrint(3, "LoRa Channel: ");
   DebugPrintln(3, actconf.lchannel);
-  DebugPrint(3, "Send Period [x30s]: ");
+  DebugPrint(3, "Send Period [x60s]: ");
   DebugPrintln(3, actconf.tinterval);
   DebugPrint(3, "Spreading Factor: ");
   DebugPrintln(3, actconf.spreadf);
@@ -1000,7 +976,7 @@ void setup() {
   DebugPrintln(3, actconf.lorafrequency);
   DebugPrint(3, "LoRa Channel: ");
   DebugPrintln(3, actconf.lchannel);
-  DebugPrint(3, "Send Period [x30s]: ");
+  DebugPrint(3, "Send Period [x60s]: ");
   DebugPrintln(3, actconf.tinterval);
   DebugPrint(3, "Spreading Factor: ");
   DebugPrintln(3, actconf.spreadf);
@@ -1022,7 +998,7 @@ void setup() {
   #endif
 
   // Set send interval
-  TX_INTERVAL = actconf.tinterval * 30;
+  TX_INTERVAL = actconf.tinterval * 60;
 
   // Create task for LoRa code
   xTaskCreatePinnedToCore(

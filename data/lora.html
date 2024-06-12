@@ -24,7 +24,8 @@
                 document.getElementById('address').innerHTML = myObj.Device.LoRaSettings.DeviceAddress;
                 document.getElementById('actualch').innerHTML = myObj.Device.LoRaSettings.ActualChannel;
                 document.getElementById('actualsf').innerHTML = myObj.Device.LoRaSettings.ActualSF;
-                document.getElementById('tinterval').innerHTML = myObj.Device.LoRaSettings.TXInterval * 30;
+                //document.getElementById('tinterval').innerHTML = myObj.Device.LoRaSettings.TXInterval * 60;
+                document.getElementById('tinterval').innerHTML = myObj.Device.LoRaSettings.TXInterval;
                 document.getElementById('slot').innerHTML = myObj.Device.LoRaSettings.TimeSlot;
                 document.getElementById('counter').innerHTML = myObj.Device.LoRaSettings.TXCounter;
 
@@ -141,7 +142,7 @@
                 </td>
 
                 <td>TX Interval:</td>
-                <td><data id='tinterval'></data>s</td>
+                <td><data id='tinterval'></data>m</td>
                 <td></td>
             </tr>
             <tr>

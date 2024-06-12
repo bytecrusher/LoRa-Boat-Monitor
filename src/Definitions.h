@@ -37,7 +37,6 @@ byte rpayload[200];                 // Received LoRa payload over downlink (arra
 long starttime0 = millis();         // Timer0 value for measuring loop
 unsigned long starttime1 = millis();         // Timer1 value for measuring loop
 long starttime2 = millis();         // Timer2 value for measuring loop
-unsigned long starttime3 = millis();         // Timer3 value for measuring loop
 unsigned long loraSendDurationTime = 0;
 float fieldstrength;                // WLAN field strength
 float quality;                      // WLAN quality
@@ -188,7 +187,7 @@ static uint8_t mydata[28];// 13 words + 1 word for array end
 
 // Schedule TX every this many seconds (might become longer due to duty
 // cycle limitations).
-unsigned TX_INTERVAL = actconf.tinterval * 30;        // Send interval
+unsigned TX_INTERVAL = actconf.tinterval * 60;        // Send interval
 bool lora_activ = false;                              // Marker for LoRa is activ
 bool loraEvent_activ = false;
 
