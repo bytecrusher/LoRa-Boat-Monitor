@@ -306,6 +306,9 @@ void WebServerHandler()
       if (vname[i] == "apchannel") {
         actconf.apchannel = toInteger(value[i]);
       }
+      if (vname[i] == "firmwareUpdateUrl") {
+        value[i].toCharArray(actconf.firmwareUpdateUrl, 51);
+      }
       if (vname[i] == "servermode") {
         actconf.serverMode = toInteger(value[i]);
       }
@@ -528,6 +531,7 @@ void WebServerHandler()
     content.replace("%username%", String(actconf.username));
     content.replace("%password%", String(actconf.password));
     content.replace("%SendDataViaWifi%", String(getindex(SendDataViaWifi, String(actconf.SendDataViaWifi))));
+    content.replace("%firmwareUpdateUrl%", String(actconf.firmwareUpdateUrl));
 
     content.replace("%MdsUrl%", String(actconf.MdsUrl));
     content.replace("%MdsApiKey%", String(actconf.MdsApiKey));

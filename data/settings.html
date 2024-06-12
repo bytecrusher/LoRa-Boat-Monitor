@@ -343,6 +343,17 @@
                         </select>
                     </div>
                 </div>
+
+                <div class="row">
+                    <h5 style="margin:0px">Firmware Update (Beta only)</h5>
+                </div>
+                <div class="row">
+                    <div class="firstColumn">Update Server</div>
+                    <div class="secondColumn">
+                        <input type='text' required name='firmwareUpdateUrl' size='20' value='%firmwareUpdateUrl%' maxlength='50' onchange=''>
+                    </div>
+                </div>
+
             </div>
         </div>
 
@@ -724,7 +735,6 @@
         <div class="row" style="padding-top: 10px;">
             <button id='sub' type='submit'>Save Settings</button>
             <button type='button' onclick="window.open('/index.html', '_self');">Back</button>
-            <script>//TODO: change location of back to main.</script>
             <button type='button' id="logoutBtn" onclick="logoutButton()" style="display:none">Logout</button>
         </div>
         <input type='hidden' required name='password' size='20' value='%userpassword%' maxlength='20'>

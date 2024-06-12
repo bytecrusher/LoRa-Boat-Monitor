@@ -38,7 +38,7 @@
 #include <WiFi.h>               // WiFi lib with TCP server and client
 #include <WiFiClient.h>         // WiFi lib for clients
 #include <AsyncTCP.h>           // asynchron TCP lib
-#include <WebSerial.h>
+#include <WebSerial.h>          // Serial loggin as a webpage
 #include <ESPmDNS.h>            // mDNS lib
 #include <Update.h>             // Web Update server
 #include "driver/adc.h"         // adc lib
@@ -46,7 +46,7 @@
 #include <U8x8lib.h>            // OLED Lib
 #include <arduino_lmic.h>       // LoRa Lib, previous lmic.h
 #include <hal/hal.h>            // LoRa Lib
-#include <Wire.h>
+#include <Wire.h>               // Wire Lib
 #include <SPI.h>                // SPI/I2C Lib for OLED and BME280
 #include <Adafruit_Sensor.h>    // BME280
 #include <Adafruit_BME280.h>    // BME280
@@ -65,22 +65,22 @@
 #include "Configuration.h"      // Configuration
 
 configData actconf;             // Actual configuration, Global variable
-                                // Overload with old EEPROM configuration by start. It is necessarry for port and serial speed
+                                // Overload with old EEPROM configuration by start. It is necessary for port and serial speed
                                 // Don't change the position!
 
-#include "Definitions.h"        // Global definitions
-#include "func_myFunctions.h"
-#include "func_webServerHandler.h"   // my lib for handle web server (deliver websites)
-#include "GPS.h"                // GPS parsing functions
-#include "vedirect.h"           // VE.direct lib
-#include "filesystem.h"         // Function for filesystem
-#include "NMEATelegrams.h"      // Function library for NMEA telegrams
-#include "LoRa.h"               // LoRa Lib
-#include "task.h"               // Task for LoRa code
+#include "Definitions.h"            // Global definitions
+#include "func_myFunctions.h"       // Special functions
+#include "func_webServerHandler.h"  // my lib for handle web server (deliver websites)
+#include "GPS.h"                    // GPS parsing functions
+#include "vedirect.h"               // VE.direct lib
+#include "filesystem.h"             // Function for filesystem
+#include "NMEATelegrams.h"          // Function library for NMEA telegrams
+#include "LoRa.h"                   // LoRa Lib
+#include "task.h"                   // Task for LoRa code
 
 // Declarations
 int value;                      // Value from first byte in EEPROM
-int empty;                      // If EEPROM empty without configutation then set to 1 otherwise 0
+int empty;                      // If EEPROM empty without configuration then set to 1 otherwise 0
 configData defconf;             // Definition of default configuration data
 configData oldconf;             // Configuration stucture for old config data in EEPROM
 configData newconf;             // Configuration stucture for new config data in EEPROM

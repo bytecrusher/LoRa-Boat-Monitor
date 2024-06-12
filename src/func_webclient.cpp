@@ -43,7 +43,7 @@ void DownloadFile(const char *fileName, char *fversion)
     size_t fileSize = 0;
 
     const uint16_t port = 80;
-    const char *host = "loraboatmonitorwebserverdata.derguntmar.de";    // TODO: replace against config variable
+    const char *host = actconf.firmwareUpdateUrl;
 
     DebugPrint(3, "Connecting to website: ");
     DebugPrintln(3, String(host));
@@ -62,6 +62,7 @@ void DownloadFile(const char *fileName, char *fversion)
         {
             String headertemp = client2.readStringUntil('\n');
             header += headertemp + "\n";
+            // TODO catch Error 404 from webserver
             if (header == "\r")
             {
                 break;

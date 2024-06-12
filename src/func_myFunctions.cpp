@@ -840,7 +840,7 @@ void writeDisplay() {
   
   // Refresh OLED data
   u8x8.setFont(u8x8_font_chroma48medium8_r);
-  u8x8.drawString(0,0,"LoRa Boat Monitor");
+  u8x8.drawString(0,0,"LoRaBoatMonitor");
   //u8x8.drawString(0,0,"NoWa(C)OBP");
   //u8x8.drawString(11,0,actconf.fversion);
   u8x8.drawString(0,1,"C:");

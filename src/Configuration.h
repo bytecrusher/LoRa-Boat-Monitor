@@ -6,10 +6,10 @@
 // Default configuration
 // Types 'byte' und 'word' doesn't work!
 typedef struct {
-  int valid = 9;                            // Number of configuration (Please change when the structure or values are changed)
+  int valid = 10;                            // Number of configuration (Please change when the structure or values are changed)
   int crypt = 0;                            // Activate for critical webside a password query [0 = off|1 = on]
   char username[31] = "admin";
-  char password[31] = "12345678";           // Password for critical websides (settings, update and reboot)
+  char password[31] = "12345678";           // Password for critical websites (settings, update and reboot)
   char devname[21] = "LoRa Boat Monitor";   // Device name for web configuration
   char crights[29] = "NoWa (C) (mod by Gunni) 2023";       // Copy rights
   char fversion[7] = "V1.06b";               // Firmware version
@@ -36,6 +36,7 @@ typedef struct {
   int serverMode = 0;                       // Used server mode [0|1|2] 0=LoRa (HTTP, JSON, NMEA), 1=NMEA Serial, 2=Demo (Simulation data)
   int serspeed = 115200;                    // Serial speed in [Bd] 8N1 [300|1200|2400|4800|9600|19200|38400|57600|74880|115200]
   int WebSerialDebug = 0;                   // Control Web Serial Debug
+  char firmwareUpdateUrl[50] = "loraboatmonitorwebserverdata.derguntmar.de";  // Url for getting firmware updates from
   int skin = 0;                             // Skin for websides [0|1|2]
 
   // LoRaWAN device, network and session key
