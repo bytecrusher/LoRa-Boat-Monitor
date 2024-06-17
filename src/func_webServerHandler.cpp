@@ -1,6 +1,8 @@
 #include "func_webServerHandler.h"
 
 #include <AsyncElegantOTA.h>    // OTA lib
+#include <HTTPClient.h>
+
 
 //const int relayPin = 25;      // Pin GPIO25, Relay is high activ
 
@@ -675,6 +677,45 @@ void WebServerHandler()
     String content = "";
     transID();
     content = readFile2(LittleFS, "/firmware.html");
+
+    // get Beta version number
+    const uint16_t port = 80;
+    const char *host = actconf.firmwareUpdateUrl;
+    String getLatestBetaVersion = "latestBetaVersion.txt";
+    HTTPClient http;
+
+    Serial.print("[HTTP] begin...\n");
+    String baseUrl = "https://" + (String)host + "/files_for_esp_webserver";
+    String myurl = baseUrl + "/" + (String)getLatestBetaVersion;
+    DebugPrintln(3, myurl);
+    http.begin(myurl);
+
+    Serial.print("[HTTP] GET...\n");
+    int httpCode = http.GET();
+
+    // httpCode will be negative on error
+    if(httpCode > 0) {
+      // HTTP header has been send and Server response header has been handled
+      Serial.printf("[HTTP] GET... code: %d\n", httpCode);
+
+      // file found at server
+      if(httpCode == HTTP_CODE_OK) {
+        String payload = http.getString();
+        Serial.println(payload);
+        content.replace("%serverAvailable%", "Server available");
+        content.replace("%version2%", String(payload));
+        content.replace("%baseUrl%", String(baseUrl));
+      } else if (httpCode == HTTP_CODE_NOT_FOUND) {
+        DebugPrintln(1, "- 404 page not found");
+        content.replace("%serverAvailable%", "Server not available");
+      }
+    } else {
+      Serial.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
+    }
+
+    http.end();
+    // end Beta Version number
+
     content.replace("%header%", getheader(actconf));
     content.replace("%devname%", String(actconf.devname));
     content.replace("%fversion%", String(actconf.fversion));
@@ -1018,6 +1059,22 @@ void WebServerHandler()
   // Firmware update
   AsyncElegantOTA.begin(&httpServer);    // Start ElegantOTA
 
+  httpServer.on("/doUpdate", HTTP_POST,
+    [](AsyncWebServerRequest *request) {},
+    [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data,
+                  size_t len, bool final) {handleDoUpdate(request, filename, index, data, len, final);}
+  );
+
+  #ifdef ESP32
+    Update.onProgress(printProgress);
+  #endif
+
+  httpServer.on("/doUpdateBeta", HTTP_POST,
+    [](AsyncWebServerRequest *request) {},
+    [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data,
+                  size_t len, bool final) {handleDoUpdateBeta(request, filename, index, data, len, final);}
+  );
+
   /*httpServer.on("/update", HTTP_POST, [](AsyncWebServerRequest *request) {
   //httpServer.on("/update", HTTP_POST, []() {
     //httpServer.sendHeader("Connection", "close");
@@ -1112,3 +1169,204 @@ void WebServerHandler()
     
 }
 
+//#include <Updater.h>
+
+#ifdef ESP8266
+#include <Updater.h>
+#include <ESP8266mDNS.h>
+#define U_PART U_FS
+#else
+#include <Update.h>
+#include <ESPmDNS.h>
+#define U_PART U_SPIFFS
+#endif
+
+size_t content_len;
+
+// TODO create new function for downloading beta file and run this funciton (from beta)
+void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
+  DebugPrintln(3, "in handleDoUpdate");
+  if (!index){
+    Serial.println("Update");
+    content_len = request->contentLength();
+    // if filename includes spiffs, update the spiffs partition
+    int cmd = (filename.indexOf("spiffs") > -1) ? U_PART : U_FLASH;
+#ifdef ESP8266
+    Update.runAsync(true);
+    if (!Update.begin(content_len, cmd)) {
+#else
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN, cmd)) {
+#endif
+      Update.printError(Serial);
+    }
+  }
+
+  if (Update.write(data, len) != len) {
+    Update.printError(Serial);
+#ifdef ESP8266
+  } else {
+    Serial.printf("Progress: %d%%\n", (Update.progress()*100)/Update.size());
+#endif
+  }
+
+  if (final) {
+    AsyncWebServerResponse *response = request->beginResponse(302, "text/plain", "Please wait while the device reboots");
+    response->addHeader("Refresh", "20");  
+    response->addHeader("Location", "/");
+    request->send(response);
+    if (!Update.end(true)){
+      Update.printError(Serial);
+    } else {
+      Serial.println("Update complete");
+      Serial.flush();
+      ESP.restart();
+    }
+  }
+}
+
+#include <Arduino.h>
+#include <WiFi.h>
+#include <WiFiMulti.h>
+#include <HTTPClient.h>
+#define USE_SERIAL Serial
+#include <SD.h>
+#include <SD_MMC.h>
+#include <SPI.h>
+WiFiMulti wifiMulti;
+#include <WiFiClientSecure.h>
+WiFiClientSecure client3;
+
+void handleDoUpdateBeta(AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
+  DebugPrintln(3, "in handleDoUpdateBeta");
+  //
+  /*String requestBody;
+  //client3.setInsecure();
+    DebugPrintln(3, "Starting connection to server...");
+    if (!client3.connect("loraboatmonitorwebserverdata.derguntmar.de", 443))
+      DebugPrintln(1, "Connection failed!");
+    else {
+    DebugPrintln(3, "Connected to server!");
+    // Make a HTTP request:
+    //client3.println("GET https://mds-git.derguntmar.de/receiver/receivejson.php HTTP/1.0");
+    //client3.println("Host: mds-git.derguntmar.de");
+    //client3.println("Connection: close");
+    //client3.println();
+
+    client3.println("GET https://loraboatmonitorwebserverdata.derguntmar.de/files_for_esp_webserver/V1.06b/firmware.bin HTTP/1.1");
+    client3.println("Host: loraboatmonitorwebserverdata.derguntmar.de");
+    client3.println("content-length:"+ String(requestBody.length()));
+    client3.println("Connection: close");
+    client3.println();
+    client3.println(requestBody);
+
+    while (client3.connected()) {
+      String line = client3.readStringUntil('\n');
+      if (line == "\r") {
+        DebugPrintln(3, "headers received");
+        break;
+      }
+    }
+    // if there are incoming bytes available
+    // from the server, read them and print them:
+    while (client3.available()) {
+      char c = client3.read();
+      Serial.write(c);
+    }
+
+    client3.stop();
+  }*/
+
+    // wait for WiFi connection
+    //if((wifiMulti.run() == WL_CONNECTED)) {
+      //File file = SD.open("/new_file.txt",FILE_WRITE);
+      File file = LittleFS.open("/firmware.bin",FILE_WRITE);
+        HTTPClient http;
+        uint8_t buff[128] = { 0 };
+        USE_SERIAL.print("[HTTP] begin...\n");
+        // configure server and url
+        //http.begin("http://192.168.0.125",5555);
+        http.begin("https://loraboatmonitorwebserverdata.derguntmar.de/files_for_esp_webserver/V1.06b/firmware.bin");
+        //http.begin("https://loraboatmonitorwebserverdata.derguntmar.de",443);
+        Serial.print("[HTTP] GET...\n");
+        // start connection and send HTTP header
+        int httpCode = http.GET();
+        if(httpCode > 0) {
+            // HTTP header has been send and Server response header has been handled
+            USE_SERIAL.printf("[HTTP] GET... code: %d\n", httpCode);
+            // file found at server
+            if(httpCode == HTTP_CODE_OK) {
+                // get length of document (is -1 when Server sends no Content-Length header)
+                int len = http.getSize();
+                // create buffer for read
+                //uint8_t buff[128] = { 0 };
+                // get tcp stream
+                WiFiClient * stream = http.getStreamPtr();
+                // read all data from server
+                while(http.connected() && (len > 0 || len == -1)) {
+                    // get available data size
+                    size_t size = stream->available();
+                    if(size) {
+                        // read up to 128 byte
+                        int c = stream->readBytes(buff, ((size > sizeof(buff)) ? sizeof(buff) : size));
+                        // write it to Serial
+                        file.write(buff,c);
+                        Serial.write(buff,c);
+                        if(len > 0) {
+                            len -= c;
+                        }
+                    }
+                    delay(1);
+                }
+                USE_SERIAL.println();
+                USE_SERIAL.print("[HTTP] connection closed or file end.\n");
+                file.close();
+                SD.end();
+            }
+        } else {
+            USE_SERIAL.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
+        }
+        http.end();
+    //}
+  //
+  if (!index){
+    Serial.println("Update");
+    //content_len = request->contentLength();
+    // if filename includes spiffs, update the spiffs partition
+    int cmd = (filename.indexOf("spiffs") > -1) ? U_PART : U_FLASH;
+#ifdef ESP8266
+    Update.runAsync(true);
+    if (!Update.begin(content_len, cmd)) {
+#else
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN, cmd)) {
+#endif
+      Update.printError(Serial);
+    }
+  }
+
+  //if (Update.write(data, len) != len) {
+  if (Update.write(buff, len) != len) {
+    Update.printError(Serial);
+#ifdef ESP8266
+  } else {
+    Serial.printf("Progress: %d%%\n", (Update.progress()*100)/Update.size());
+#endif
+  }
+
+  if (final) {
+    AsyncWebServerResponse *response = request->beginResponse(302, "text/plain", "Please wait while the device reboots");
+    response->addHeader("Refresh", "20");  
+    response->addHeader("Location", "/");
+    request->send(response);
+    if (!Update.end(true)){
+      Update.printError(Serial);
+    } else {
+      Serial.println("Update complete");
+      Serial.flush();
+      ESP.restart();
+    }
+  }
+}
+
+void printProgress(size_t prg, size_t sz) {
+  Serial.printf("Progress: %d%%\n", (prg*100)/content_len);
+}

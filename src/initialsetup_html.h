@@ -137,7 +137,7 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
             /*height:20px;
             padding:15px 0 0 0;*/
             margin:0;
-            background:none;
+            /*background:none;*/
             border: 0;
             border-radius: 15px;
             text-align: left;

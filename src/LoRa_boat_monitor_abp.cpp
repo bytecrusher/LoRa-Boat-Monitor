@@ -766,9 +766,9 @@ void setup() {
   actconf = loadEEPROMConfig(); // Overload with old EEPROM configuration by start. It is necessarry for serspeed
 
   // If the firmware version in EEPROM different to defconf then save the new version in EEPROM
-  if(String(actconf.fversion) != String(defconf.fversion)){
+  if(actconf.fversion != defconf.fversion){
     String fver = defconf.fversion;
-    fver.toCharArray(actconf.fversion, 6);
+    fver.toCharArray(actconf.fversion, 7);
     saveEEPROMConfig(actconf);
   }
 
@@ -855,10 +855,9 @@ void setup() {
     DebugPrintln(3, "EEPROM config present");
   }
 
-  // Loading EEPROM config
-  DebugPrintln(3, "Loading actual EEPROM config");
-  actconf = loadEEPROMConfig();
-  DebugPrintln(3, "");
+  // EEPROM config Version
+  DebugPrintln(3, "actconf.fversion: " + String(actconf.fversion));
+  DebugPrintln(3, "defconf.fversion: " + String(defconf.fversion));
 
   DebugPrint(3, "Sensor ID: ");
   DebugPrintln(3, actconf.deviceID);

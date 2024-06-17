@@ -85,7 +85,7 @@
         databeta = new Blob([this.response], { type: 'application/octet-stream' });
 
         var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/update', true);
+        xhr.open('POST', '/doUpdateBeta', true);
         var formData = new FormData();
 
         var hash = md5(databeta)
@@ -97,14 +97,17 @@
           alert('Update successful!');
           console.log('File uploading completed');
         };
-        /*var r = confirm('Update firmware?');
+        var r = confirm('Update firmware?');
         if (r == true) {
           console.log('File uploading started');
           xhr.send(formData);
         }
         else {
           console.log('File uploading stoped');
-        }*/
+        }
+      } else if (this.status == 404) {
+        alert('File not found');
+        console.log('File not found');
       }
     };
 
@@ -211,13 +214,32 @@
     function send_beta() {
       var link2 =  document.upform2.firmware2.value;
       xmlhttp3.open('GET', link2, true);
+      //xmlhttp3.withCredentials = true;
+      //xmlhttp3.setRequestHeader("Content-Type", "application/html");
+      //xmlhttp3.send({ 'request': "authentication token" });
+      
+      xmlhttp3.getResponseHeader;
       // Action after uploading
       xmlhttp3.onload = function (e) {
+        if(xmlhttp3.status == 404) {
+          throw new Error(url + ' replied 404');
+        }
         alert('Update successful!');
         console.log('File uploading completed');
         document.getElementById('loader').style.display = 'none';
         document.getElementById('myDiv').style.display = 'block';
       };
+
+      xmlhttp3.onloadend = function() {
+      if(xmlhttp3.status == 404) 
+        //throw new Error(' replied 404');
+        console.log('Error 404');
+      }
+
+      xmlhttp3.onerror = function(e) {
+        console.log('Error' + e);
+      }
+
       var r = confirm('Please download your config before update the firmware.\nDownload and Install Beta Firmware update?');
       if (r == true) {
         console.log('File uploading started');
@@ -279,17 +301,21 @@
 
     <form name='upform2' action='/update' method='post' enctype='multipart/form-data'>Beta Firmware from derguntmar.de
       <p>
-        <input type='text' name='firmware2' size='20' value='http://loraboatmonitorwebserverdata.derguntmar.de/files_for_esp_webserver/V1.0x/firmware.bin' onchange=''> Version:
-        <input type='text' name='version2' size='5' value='' maxlength='20'>
+        <input type='text' name='firmware2' size='20' value='%baseUrl%/%version2%/firmware.bin' onchange=''> Version:
+        <input type='text' name='version2' size='5' value='%version2%' maxlength='20'> ( %serverAvailable% )
       <p>
         <font size='2'><data id='info'></data></font>
     </form>
     <button type='submit' id='sub3' onclick='send_beta()'>Update Beta Firmware</button>
     <hr>
-    <b>Info:</b> A message is displayed afer successful update.
+    <b>Info:</b> A message is displayed after successful update.
     <hr>
     <button onclick="window.open('/', '_self');">Back</button>
   </div>
+
+  <form method='POST' action='/doUpdate' enctype='multipart/form-data'><input type='file' name='update' value="https://loraboatmonitorwebserverdata.derguntmar.de/files_for_esp_webserver/V1.06b/firmware.bin"><input type='submit' value='Update'></form>
+
+
 </body>
 
 </html>
