@@ -85,13 +85,12 @@
         databeta = new Blob([this.response], { type: 'application/octet-stream' });
 
         var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/doUpdateBeta', true);
+        xhr.open('POST', '/doUpdate', true);
         var formData = new FormData();
 
         var hash = md5(databeta)
         formData.append("MD5",hash);
-        //formData.append('file', data, 'firmware.bin');
-        formData.append('firmware', databeta, 'firmware');
+        formData.append('update', databeta, 'update');
         // Action after uploading
         xhr.onload = function (e) {
           alert('Update successful!');
@@ -313,9 +312,7 @@
     <button onclick="window.open('/', '_self');">Back</button>
   </div>
 
-  <form method='POST' action='/doUpdate' enctype='multipart/form-data'><input type='file' name='update' value="https://loraboatmonitorwebserverdata.derguntmar.de/files_for_esp_webserver/V1.06b/firmware.bin"><input type='submit' value='Update'></form>
-
-
+  <form method='POST' action='/doUpdate' enctype='multipart/form-data'><input type='file' name='update' id='myupload' value="https://loraboatmonitorwebserverdata.derguntmar.de/files_for_esp_webserver/V1.06b/firmware.bin"><input type='submit' value='Update'></form>
 </body>
 
 </html>

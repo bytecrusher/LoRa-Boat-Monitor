@@ -56,7 +56,6 @@ extern uint32_t getLMICseqnoUp();
 
 void WebServerHandler();
 void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final);
-void handleDoUpdateBeta(AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final);
 void printProgress(size_t prg, size_t sz);
 
 #endif
