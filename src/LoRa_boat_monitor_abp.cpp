@@ -59,6 +59,7 @@
 #include "FS.h"                 // FS lib
 #include <LittleFS.h>           // Lib for LittleFS filesystem
 #include <time.h>               // Time lib
+#include <new>
 #include "func_ftpclient.h"     // my lib for FTP connection (getting files for webserver)
 #include "func_webclient.h"     // my lib for webclient connection (getting files for webserver)
 #include <stdint.h>
@@ -101,8 +102,6 @@ Ticker Timer2;                  // Declare Timer for relay ontime
 Ticker Timer3;                  // Declare Timer for NMEA sending
 Ticker Timer4;                  // Declare Timer for Lora sending
 
-int state1counter = 0;
-
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP  actconf.standbySleepDuration       /* Time ESP32 will go to sleep */
 RTC_DATA_ATTR int bootCount = 0;
@@ -116,6 +115,10 @@ bool toggleDisplayStatus = false;
 long LoraSendDurationSeconds = 0;
 boolean runDownloadingFiles = false;
 boolean runDownloadingFilesStatus = false;
+bool wifiServicesInitialized = false;
+
+const unsigned long MDS_UPLOAD_INTERVAL_MS = 300000UL;
+unsigned long lastMdsUploadMillis = 0;
 
 long timezone = 1; 
 byte daysavetime = 1;
@@ -127,8 +130,69 @@ void IRAM_ATTR onTimer(){
   sendLoraQueue = true;
 }
 
+void initWiFiServicesOnce() {
+  if (wifiServicesInitialized) {
+    return;
+  }
+
+  WebServerHandler();
+
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, PUT");
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "content-type");
+
+  httpServer.begin();
+  server.begin();
+  Timer3.attach_ms(SendPeriod, sendNMEA);
+
+  wifiServicesInitialized = true;
+}
+
+void maybeSendDataViaWifi() {
+  if (String(actconf.SendDataViaWifi) != "Yes") {
+    return;
+  }
+
+  const unsigned long now = millis();
+  if ((lastMdsUploadMillis == 0) || (now - lastMdsUploadMillis >= MDS_UPLOAD_INTERVAL_MS)) {
+    sendToMDS(actconf);
+    lastMdsUploadMillis = now;
+  }
+}
+
+void disableWiFiForSleep() {
+  Timer3.detach();
+  server.stop();
+  WiFi.disconnect(true, true);
+  WiFi.mode(WIFI_OFF);
+}
+
+void prepareForStandbySleep() {
+  DebugPrintln(3, "Prepare standby sleep");
+
+  // Re-arm wake sources right before sleep so runtime config changes
+  // like standbySleepDuration apply without needing a reboot.
+  esp_sleep_enable_timer_wakeup((TIME_TO_SLEEP * 60) * uS_TO_S_FACTOR);
+  rtc_gpio_pullup_en(GPIO_NUM_39);
+  esp_sleep_enable_ext0_wakeup(GPIO_NUM_39, 0);
+
+  if (String(actconf.WifiStandbyMode) == "Yes") {
+    disableWiFiForSleep();
+  }
+
+  if (String(actconf.relay) == "2" || actconf.relay == 2) {
+    UBLOX_GPS_Shutdown();
+    delay(100);
+  }
+
+  digitalWrite(relayPin, LOW);
+  u8x8.clearDisplay();
+  u8x8.setPowerSave(1);
+}
+
 void enableWiFi(){
   //adc_power_on();
+  hname = String(actconf.hostname) + "-" + String(actconf.deviceID);
   WiFi.disconnect(false);  // Reconnect the network
   WiFi.hostname(hname);   // Provide the hostname
   //WiFi.setHostname (hname.c_str()); /*ESP32 hostname set*/
@@ -144,9 +208,7 @@ void enableWiFi(){
       DebugPrintln(3, actconf.maxconnections);
       //WiFi.mode(WIFI_AP_STA);
       WiFi.mode(WIFI_MODE_APSTA);
-      //WiFi.softAP(actconf.sssid, actconf.spassword, actconf.apchannel, false, actconf.maxconnections);
-      WiFi.softAP(actconf.sssid, actconf.spassword);
-      hname = String(actconf.hostname) + "-" + String(actconf.deviceID);
+      WiFi.softAP(actconf.sssid, actconf.spassword, actconf.apchannel, false, actconf.maxconnections);
       
       DebugPrint(3, "Host name: ");
       DebugPrintln(3, hname);
@@ -156,15 +218,17 @@ void enableWiFi(){
       
       for (int i=1; i < 4; i++) {
         if (i == 1) {
-          strncpy(cssid, actconf.cssid1, 31);
-          strncpy(cpassword, actconf.cpassword1, 31);
+          strncpy(cssid, actconf.cssid1, sizeof(cssid) - 1);
+          strncpy(cpassword, actconf.cpassword1, sizeof(cpassword) - 1);
         } else if (i == 2) {
-          strncpy(cssid, actconf.cssid2, 31);
-          strncpy(cpassword, actconf.cpassword2, 31);
+          strncpy(cssid, actconf.cssid2, sizeof(cssid) - 1);
+          strncpy(cpassword, actconf.cpassword2, sizeof(cpassword) - 1);
         } else if (i == 3) {
-          strncpy(cssid, actconf.cssid3, 31);
-          strncpy(cpassword, actconf.cpassword3, 31);
+          strncpy(cssid, actconf.cssid3, sizeof(cssid) - 1);
+          strncpy(cpassword, actconf.cpassword3, sizeof(cpassword) - 1);
         }
+        cssid[sizeof(cssid) - 1] = '\0';
+        cpassword[sizeof(cpassword) - 1] = '\0';
 
         // Connect to WiFi network
         DebugPrint(3, "Connecting WiFi #");
@@ -232,17 +296,11 @@ void enableWiFi(){
 	    configTime(3600*timezone, daysavetime*3600, "time.nist.gov", "0.pool.ntp.org", "1.pool.ntp.org");
 	    struct tm tmstruct ;
       tmstruct.tm_year = 0;
-      getLocalTime(&tmstruct, 5000);
+	      getLocalTime(&tmstruct, 5000);
       DebugPrintln(3, "\nNow is : " + String((tmstruct.tm_year)+1900) + "-" + String(( tmstruct.tm_mon)+1) + "-" + String(tmstruct.tm_mday) + " " + String(tmstruct.tm_hour) + ":" + String(tmstruct.tm_min) + ":" + String(tmstruct.tm_sec));
 
-      WebServerHandler();
+      initWiFiServicesOnce();
 
-      // Sart update server
-      //DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "http://loraboatmonitorwebserverdata.derguntmar.de");
-      DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
-      DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, PUT");
-      DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "content-type");
-      httpServer.begin();
       DebugPrint(3, "HTTP Update Server started at port: ");
       DebugPrintln(3, actconf.httpport);
       DebugPrint(3, "Use this URL: ");
@@ -252,7 +310,6 @@ void enableWiFi(){
       DebugPrintln(3, "");
       
       // Start the NMEA TCP server
-      server.begin();
       DebugPrint(3, "NMEA-Server started at port: ");
       DebugPrintln(3, actconf.dataport);
       // Print the IP address
@@ -265,7 +322,6 @@ void enableWiFi(){
         DebugPrintln(3, WiFi.softAPIP());
       };
       DebugPrintln(3, "");
-      Timer3.attach_ms(SendPeriod, sendNMEA);    // Data transmission timer for NMEA
 
       // TCP-Server for NMEA0183
       //client = server.available();// Check if a client is connected
@@ -311,60 +367,63 @@ void VEdirectRead()
   boolean debugPrintValues = false;
 // Read VE.direct values (BMV-712 tested)
   if (String(actconf.envSensor) == "VEdirect-Read") {
-    int rawvoltage = 0;
-    char rc;
-    String receivedChars;
+    static String receivedLine;
 
-    if (Serial1.available()) {
-      rc = Serial1.read();
-      receivedChars += String(rc);
-      // Read actual voltage
-      if (receivedChars == "V"){
-        rawvoltage = Serial1.parseInt();
-        if(rawvoltage > 712){
-          vedirectVoltage = rawvoltage / 1000.0;
-          if (debugPrintValues) {
-            DebugPrintln(3, "VE.direct V: " + String(vedirectVoltage, 3));
-            
+    while (Serial1.available()) {
+      const char rc = char(Serial1.read());
+
+      if (rc == '\r') {
+        continue;
+      }
+
+      if (rc == '\n') {
+        receivedLine.trim();
+
+        const int separator = receivedLine.indexOf('\t');
+        if (separator > 0) {
+          const String field = receivedLine.substring(0, separator);
+          const String value = receivedLine.substring(separator + 1);
+          const long parsedValue = value.toInt();
+
+          if (field == "V" && parsedValue > 712) {
+            vedirectVoltage = parsedValue / 1000.0;
+            if (debugPrintValues) {
+              DebugPrintln(3, "VE.direct V: " + String(vedirectVoltage, 3));
+            }
           }
-          receivedChars = "";
+          else if (field == "I") {
+            vedirectCurrent = parsedValue / 1000.0;
+            if (debugPrintValues) {
+              DebugPrintln(3, "VE.direct I: " + String(vedirectCurrent));
+            }
+          }
+          else if (field == "P") {
+            vedirectPower = parsedValue;
+            if (debugPrintValues) {
+              DebugPrintln(3, "VE.direct P: " + String(vedirectPower));
+            }
+          }
+          else if (field == "SOC") {
+            vedirectSOC = parsedValue;
+            if (debugPrintValues) {
+              DebugPrintln(3, "VE.direct SOC: " + String(vedirectSOC));
+            }
+          }
+          else if (field == "T") {
+            vedirectTemp = parsedValue / 10.0;
+            if (debugPrintValues) {
+              DebugPrintln(3, "VE.direct T: " + String(vedirectTemp));
+            }
+          }
         }
+
+        receivedLine = "";
       }
-      // Read actual current
-      if (receivedChars == "I"){
-        vedirectCurrent = Serial1.parseInt() / 1000.0;
-        if (debugPrintValues) {
-          DebugPrintln(3, "VE.direct I: " + String(vedirectCurrent));
+      else {
+        receivedLine += rc;
+        if (receivedLine.length() > 80) {
+          receivedLine = "";
         }
-        receivedChars = "";
-      }
-      // Read actual power
-      if (receivedChars == "P"){
-        vedirectPower = Serial1.parseInt();
-        if (debugPrintValues) {
-          DebugPrintln(3, "VE.direct P: " + String(vedirectPower));
-        }
-        receivedChars = "";
-      }
-      // Read actual SOC
-      if (receivedChars == "S"){
-        vedirectSOC = Serial1.parseInt();
-        if (debugPrintValues) {
-          DebugPrintln(3, "VE.direct SOC: " + String(vedirectSOC));
-        }
-        receivedChars = "";
-      }
-      // Read actual temperature
-      if (receivedChars == "T"){
-        vedirectTemp = Serial1.parseInt() / 10.0;
-        if (debugPrintValues) {
-          DebugPrintln(3, "VE.direct T: " + String(vedirectTemp));
-        }
-        receivedChars = "";
-      }
-      // If line end then clear lina data
-      if (rc == '\n'){
-        receivedChars = "";
       }
     }
   }
@@ -441,11 +500,15 @@ void lora_init() {
   if (RTC_LMIC.seqnoUp != 0)    // TODO: only for OTAA mode?
   {
     LoadLMICFromRTC();
+    DebugPrintln(3, "LMIC.seqnoUp restored from RTC: " + String(LMIC.seqnoUp));
+  }
+  else
+  {
+    DebugPrintln(3, "LMIC.seqnoUp: " + String(LMIC.seqnoUp));
+    LMIC.seqnoUp = actconf.fcnt;
+    DebugPrintln(3, "After LMIC.seqnoUp = actconf.fcnt: " + String(LMIC.seqnoUp));
   }
 
-  DebugPrintln(3, "LMIC.seqnoUp: " + String(LMIC.seqnoUp));
-  LMIC.seqnoUp = actconf.fcnt;
-  DebugPrintln(3, "After LMIC.seqnoUp = actconf.fcnt: " + String(LMIC.seqnoUp));
   DebugPrintln(3, "LMIC.seqnoUp: " + String(LMIC.seqnoUp));
   DebugPrintln(3, "actconf.fcnt: " + String(actconf.fcnt));
 
@@ -471,7 +534,6 @@ void state0(){
   if(machine_state0_executeOnce){
     DebugPrintln(3, " ");
     DebugPrintln(3, "state0 once");
-    // disable gps
 
     u8x8.clearDisplay();
     u8x8.setFont(u8x8_font_chroma48medium8_r);
@@ -487,6 +549,13 @@ void state0(){
     if (String(actconf.WifiStandbyMode) == "Yes") {
       enableWiFi();
     }
+    else {
+      disableWiFiForSleep();
+    }
+
+    // In standby keep the relay off unless a timed downlink action turns it on.
+    digitalWrite(relayPin, LOW);
+
     lora_init();
     machine_state0_executeOnce = false;
     machine_state1_executeOnce = true;
@@ -512,6 +581,7 @@ void state0(){
       LoraWANPrintLMICOpmode();
       SaveLMICToRTC(TX_INTERVAL);
       delay(500); // give some time to save.
+      prepareForStandbySleep();
       GoDeepSleep();
     } else if (lastPrintTime + 2000 < millis()) {
       if (toggleDisplayStatus) {
@@ -530,14 +600,21 @@ void state0(){
         DebugPrintln(3, "seconds >= 50");
         SaveLMICToRTC(TX_INTERVAL);
         delay(500);
+        prepareForStandbySleep();
         GoDeepSleep();
       }
     }
-  }
-  if (String(actconf.WifiStandbyMode) == "Yes") {
-    if (String(actconf.SendDataViaWifi) == "Yes") {
-      sendToMDS(actconf);
+  } else {
+    // Standby must still enter deep sleep even when LoRa is disabled.
+    if (String(actconf.WifiStandbyMode) == "Yes") {
+      maybeSendDataViaWifi();
     }
+    prepareForStandbySleep();
+    GoDeepSleep();
+  }
+
+  if (String(actconf.WifiStandbyMode) == "Yes") {
+    maybeSendDataViaWifi();
   }
 }
 
@@ -586,13 +663,7 @@ void state1(){
   //httpServer.handleClient();   // HTTP Server-handler for HTTP update server
   //old Voltage Offset: 6.47301
 
-  if (state1counter >= 300000) {
-    if (String(actconf.SendDataViaWifi) == "Yes") {
-      sendToMDS(actconf);
-    }
-    state1counter = 0;
-  }
-  state1counter++;
+  maybeSendDataViaWifi();
   VEdirectSend();
 
   // Read measuring data and display on OLED all 1s
@@ -619,8 +690,9 @@ void state1(){
 
   //DebugPrint(3, "client.connected(): " + String(client.connected()));
   //DebugPrintln(3, ", client.available(): " + String(client.available()));
-  // While TCP client is connected or Serial Mode is active
-  while ((client.connected() && !client.available()) || (int(actconf.serverMode) == 1)) {
+  // Only keep this loop for active TCP clients; serial mode must return to loop()
+  // so standby/alarm state changes are reevaluated continuously.
+  while (client.connected() && !client.available()) {
     //DebugPrint(3, "While client connected.");
     //httpServer.handleClient();      // HTTP Server-handler for HTTP update server
 
@@ -748,47 +820,49 @@ void print_wakeup_reason(){
 }
 
 void setup() {
-  // Read the first byte from the EEPROM
-  EEPROM.begin(sizeEEPROM);
-  value = EEPROM.read(cfgStart);
-  EEPROM.end();
-  // If the fist Byte not identical to the first value in the default configuration then saving a default configuration in EEPROM.
-  // Means if the EEPROM empty then saving a default configuration.
-  if(value == defconf.valid){
-    empty = 0;                  // Marker for configuration is present
-  }
-  else{
-    saveEEPROMConfig(defconf);
-    empty = 1;                  // Marker for configuration is missing
-  }
-
   // Loading EEPROM configuration
   actconf = loadEEPROMConfig(); // Overload with old EEPROM configuration by start. It is necessarry for serspeed
 
-  // If the firmware version in EEPROM different to defconf then save the new version in EEPROM
-  if(actconf.fversion != defconf.fversion){
+  if (actconf.valid == defconf.valid) {
+    empty = 0;                  // Marker for configuration is present
+    if (!hasEEPROMConfigHeader()) {
+      saveEEPROMConfig(actconf); // Migrate legacy raw layout to headered layout
+    }
+  }
+  else{
+    saveEEPROMConfig(defconf);
+    actconf = defconf;
+    empty = 1;                  // Marker for configuration is missing
+  }
+
+  // Rebuild network servers with the persisted ports before first use.
+  new (&httpServer) AsyncWebServer(actconf.httpport);
+  new (&server) WiFiServer(actconf.dataport);
+
+  // If the firmware version in EEPROM is different to the default config,
+  // only update the stored version string and preserve the rest of the config.
+  if(strcmp(actconf.fversion, defconf.fversion) != 0){
     String fver = defconf.fversion;
-    fver.toCharArray(actconf.fversion, 7);
+    fver.toCharArray(actconf.fversion, sizeof(actconf.fversion));
     saveEEPROMConfig(actconf);
   }
 
-  if (actconf.WebSerialDebug == 1) {
-    WebSerial.begin(&httpServer);
+  WebSerial.begin(&httpServer);
 
-    /* Attach Message Callback */
-    WebSerial.onMessage([&](uint8_t *data, size_t len) {
-      DebugPrintln(3, "Received " + String(len) + " bytes from WebSerial: ");
-      //Serial.write(data, len);
-      //WebSerial.write(data, len);
-      //DebugPrint(3, "Received Data: ");
-      String d = "";
-      for(size_t i=0; i < len; i++){
-        d += char(data[i]);
-      }
-      
-      DebugPrintln(3, "Received Data: " + String(d));
-    });
-  }
+  /* Attach Message Callback */
+  WebSerial.onMessage([&](uint8_t *data, size_t len) {
+    if (actconf.WebSerialDebug != 1) {
+      return;
+    }
+
+    DebugPrintln(3, "Received " + String(len) + " bytes from WebSerial: ");
+    String d = "";
+    for(size_t i=0; i < len; i++){
+      d += char(data[i]);
+    }
+
+    DebugPrintln(3, "Received Data: " + String(d));
+  });
 
   //##### Start OLED #####
   u8x8.begin();
@@ -1020,10 +1094,8 @@ void setup() {
   First we configure the wake up source
   We set our ESP32 to wake up every 5 seconds
   */
-  esp_sleep_enable_timer_wakeup((TIME_TO_SLEEP * 60) * uS_TO_S_FACTOR);
-  //DebugPrintln(3, "Setup ESP32 to sleep for every " + String(TIME_TO_SLEEP) + " Seconds");
-
   if (String(actconf.standbyMode) == "On") {
+    esp_sleep_enable_timer_wakeup((TIME_TO_SLEEP * 60) * uS_TO_S_FACTOR);
     rtc_gpio_pullup_en(GPIO_NUM_39);
     esp_sleep_enable_ext0_wakeup(GPIO_NUM_39,0);
   }

@@ -553,8 +553,6 @@ void do_send(osjob_t *j)
 
     //        flashLED(100);  // Flash white LED on LoRa board
     loraSendDurationTime = millis();
-    actconf.fcnt = LMIC.seqnoUp;
-    saveEEPROMConfig(actconf);
     LMIC_setTxData2(1, mydata, sizeof(mydata) - 1, 0);
     DebugPrintln(3, "Packet queued");
   }
@@ -694,8 +692,8 @@ void onEvent(ev_t ev) {
 
               // Byte 0, set relay time (Relay on)
               relaytimer = rpayload[0];
-              relayTimerInterrupt(); // Activate relay timer
-              actconf.relay = 1;
+              actconf.relay = (relaytimer > 0) ? 1 : 0;
+              digitalWrite(relayPin, (relaytimer > 0) ? HIGH : LOW);
               DebugPrint(3, " Downlink Massage Relay: ");
               DebugPrint(3, String(relaytimer));
               DebugPrintln(3, " x 5min");
@@ -889,7 +887,7 @@ void SaveLMICToRTC(int deepsleep_sec)
     RTC_LMIC = LMIC;
 
     // save LMIC counter to config.
-    actconf.fcnt = LMIC.seqnoUp++;
+    actconf.fcnt = LMIC.seqnoUp;
     saveEEPROMConfig(actconf);
 
     // ESP32 can't track millis during DeepSleep and no option to advanced millis after DeepSleep.
@@ -939,6 +937,7 @@ void GoDeepSleep()
   DebugPrintln(3, "Go DeepSleep");
   PrintRuntime();
   Serial.flush();
+  Serial2.flush();
   esp_deep_sleep_start();
 }
 

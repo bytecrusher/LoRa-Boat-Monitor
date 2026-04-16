@@ -14,6 +14,7 @@ extern String getheader(configData actconf);
 extern configData actconf;
 extern int resetESP;
 extern boolean runDownloadingFiles;
+extern boolean runDownloadingFilesStatus;
 extern String formatfs(fs::FS &fs);
 extern configData defconf;
 extern int slot;

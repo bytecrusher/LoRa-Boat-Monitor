@@ -1,6 +1,52 @@
 #include "func_myFunctions.h"
 #include <Configuration.h>
 
+namespace {
+struct ConfigStorageHeader {
+  uint32_t magic;
+  uint16_t version;
+  uint16_t length;
+  uint32_t checksum;
+};
+
+constexpr uint32_t CONFIG_STORAGE_MAGIC = 0x43464731UL;  // "CFG1"
+constexpr uint16_t CONFIG_STORAGE_VERSION = 1;
+
+int configHeaderStart() {
+  return cfgStart - int(sizeof(ConfigStorageHeader));
+}
+
+uint32_t calculateConfigChecksum(const uint8_t *data, size_t len) {
+  uint32_t hash = 2166136261UL;
+  for (size_t i = 0; i < len; ++i) {
+    hash ^= data[i];
+    hash *= 16777619UL;
+  }
+  return hash;
+}
+
+bool readConfigStorageHeader(ConfigStorageHeader &header) {
+  if (configHeaderStart() < 0) {
+    return false;
+  }
+  EEPROM.get(configHeaderStart(), header);
+
+  return header.magic == CONFIG_STORAGE_MAGIC &&
+         header.version == CONFIG_STORAGE_VERSION &&
+         header.length > 0 &&
+         header.length <= sizeof(configData);
+}
+
+void flushSerial2UntilSentenceStart() {
+  int nextByte = -1;
+  while ((nextByte = Serial2.read()) >= 0) {
+    if (nextByte == '$') {
+      break;
+    }
+  }
+}
+}  // namespace
+
 // Debugging functions
 void DebugPrintln(int type, const char* x){
   if(type <= actconf.debug){
@@ -177,7 +223,9 @@ void eraseEEPROMConfig(configData cfg) {
   // Reset EEPROM bytes to '0' for the length of the data structure
   //noInterrupts();                       // Stop all interrupts important for writing in EEPROM
   EEPROM.begin(sizeEEPROM);
-  for (int i = cfgStart ; i < sizeof(cfg) ; i++) {
+  const int eraseStart = max(0, configHeaderStart());
+  const int eraseEnd = cfgStart + sizeof(cfg);
+  for (int i = eraseStart; i < eraseEnd; i++) {
     EEPROM.write(i, 0);
   }
   delay(200);
@@ -189,7 +237,15 @@ void eraseEEPROMConfig(configData cfg) {
 void saveEEPROMConfig(configData cfg) {
   // Save configuration from RAM into EEPROM
   //noInterrupts();                       // Stop all interrupts important for writing in EEPROM
+  const ConfigStorageHeader header = {
+    CONFIG_STORAGE_MAGIC,
+    CONFIG_STORAGE_VERSION,
+    uint16_t(sizeof(configData)),
+    calculateConfigChecksum(reinterpret_cast<const uint8_t*>(&cfg), sizeof(configData))
+  };
+
   EEPROM.begin(sizeEEPROM);
+  EEPROM.put(configHeaderStart(), header);
   EEPROM.put( cfgStart, cfg );
   delay(200);
   EEPROM.commit();                      // Only needed for ESP8266 to get data written
@@ -200,11 +256,35 @@ void saveEEPROMConfig(configData cfg) {
 
 configData loadEEPROMConfig() {
   // Loads configuration from EEPROM into RAM
-  configData cfg;
+  configData cfg = configData();
+  ConfigStorageHeader header;
   EEPROM.begin(sizeEEPROM);
-  EEPROM.get( cfgStart, cfg );
+  if (readConfigStorageHeader(header)) {
+    for (uint16_t i = 0; i < header.length; ++i) {
+      reinterpret_cast<uint8_t*>(&cfg)[i] = EEPROM.read(cfgStart + i);
+    }
+    EEPROM.end();
+
+    const uint32_t checksum = calculateConfigChecksum(reinterpret_cast<const uint8_t*>(&cfg), header.length);
+    if (checksum == header.checksum) {
+      return cfg;
+    }
+
+    DebugPrintln(1, "EEPROM config header checksum mismatch, trying legacy layout");
+    EEPROM.begin(sizeEEPROM);
+  }
+
+  EEPROM.get(cfgStart, cfg);
   EEPROM.end();
   return cfg;
+}
+
+bool hasEEPROMConfigHeader() {
+  ConfigStorageHeader header;
+  EEPROM.begin(sizeEEPROM);
+  const bool hasHeader = readConfigStorageHeader(header);
+  EEPROM.end();
+  return hasHeader;
 }
 
 //**************************************************************************************
@@ -651,12 +731,13 @@ void readValues(configData myactconf) {
     
     // Analog input 0...3.3V => 0...33V => 0...4096
     if (String(myactconf.envSensor) != "VEdirect-Read") {
+      const int analogVoltageRaw = analogRead(ANALOG_IN);
       if (debugVEdirect) {
         DebugPrint(3, "Voltage = ");
       }
-      voltage = myactconf.a2vslope * myactconf.a2vslope * analogRead(ANALOG_IN) + myactconf.a1vslope * analogRead(ANALOG_IN) + myactconf.voffset;
+      voltage = myactconf.a2vslope * myactconf.a2vslope * analogVoltageRaw + myactconf.a1vslope * analogVoltageRaw + myactconf.voffset;
       if (debugVEdirect) {
-        DebugPrint(3, analogRead(ANALOG_IN));
+        DebugPrint(3, analogVoltageRaw);
         DebugPrintln(3, " dig");
       }
     }
@@ -683,8 +764,9 @@ void readValues(configData myactconf) {
       DebugPrint(3, "Tank1 = ");
     }
     // Analog input 0...3.3V => 0...33V => 0...4096
-    tank1 = 3.3 / 4096 * analogRead(TANK1_IN);
-    tank1adc = analogRead(TANK1_IN);  // real adc value
+    const int rawTank1 = analogRead(TANK1_IN);
+    tank1 = 3.3 / 4096 * rawTank1;
+    tank1adc = rawTank1;  // real adc value
     uint16_t sensorMin = 0;
     uint16_t sensorMax = 3674;  // max value without Resistor.
     tank1adc = map(tank1adc, sensorMin, sensorMax, 0, 4096);
@@ -715,8 +797,9 @@ void readValues(configData myactconf) {
       DebugPrint(3, "Tank2 = ");
     }
     // Analog input 0...3.3V => 0...33V => 0...4096
-    tank2 = 3.3 / 4096 * analogRead(TANK2_IN);
-    tank2adc = analogRead(TANK2_IN);  // real adc value
+    const int rawTank2 = analogRead(TANK2_IN);
+    tank2 = 3.3 / 4096 * rawTank2;
+    tank2adc = rawTank2;  // real adc value
     // apply the calibration to the sensor reading
     //uint16_t sensor2Min = 0;
     //uint16_t sensor2Max = 3674;
@@ -957,13 +1040,28 @@ void readGPSValues(configData myactconf) {
     DebugPrintln(3, "Timer1");
   }
   rmc_finish = false;
-  // Special hack to restart the hanging serial 2 port
+  const unsigned long gpsWaitStart = millis();
+  unsigned long lastRestartAttempt = 0;
+  // Special hack to restart the hanging serial 2 port.
+  // Bound the wait time so a missing/sleeping GPS cannot block forever.
   while(!Serial2.available()){
     while(Serial2.read() >= 0);  // Clear read buffer
-    Serial2.end();
-    delay(200);
-    Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
-    delay(200);
+
+    if (millis() - gpsWaitStart >= 1500) {
+      if (debugGPS) {
+        DebugPrintln(3, "GPS timeout waiting for serial data");
+      }
+      flag2 = false;
+      return;
+    }
+
+    if (millis() - lastRestartAttempt >= 400) {
+      Serial2.end();
+      delay(50);
+      Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
+      lastRestartAttempt = millis();
+    }
+    delay(10);
   }
   // Read serial 2 if data coming and RMC not finished and no LoRa telegram sending
   while(Serial2.read() >= 0);  // Clear read buffer
@@ -1083,7 +1181,7 @@ void readGPSValues(configData myactconf) {
         }
         else{
           DebugPrintln(3, "Checksum wrong!");
-          while(Serial2.read() >= 0 && Serial2.read() != '$'); // Clear read buffer until $
+          flushSerial2UntilSentenceStart(); // Clear read buffer until sentence start
           nmea = "";
           nmea_all = "";
         }
@@ -1091,7 +1189,7 @@ void readGPSValues(configData myactconf) {
       else{
         DebugPrintln(3, "No RMC message found! ");
         delay(250);
-        while(Serial2.read() >= 0 && Serial2.read() != '$'); // Clear read buffer until $
+        flushSerial2UntilSentenceStart(); // Clear read buffer until sentence start
         nmea = "";
         nmea_all = "";
       }
@@ -1123,9 +1221,27 @@ void sendNMEA() {
 }
 
 // handles uploads
+static bool isSafeUploadFilename(const String &filename) {
+  if (filename.length() == 0) {
+    return false;
+  }
+  if (filename.indexOf("..") >= 0) {
+    return false;
+  }
+  if (filename.indexOf('\\') >= 0) {
+    return false;
+  }
+  return true;
+}
+
 void handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
   String logmessage = "Client:" + request->client()->remoteIP().toString() + " " + request->url();
   Serial.println(logmessage);
+
+  if (!isSafeUploadFilename(filename)) {
+    Serial.println("Upload rejected: unsafe filename");
+    return;
+  }
 
   if (!index) {
     logmessage = "Upload Start: " + String(filename);

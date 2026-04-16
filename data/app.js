@@ -1,117 +1,96 @@
+function setElementValue(id, value) {
+  var element = document.getElementById(id);
+  if (!element) {
+    return;
+  }
+
+  if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.tagName === 'SELECT') {
+    element.value = value;
+  } else {
+    element.innerHTML = value;
+  }
+}
+
+function setNetworkInfo(myObj) {
+  setElementValue('heapsize', myObj.Device.ESP32.FreeHeapSize.Value);
+  setElementValue('hunit', myObj.Device.ESP32.FreeHeapSize.Unit);
+  setElementValue('strength', myObj.Device.NetworkParameter.FieldStrength.Value);
+  setElementValue('sunit', myObj.Device.NetworkParameter.FieldStrength.Unit);
+  setElementValue('quality', myObj.Device.NetworkParameter.ConnectionQuality.Value);
+  setElementValue('quality2', myObj.Device.NetworkParameter.ConnectionQuality.Value);
+  setElementValue('qunit', myObj.Device.NetworkParameter.ConnectionQuality.Unit);
+  setElementValue('qunit2', myObj.Device.NetworkParameter.ConnectionQuality.Unit);
+}
+
+function setLoRaInfo(myObj) {
+  setElementValue('actualch', myObj.Device.LoRaSettings.ActualChannel);
+  setElementValue('actualsf', myObj.Device.LoRaSettings.ActualSF);
+  setElementValue('tinterval', myObj.Device.LoRaSettings.TXInterval);
+  setElementValue('slot', myObj.Device.LoRaSettings.TimeSlot);
+  setElementValue('counter', myObj.Device.LoRaSettings.TXCounter);
+}
+
+function setPositionInfo(myObj) {
+  setElementValue('lat', myObj.Device.MeasuringValues.Latitude.Value);
+  setElementValue('lon', myObj.Device.MeasuringValues.Longitude.Value);
+  setElementValue('alt', myObj.Device.MeasuringValues.Altitude.Value);
+}
+
+function setEnvironmentInfo(myObj) {
+  if (myObj.Device.MeasuringValues.EnvSensor.Value !== 'BME280') {
+    return;
+  }
+
+  setElementValue('airtemp', myObj.Device.MeasuringValues.AirTemperature.Value);
+  setElementValue('atunit', myObj.Device.MeasuringValues.AirTemperature.Unit);
+  setElementValue('pressure', myObj.Device.MeasuringValues.AirPressure.Value);
+  setElementValue('humidity', myObj.Device.MeasuringValues.AirHumidity.Value);
+  setElementValue('dewpoint', myObj.Device.MeasuringValues.Dewpoint.Value);
+  setElementValue('dpunit', myObj.Device.MeasuringValues.Dewpoint.Unit);
+  setElementValue('dunit', myObj.Device.MeasuringValues.Dewpoint.Unit);
+}
+
+function setSensorInfo(myObj) {
+  setElementValue('voltage', myObj.Device.MeasuringValues.BatteryVoltage.Value);
+  setElementValue('1wtemp', myObj.Device.MeasuringValues.Temp1Wire.Value);
+  setElementValue('1wunit', myObj.Device.MeasuringValues.Temp1Wire.Unit);
+  setElementValue('tank1', myObj.Device.MeasuringValues.Tank1Voltage.Value);
+  setElementValue('tank1adc', myObj.Device.MeasuringValues.Tank1adc.Value);
+  setElementValue('tank2', myObj.Device.MeasuringValues.Tank2Voltage.Value);
+  setElementValue('tank2adc', myObj.Device.MeasuringValues.Tank2adc.Value);
+  setElementValue('alarm', myObj.Device.MeasuringValues.Alarm.Value);
+  setElementValue('relay', myObj.Device.MeasuringValues.Relay.Value);
+  setElementValue('rtimer', myObj.Device.MeasuringValues.RelayTimer.Value);
+  setElementValue('envSensor', myObj.Device.MeasuringValues.EnvSensor.Value);
+  setElementValue('standbyMode', myObj.Device.MeasuringValues.standbyMode.Value);
+  setElementValue('loraOperationMode', myObj.Device.MeasuringValues.loraOperationMode.Value);
+  setElementValue('WifiStandbyMode', myObj.Device.MeasuringValues.WifiStandbyMode.Value);
+}
+
+function setServerModeInfo(myObj) {
+  var infoElement = document.getElementById('info');
+  if (!infoElement) {
+    return;
+  }
+
+  if (myObj.Device.NetworkParameter.ServerMode == 4) {
+    infoElement.innerHTML = '(Demo Mode)';
+  } else {
+    infoElement.innerHTML = '';
+  }
+}
+
 var xmlhttp = new XMLHttpRequest();
 xmlhttp.onreadystatechange = function () {
   if (this.readyState == 4 && this.status == 200) {
     var myObj = JSON.parse(this.responseText);
 
-    //cssid = document.getElementById('cssid');
-    //cssid.value = myObj.Device.NetworkParameter.WLANClientSSID;
-    //sssid = document.getElementById('sssid');
-    //sssid.value = myObj.Device.NetworkParameter.WLANServerSSID;
-
-    heapsize = document.getElementById('heapsize');
-    heapsize.value = myObj.Device.ESP32.FreeHeapSize.Value;
-    document.getElementById('hunit').innerHTML = myObj.Device.ESP32.FreeHeapSize.Unit;
-
-    strength = document.getElementById('strength');
-    strength.value = myObj.Device.NetworkParameter.FieldStrength.Value;
-    document.getElementById('sunit').innerHTML = myObj.Device.NetworkParameter.FieldStrength.Unit;
-
-    quality = document.getElementById('quality');
-    quality.value = myObj.Device.NetworkParameter.ConnectionQuality.Value;
-    if (document.getElementById('qunit') != null) {
-      document.getElementById('qunit').innerHTML = myObj.Device.NetworkParameter.ConnectionQuality.Unit;
-    }
-    document.getElementById('quality').innerHTML = myObj.Device.NetworkParameter.ConnectionQuality.Value;
-    if (document.getElementById('qunit2') != null) {
-      document.getElementById('qunit2').innerHTML = myObj.Device.NetworkParameter.ConnectionQuality.Unit;
-      document.getElementById('quality2').value = myObj.Device.NetworkParameter.ConnectionQuality.Value;
-    }
-
-    actualch = document.getElementById('actualch');
-    actualch.value = myObj.Device.LoRaSettings.ActualChannel;
-    actualsf = document.getElementById('actualsf');
-    actualsf.value = myObj.Device.LoRaSettings.ActualSF;
-    tinterval = document.getElementById('tinterval');
-    //tinterval.value = myObj.Device.LoRaSettings.TXInterval * 60;
-    tinterval.value = myObj.Device.LoRaSettings.TXInterval;
-    slot = document.getElementById('slot');
-    slot.value = myObj.Device.LoRaSettings.TimeSlot;
-    counter = document.getElementById('counter');
-    counter.value = myObj.Device.LoRaSettings.TXCounter;
-
-    lat = document.getElementById('lat');
-    lat.value = myObj.Device.MeasuringValues.Latitude.Value;
-
-    lon = document.getElementById('lon');
-    lon.value = myObj.Device.MeasuringValues.Longitude.Value;
-
-    alt = document.getElementById('alt');
-    alt.value = myObj.Device.MeasuringValues.Altitude.Value;
-
-    //if (String(actconf.envSensor) == "BME280") { // from cpp
-    if (envSensor.value == "BME280") {
-      airtemp = document.getElementById('airtemp');
-      airtemp.value = myObj.Device.MeasuringValues.AirTemperature.Value;
-      document.getElementById('atunit').innerHTML = myObj.Device.MeasuringValues.AirTemperature.Unit;
-
-      pressure = document.getElementById('pressure');
-      pressure.value = myObj.Device.MeasuringValues.AirPressure.Value;
-
-      humidity = document.getElementById('humidity');
-      humidity.value = myObj.Device.MeasuringValues.AirHumidity.Value;
-
-      dewpoint = document.getElementById('dewpoint');
-      dewpoint.value = myObj.Device.MeasuringValues.Dewpoint.Value;
-      document.getElementById('dpunit').innerHTML = myObj.Device.MeasuringValues.Dewpoint.Unit;
-    }  // from cpp
-
-    voltage = document.getElementById('voltage');
-    voltage.value = myObj.Device.MeasuringValues.BatteryVoltage.Value;
-
-    temp1w = document.getElementById('1wtemp');
-    temp1w.value = myObj.Device.MeasuringValues.Temp1Wire.Value;
-    document.getElementById('1wunit').innerHTML = myObj.Device.MeasuringValues.Temp1Wire.Unit;
-
-    tank1 = document.getElementById('tank1');
-    tank1.value = myObj.Device.MeasuringValues.Tank1Voltage.Value;
-
-    tank1adc = document.getElementById('tank1adc');
-    tank1adc.value = myObj.Device.MeasuringValues.Tank1adc.Value;
-
-    tank2 = document.getElementById('tank2');
-    tank2.value = myObj.Device.MeasuringValues.Tank2Voltage.Value;
-
-    tank2adc = document.getElementById('tank2adc');
-    tank2adc.value = myObj.Device.MeasuringValues.Tank2adc.Value;
-
-    alarm = document.getElementById('alarm');
-    alarm.value = myObj.Device.MeasuringValues.Alarm.Value;
-
-    relay = document.getElementById('relay');
-    relay.value = myObj.Device.MeasuringValues.Relay.Value;
-
-    rtimer = document.getElementById('rtimer');
-    rtimer.value = myObj.Device.MeasuringValues.RelayTimer.Value;
-
-    envSensor = document.getElementById('envSensor');
-    envSensor.value = myObj.Device.MeasuringValues.EnvSensor.Value;
-
-    standbyMode = document.getElementById('standbyMode');
-    standbyMode.value = myObj.Device.MeasuringValues.standbyMode.Value;
-
-    loraOperationMode = document.getElementById('loraOperationMode');
-    loraOperationMode.value = myObj.Device.MeasuringValues.loraOperationMode.Value;
-
-    WifiStandbyMode = document.getElementById('WifiStandbyMode');
-    WifiStandbyMode.value = myObj.Device.MeasuringValues.WifiStandbyMode.Value;
-
-    // If Demo Mode active the give out a message
-    servermode = myObj.Device.NetworkParameter.ServerMode;
-    if (servermode == 4) {
-      document.getElementById('info').innerHTML = '(Demo Mode)';
-    } else {
-      document.getElementById('info').innerHTML = '';
-    }
+    setNetworkInfo(myObj);
+    setLoRaInfo(myObj);
+    setPositionInfo(myObj);
+    setEnvironmentInfo(myObj);
+    setSensorInfo(myObj);
+    setServerModeInfo(myObj);
   }
 };
 
@@ -121,35 +100,15 @@ xmlhttpStaticData.onreadystatechange = function () {
   if (this.readyState == 4 && this.status == 200) {
     var myObj = JSON.parse(this.responseText);
 
-    cssid1 = document.getElementById('cssid1');
-    cssid1.value = myObj.Device.NetworkParameter.WLANClientSSID;
-    sssid = document.getElementById('sssid');
-    sssid.value = myObj.Device.NetworkParameter.WLANServerSSID;
+    setElementValue('cssid1', myObj.Device.NetworkParameter.WLANClientSSID1);
+    setElementValue('cssid2', myObj.Device.NetworkParameter.WLANClientSSID2);
+    setElementValue('cssid3', myObj.Device.NetworkParameter.WLANClientSSID3);
+    setElementValue('sssid', myObj.Device.NetworkParameter.WLANServerSSID);
+    setElementValue('standbyMode', myObj.Device.DeviceSettings.standbyMode);
 
-    actualch = document.getElementById('actualch');
-    actualch.value = myObj.Device.LoRaSettings.ActualChannel;
-    actualsf = document.getElementById('actualsf');
-    actualsf.value = myObj.Device.LoRaSettings.ActualSF;
-    tinterval = document.getElementById('tinterval');
-    //tinterval.value = myObj.Device.LoRaSettings.TXInterval * 60;
-    tinterval.value = myObj.Device.LoRaSettings.TXInterval;
-    slot = document.getElementById('slot');
-    slot.value = myObj.Device.LoRaSettings.TimeSlot;
-    counter = document.getElementById('counter');
-    counter.value = myObj.Device.LoRaSettings.TXCounter;
-
-    standbyMode = document.getElementById('standbyMode');
-    standbyMode.value = myObj.Device.MeasuringValues.standbyMode.Value;
-
-    loraOperationMode = document.getElementById('loraOperationMode');
-    loraOperationMode.value = myObj.Device.MeasuringValues.loraOperationMode.Value;
-
-    // If Demo Mode active the give out a message
-    servermode = myObj.Device.NetworkParameter.ServerMode;
-    if (servermode == 4) {
-      document.getElementById('info').innerHTML = '(Demo Mode)';
-    } else {
-      document.getElementById('info').innerHTML = '';
+    var infoElement = document.getElementById('info');
+    if (infoElement && myObj.Device.NetworkParameter.ServerMode == 4) {
+      infoElement.innerHTML = '(Demo Mode)';
     }
   }
 };
@@ -158,5 +117,15 @@ function read_json() {
   xmlhttp.open('GET', '/data.json', true);
   xmlhttp.send();
 }
+
+function read_static_json() {
+  xmlhttpStaticData.open('GET', '/staticdata.json', true);
+  xmlhttpStaticData.send();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  read_json();
+  read_static_json();
+});
 
 setInterval(function () { read_json(); }, 1000);

@@ -115,9 +115,9 @@ function check_username(iname) {
     var valuestring = "";
     if (iname == "username") { valuestring = document.SetForm.username.value; }
     var reguexp = /[^A-z0-9\-]/;
-    if (reguexp.exec(valuestring) || valuestring < 4 || valuestring > 20) {
+    if (reguexp.exec(valuestring) || valuestring.length < 4 || valuestring.length > 20) {
         document.getElementById('sub').disabled = true;
-        alert('Error!\nUse only a-z, A-Z, 0-9, ' - '\nPassword Length 4-20');
+        alert('Error!\nUse only a-z, A-Z, 0-9, -\nUsername Length 4-20');
     }
     else {
         document.getElementById('sub').disabled = false;
@@ -126,7 +126,7 @@ function check_username(iname) {
 
 function check_passwd(iname) {
     var valuestring = "";
-    if (iname == "pagepasswd") { valuestring = document.SetForm.sidepasswd.value; }
+    if (iname == "pagepasswd") { valuestring = document.SetForm.pagepasswd.value; }
     if (iname == "cpasswd1") { valuestring = document.SetForm.cpasswd1.value; }
     if (iname == "cpasswd2") { valuestring = document.SetForm.cpasswd2.value; }
     if (iname == "cpasswd3") { valuestring = document.SetForm.cpasswd3.value; }
@@ -134,7 +134,7 @@ function check_passwd(iname) {
     var reguexp = /[^A-z0-9\-]/;
     if (reguexp.exec(valuestring) || valuestring.length < 8 || valuestring.length > 20) {
         document.getElementById('sub').disabled = true;
-        alert('Error!\nUse only a-z, A-Z, 0-9, ' - '\nPassword Length 8-20');
+        alert('Error!\nUse only a-z, A-Z, 0-9, -\nPassword Length 8-20');
     }
     else {
         document.getElementById('sub').disabled = false;
@@ -148,15 +148,14 @@ function check_alarmState(event) {
         var xhr = new XMLHttpRequest();
         xhr.onreadystatechange = function () {
             if (this.readyState == 4 && this.status == 200) {
-                //console.log(xhr.response);
-                if (xhr.response == "0") {
+                var response = JSON.parse(xhr.responseText);
+                if (response.alarm1 == "0" || response.alarm1 === 0) {
                     alert("Please check wiring and make sure, Batterie switch is on.");
                     selectElement.value = "Off";
                 }
             }
         };
-        //xhr.open("GET", "/getdata?alarmState="+element.id+"&state=1", true);
-        xhr.open("GET", "/getdata", true);
+        xhr.open("GET", "/getdata?data=alarm1", true);
         xhr.send();
     }
 }

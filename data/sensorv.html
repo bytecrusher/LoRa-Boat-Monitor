@@ -22,7 +22,7 @@
         // Fill all values in Page
         document.getElementById('quality').innerHTML = myObj.Device.NetworkParameter.ConnectionQuality.Value;
         //if (String(actconf.envSensor) == "BME280") {
-        if (staticData.Device.DeviceSettings.envSensor == "BME280") {
+        if (staticData && staticData.Device && staticData.Device.DeviceSettings.envSensor == "BME280") {
           document.getElementById('airtemp').innerHTML = myObj.Device.MeasuringValues.AirTemperature.Value;
           document.getElementById('atunit').innerHTML = myObj.Device.MeasuringValues.AirTemperature.Unit;
           document.getElementById('pressure').innerHTML = myObj.Device.MeasuringValues.AirPressure.Value;
@@ -70,7 +70,7 @@
         }
         //document.getElementById('relay').innerHTML = myObj.Device.MeasuringValues.Relay.Value;
 
-        var rtime = 5 * myObj.Device.MeasuringValues.RelayTimer.Value;
+        var rtime = myObj.Device.MeasuringValues.RelayTimer.Value;
         document.getElementById('rtimer').innerHTML = rtime;
 
         // If Demo Mode active the give out a message
@@ -84,6 +84,7 @@
       xmlhttp.open('GET', '/data.json', true);
       xmlhttp.send();
     }
+    read_json();
     setInterval(function () { read_json(); }, 1000);
 
     //____________________
@@ -104,6 +105,7 @@
       xmlhttp2.open('GET', '/getdata?data=Tank1', true);
       xmlhttp2.send();
     }
+    run_getdata();
     setInterval(function () { run_getdata(); }, 250);
     //___________________
 
@@ -111,7 +113,6 @@
     xmlhttpStaticData.onreadystatechange = function () {
       if (this.readyState == 4 && this.status == 200) {
         staticData = JSON.parse(this.responseText);
-        staticData.Device.DeviceSettings.envSensor == "BME280"
       }
     };
 

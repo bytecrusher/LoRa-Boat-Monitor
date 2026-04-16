@@ -18,19 +18,22 @@ const char logout_html2[] PROGMEM = R"rawliteral(
 void WebServerHandler()
 {
   httpServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1 && request->hasArg("restart")) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
     // Read all received get arguments and save in a array
     int num = request->args();
     String vname[num];
     String value[num];
+    resetESP = 0;
     for (int i = 0; i < num; i++) {
       vname[i] = request->argName(i);
       value[i] = request->arg(i);
       // Check the return value from Restart web page
       if(vname[i] == "restart" &&  value[i] == "1"){
         resetESP = 1;
-      }
-      else{
-        resetESP = 0;
       }
     }
     request->redirect("/index.html");
@@ -58,6 +61,11 @@ void WebServerHandler()
   });
 
   httpServer.on("/initialsetup.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
     String content = initialsetup_html;
     content.replace("%devname%", String(actconf.devname));
     content.replace("%crights%", String(actconf.crights));
@@ -82,6 +90,11 @@ void WebServerHandler()
   });
 
   httpServer.on("/gettable", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
     String content = "";
     //content.replace("%tabelle%", getMyDirAsString(LittleFS, "/", 0));
     content = getMyDirAsString(LittleFS, "/", 0);
@@ -92,7 +105,7 @@ void WebServerHandler()
   httpServer.on("/filesystem.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     if (actconf.crypt == 1) {
       if(!request->authenticate(actconf.username, actconf.password)) {
-        request->requestAuthentication();
+        return request->requestAuthentication();
       }
     }
 
@@ -122,6 +135,11 @@ void WebServerHandler()
   });
 
   httpServer.on("/sensorv.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
     String content = readFile2(LittleFS, "/sensorv.html");
     content.replace("%header%", getheader(actconf));
     content.replace("%devname%", String(actconf.devname));
@@ -202,6 +220,11 @@ void WebServerHandler()
   });
 
   httpServer.on("/lora.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
     String content = readFile2(LittleFS, "/lora.html");
     content.replace("%header%", getheader(actconf));
     content.replace("%devname%", String(actconf.devname));
@@ -209,6 +232,11 @@ void WebServerHandler()
   });
 
   httpServer.on("/getdata", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
     String inputMessage;
     StaticJsonDocument<100> data;
 
@@ -223,14 +251,9 @@ void WebServerHandler()
             DebugPrintln(3, "getdata param = alarm1");
             data["alarm1"] = alarm1;
           } if (inputMessage == "Tank1") {
-            //data["Tank1"] = tank1;
-            //data["Tank1adc"] = tank1adc;
-            data["Tank1"] = String(tank1);
+            data["Tank1"] = String(tank1p);
             data["Tank1adc"] = String(tank1adc);
-            //json_Device["Device"]["MeasuringValues"]["Tank1adc"]["Value"] = String(tank1adc);
-          } //else if (inputMessage == "ping") {
-            //data["ping"] = true;
-          //}
+          }
         }
       }
       data["data"] = true;
@@ -243,6 +266,12 @@ void WebServerHandler()
   });
 
   httpServer.on("/savesettings", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
+
     // Read all received get arguments and save in a array
     int num = request->args();
     String vname[num];
@@ -266,7 +295,7 @@ void WebServerHandler()
         actconf.crypt = toInteger(value[i]);
       }
       if (vname[i] == "pagepasswd") {
-        value[i].toCharArray(actconf.password, 31);
+        value[i].toCharArray(actconf.password, sizeof(actconf.password));
       }
       // Display Settings
       //*****************
@@ -276,37 +305,37 @@ void WebServerHandler()
       // Network Settings
       //*****************
       if (vname[i] == "cssid1") {
-        value[i].toCharArray(actconf.cssid1, 31);
+        value[i].toCharArray(actconf.cssid1, sizeof(actconf.cssid1));
       }
       if (vname[i] == "cpasswd1") {
-        value[i].toCharArray(actconf.cpassword1, 31);
+        value[i].toCharArray(actconf.cpassword1, sizeof(actconf.cpassword1));
       }
       if (vname[i] == "cssid2") {
-        value[i].toCharArray(actconf.cssid2, 31);
+        value[i].toCharArray(actconf.cssid2, sizeof(actconf.cssid2));
       }
       if (vname[i] == "cpasswd2") {
-        value[i].toCharArray(actconf.cpassword2, 31);
+        value[i].toCharArray(actconf.cpassword2, sizeof(actconf.cpassword2));
       }
       if (vname[i] == "cssid3") {
-        value[i].toCharArray(actconf.cssid3, 31);
+        value[i].toCharArray(actconf.cssid3, sizeof(actconf.cssid3));
       }
       if (vname[i] == "cpasswd3") {
-        value[i].toCharArray(actconf.cpassword3, 31);
+        value[i].toCharArray(actconf.cpassword3, sizeof(actconf.cpassword3));
       }
       if (vname[i] == "timeout") {
         actconf.timeout = toInteger(value[i]);
       }
       if (vname[i] == "sssid") {
-        value[i].toCharArray(actconf.sssid, 31);
+        value[i].toCharArray(actconf.sssid, sizeof(actconf.sssid));
       }
       if (vname[i] == "spasswd") {
-        value[i].toCharArray(actconf.spassword, 31);
+        value[i].toCharArray(actconf.spassword, sizeof(actconf.spassword));
       }
       if (vname[i] == "apchannel") {
         actconf.apchannel = toInteger(value[i]);
       }
       if (vname[i] == "firmwareUpdateUrl") {
-        value[i].toCharArray(actconf.firmwareUpdateUrl, 51);
+        value[i].toCharArray(actconf.firmwareUpdateUrl, sizeof(actconf.firmwareUpdateUrl));
       }
       if (vname[i] == "servermode") {
         actconf.serverMode = toInteger(value[i]);
@@ -316,29 +345,30 @@ void WebServerHandler()
       }
       if (vname[i] == "SendDataViaWifi") {
         //actconf.SendDataViaWifi = toInteger(value[i]);
-        value[i].toCharArray(actconf.SendDataViaWifi, 4);
+        value[i].toCharArray(actconf.SendDataViaWifi, sizeof(actconf.SendDataViaWifi));
       }
       if (vname[i] == "MdsUrl") {
-        value[i].toCharArray(actconf.MdsUrl, 100);
+        value[i].toCharArray(actconf.MdsUrl, sizeof(actconf.MdsUrl));
       }
       if (vname[i] == "MdsApiKey") {
-        value[i].toCharArray(actconf.MdsApiKey, 30);
+        value[i].toCharArray(actconf.MdsApiKey, sizeof(actconf.MdsApiKey));
       }
       // LoRa Settings
       //**************
       if (vname[i] == "devaddr") {
-        char hexstring[8];
-        value[i].toCharArray(hexstring, 9);
+        char hexstring[9];
+        value[i].toCharArray(hexstring, sizeof(hexstring));
         actconf.devaddr = HexToInt(hexstring);
       }
       if (vname[i] == "nskey") {
         char mystring[33];
-        char hexstring[2];
-        value[i].toCharArray(mystring, 33);
+        char hexstring[3];
+        value[i].toCharArray(mystring, sizeof(mystring));
         DebugPrintln(3, mystring);
         for (int j = 0; j < 16; j++){
           hexstring[0] = mystring[j*2];
           hexstring[1] = mystring[j*2+1];
+          hexstring[2] = '\0';
           actconf.nskey[j] = HexToInt(hexstring);
           DebugPrint(3, j);
           DebugPrint(3, " ");
@@ -349,12 +379,13 @@ void WebServerHandler()
       }
       if (vname[i] == "appkey") {
         char mystring[33];
-        char hexstring[2];
-        value[i].toCharArray(mystring, 33);
+        char hexstring[3];
+        value[i].toCharArray(mystring, sizeof(mystring));
         DebugPrintln(3, mystring);
         for (int j = 0; j < 16; j++){
           hexstring[0] = mystring[j*2];
           hexstring[1] = mystring[j*2+1];
+          hexstring[2] = '\0';
           actconf.appkey[j] = HexToInt(hexstring);
           DebugPrint(3, j);
           DebugPrint(3, " ");
@@ -364,7 +395,7 @@ void WebServerHandler()
         }
       } 
       if (vname[i] == "lorafrequency") {
-        value[i].toCharArray(actconf.lorafrequency, 31);
+        value[i].toCharArray(actconf.lorafrequency, sizeof(actconf.lorafrequency));
       }
       if (vname[i] == "lchannel") {
         actconf.lchannel = toInteger(value[i]);
@@ -398,7 +429,6 @@ void WebServerHandler()
         }
         else{
           digitalWrite(relayPin, HIGH);
-          relaytimer = 288;  // 288 x 5min = 1440min
         }
       }
       // DeviceSettings
@@ -430,28 +460,28 @@ void WebServerHandler()
         actconf.t2average = toInteger(value[i]);
       }   
       if (vname[i] == "tstype") {
-        value[i].toCharArray(actconf.tempSensorType, 10);
+        value[i].toCharArray(actconf.tempSensorType, sizeof(actconf.tempSensorType));
       }
       if (vname[i] == "tempunit") {
-        value[i].toCharArray(actconf.tempUnit, 2);
+        value[i].toCharArray(actconf.tempUnit, sizeof(actconf.tempUnit));
       }
       if (vname[i] == "envSensor") {
-        value[i].toCharArray(actconf.envSensor, 20);
+        value[i].toCharArray(actconf.envSensor, sizeof(actconf.envSensor));
       }
       if (vname[i] == "standbyMode") {
         // Check if Alarm is High (?), to prevent the user from locking out.
         //String(alarm1)
-        value[i].toCharArray(actconf.standbyMode, 4);
+        value[i].toCharArray(actconf.standbyMode, sizeof(actconf.standbyMode));
       }
       if (vname[i] == "standbySleepDuration") {
         //value[i].toInteger(actconf.standbySleepDuration);
         actconf.standbySleepDuration = toInteger(value[i]);
       }
       if (vname[i] == "loraOperationMode") {
-        value[i].toCharArray(actconf.loraOperationMode, 8);
+        value[i].toCharArray(actconf.loraOperationMode, sizeof(actconf.loraOperationMode));
       }
       if (vname[i] == "WifiStandbyMode") {
-        value[i].toCharArray(actconf.WifiStandbyMode, 8);
+        value[i].toCharArray(actconf.WifiStandbyMode, sizeof(actconf.WifiStandbyMode));
       }
       // Calibration Settings
       //*********************    
@@ -667,7 +697,7 @@ void WebServerHandler()
     // Check page password
     if (actconf.crypt == 1) {
       if(!request->authenticate(actconf.username, actconf.password)) {
-        request->requestAuthentication();
+        return request->requestAuthentication();
       }
     }
 
@@ -676,16 +706,29 @@ void WebServerHandler()
     content = readFile2(LittleFS, "/firmware.html");
 
     // get Beta version number
-    const uint16_t port = 80;
     const char *host = actconf.firmwareUpdateUrl;
     String getLatestBetaVersion = "latestBetaVersion.txt";
+    WiFiClientSecure client;
     HTTPClient http;
 
     Serial.print("[HTTP] begin...\n");
     String baseUrl = "https://" + (String)host + "/files_for_esp_webserver";
     String myurl = baseUrl + "/" + (String)getLatestBetaVersion;
     DebugPrintln(3, myurl);
-    http.begin(myurl);
+    client.setInsecure();
+    http.setTimeout(2000);
+    if (!http.begin(client, myurl)) {
+      content.replace("%serverAvailable%", "Server not available");
+      content.replace("%version2%", "-");
+      content.replace("%baseUrl%", String(baseUrl));
+      content.replace("%header%", getheader(actconf));
+      content.replace("%devname%", String(actconf.devname));
+      content.replace("%fversion%", String(actconf.fversion));
+      content.replace("%getSdkVersion%", String(ESP.getSdkVersion()));
+      content.replace("%chipId%", String(chipId));
+      content.replace("%getCpuFreqMHz%", String(String(ESP.getCpuFreqMHz())));
+      return request->send(200, "text/html", content);
+    }
 
     Serial.print("[HTTP] GET...\n");
     int httpCode = http.GET();
@@ -705,9 +748,14 @@ void WebServerHandler()
       } else if (httpCode == HTTP_CODE_NOT_FOUND) {
         DebugPrintln(1, "- 404 page not found");
         content.replace("%serverAvailable%", "Server not available");
+        content.replace("%version2%", "-");
+        content.replace("%baseUrl%", String(baseUrl));
       }
     } else {
       Serial.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
+      content.replace("%serverAvailable%", "Server not available");
+      content.replace("%version2%", "-");
+      content.replace("%baseUrl%", String(baseUrl));
     }
 
     http.end();
@@ -724,6 +772,11 @@ void WebServerHandler()
   });
 
   httpServer.on("/devinfo.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
     String content = readFile2(LittleFS, "/devinfo.html");
     content.replace("%header%", getheader(actconf));
     content.replace("%devname%", String(actconf.devname));
@@ -826,6 +879,11 @@ void WebServerHandler()
   });
 
   httpServer.on("/staticdata.json", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
     DynamicJsonDocument json_Device(8048);
     json_Device["Device"]["Type"] = String(actconf.devname);
     json_Device["Device"]["CopyRights"] = String(actconf.crights);
@@ -880,6 +938,11 @@ void WebServerHandler()
   });
 
   httpServer.on("/data.json", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
     //unsigned long previousMillis = 0;
     //unsigned long elapsedMillis = 0;
     //previousMillis = millis();
@@ -972,13 +1035,13 @@ void WebServerHandler()
     json_Device["Device"]["MeasuringValues"]["SendDataViaWifi"]["Value"] = String(actconf.SendDataViaWifi);
     json_Device["Device"]["MeasuringValues"]["SendDataViaWifi"]["Unit"] = "";  // TODO: bring into staticdata.json
 
-    json_Device["Device"]["MeasuringValues"]["VEdirectV"]["Value"] = "%vedirectVoltage%";
+    json_Device["Device"]["MeasuringValues"]["VEdirectV"]["Value"] = String(vedirectVoltage, 3);
     json_Device["Device"]["MeasuringValues"]["VEdirectV"]["Unit"] = "V";  // TODO: bring into staticdata.json
 
-    json_Device["Device"]["MeasuringValues"]["VEdirectC"]["Value"] = "%vedirectCurrent%";
+    json_Device["Device"]["MeasuringValues"]["VEdirectC"]["Value"] = String(vedirectCurrent, 3);
     json_Device["Device"]["MeasuringValues"]["VEdirectC"]["Unit"] = "A";  // TODO: bring into staticdata.json
 
-    json_Device["Device"]["MeasuringValues"]["VEdirectT"]["Value"] = "%vedirectTemp%";
+    json_Device["Device"]["MeasuringValues"]["VEdirectT"]["Value"] = String(vedirectTemp, 1);
     json_Device["Device"]["MeasuringValues"]["VEdirectT"]["Unit"] = "°C";  // TODO: bring into staticdata.json
 
     json_Device["Device"]["MeasuringValues"]["Latitude"]["Value"] = String(latitude, 6);
@@ -993,22 +1056,22 @@ void WebServerHandler()
     String zhour = firstzero(hour);
     String zminute = firstzero(minute);
     String zsecond = firstzero(second); 
-    String timestr = "\"" + String(zhour) + ":" + String(zminute) + ":" + String(zsecond) + "\"";
+    String timestr = String(zhour) + ":" + String(zminute) + ":" + String(zsecond);
     json_Device["Device"]["MeasuringValues"]["Time"]["Value"] = String(timestr);
     json_Device["Device"]["MeasuringValues"]["Time"]["Unit"] = "UTC";  // TODO: bring into staticdata.json
 
     String zday = firstzero(day);
     String zmonth = firstzero(month);
     String zyear = firstzero(year);
-    String datestr = "\"" + String(zday) + "." + String(zmonth) + "." + String(zyear) + "\"";
+    String datestr = String(zday) + "." + String(zmonth) + "." + String(zyear);
     json_Device["Device"]["MeasuringValues"]["Date"]["Value"] = String(datestr);
-    json_Device["Device"]["MeasuringValues"]["Date"]["Unit"] = "GTM";  // TODO: bring into staticdata.json
+    json_Device["Device"]["MeasuringValues"]["Date"]["Unit"] = "GMT";  // TODO: bring into staticdata.json
 
-    String sunrisestr = "\"" + String(zhour) + ":" + String(zminute) + ":" + String(zsecond) + "\"";
+    String sunrisestr = String(zhour) + ":" + String(zminute) + ":" + String(zsecond);
     json_Device["Device"]["MeasuringValues"]["Sunrise"]["Value"] = String(sunrisestr);
     json_Device["Device"]["MeasuringValues"]["Sunrise"]["Unit"] = "UTC";  // TODO: bring into staticdata.json
 
-    String sunsetstr = "\"" + String(zhour) + ":" + String(zminute) + ":" + String(zsecond) + "\"";
+    String sunsetstr = String(zhour) + ":" + String(zminute) + ":" + String(zsecond);
     json_Device["Device"]["MeasuringValues"]["Sunset"]["Value"] = String(sunsetstr);
     json_Device["Device"]["MeasuringValues"]["Sunset"]["Unit"] = "UTC";  // TODO: bring into staticdata.json
 
@@ -1035,8 +1098,15 @@ void WebServerHandler()
   });
 
   httpServer.on("/reseteeprom", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
+    actconf = defconf;
     saveEEPROMConfig(defconf);
     request->send(200, "text/javascript", "ok, EEPROM erased.");
+    ESP.restart();
   });
 
   // Use no cache because the js was permanently modifyed (transaction ID)
@@ -1054,9 +1124,22 @@ void WebServerHandler()
   httpServer.serveStatic("/gauge.min.js", LittleFS, "/gauge.min.js").setCacheControl("max-age=600");
 
   httpServer.on("/doUpdate", HTTP_POST,
-    [](AsyncWebServerRequest *request) {},
+    [](AsyncWebServerRequest *request) {
+      if (actconf.crypt == 1) {
+        if(!request->authenticate(actconf.username, actconf.password)) {
+          return request->requestAuthentication();
+        }
+      }
+    },
     [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data,
-                  size_t len, bool final) {handleDoUpdate(request, filename, index, data, len, final);}
+                  size_t len, bool final) {
+                    if (actconf.crypt == 1) {
+                      if(!request->authenticate(actconf.username, actconf.password)) {
+                        return;
+                      }
+                    }
+                    handleDoUpdate(request, filename, index, data, len, final);
+                  }
   );
 
   #ifdef ESP32
@@ -1092,9 +1175,25 @@ void WebServerHandler()
   //});
 
   // run handleUpload function when any file is uploaded
-  httpServer.on("/upload", HTTP_POST, [](AsyncWebServerRequest *request) {
-    request->send(200);
-  }, handleUpload);
+  httpServer.on("/upload", HTTP_POST,
+    [](AsyncWebServerRequest *request) {
+      if (actconf.crypt == 1) {
+        if(!request->authenticate(actconf.username, actconf.password)) {
+          return request->requestAuthentication();
+        }
+      }
+      request->send(200);
+    },
+    [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data,
+                  size_t len, bool final) {
+                    if (actconf.crypt == 1) {
+                      if(!request->authenticate(actconf.username, actconf.password)) {
+                        return;
+                      }
+                    }
+                    handleUpload(request, filename, index, data, len, final);
+                  }
+  );
 
   /*handling uploading file */
   /*httpServer.on("/upload", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -1119,17 +1218,32 @@ void WebServerHandler()
   });*/
 
   httpServer.on("/formatfs", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
     formatfs(LittleFS);
     request->send(200, "text/html", "done");
   });
 
   httpServer.on("/updatefiles", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
     runDownloadingFiles = true;
     request->send(200, "text/html", "done");
   });
 
   httpServer.on("/updatefilesstatus", HTTP_GET, [](AsyncWebServerRequest *request) {
-    String test = (String)runDownloadingFiles;
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
+    String test = String(runDownloadingFilesStatus || runDownloadingFiles);
     request->send(200, "text/html", test);
   });
 

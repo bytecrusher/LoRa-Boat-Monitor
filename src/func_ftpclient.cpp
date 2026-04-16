@@ -43,7 +43,7 @@ void openFtpConnection(char *fversion)
 {
   ftp.OpenConnection();
   ftp.InitFile("Type A");
-  ftp.ChangeWorkDir("/V1.0x/");
+  ftp.ChangeWorkDir("/V1.01/");
 }
 
 void closeFtpConnection()
@@ -55,7 +55,7 @@ void listFTPdir()
 {
   // Get directory content
   ftp.InitFile("Type A");
-  ftp.ChangeWorkDir("/V1.0x/");
+  ftp.ChangeWorkDir("/V1.01/");
 
   // Download the text file or read it
   String response = "";

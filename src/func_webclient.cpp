@@ -8,6 +8,7 @@
 #include <LittleFS.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <time.h>
 #include <Configuration.h>
 #include "func_myFunctions.h"
 
@@ -37,187 +38,154 @@ void DownloadFilesFromWeb(char *fversion)
 
 void DownloadFile(const char *fileName, char *fversion)
 {
-  WiFiClient client2;
   File targetFile;
-  bool opened2 = false;
-  size_t fileSize = 0;
-
-  const uint16_t port = 80;
   const char *host = actconf.firmwareUpdateUrl;
+  const String myurl = "https://" + String(host) + "/files_for_esp_webserver/" + String(fversion) + "/" + String(fileName);
+  WiFiClientSecure client;
+  HTTPClient http;
 
   DebugPrint(3, "Connecting to website: ");
   DebugPrintln(3, String(host));
+  DebugPrintln(3, myurl);
 
-  if (client2.connect(host, port)) {
-    HTTPClient http;
+  client.setInsecure();
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
 
-    Serial.print("[HTTP] begin...\n");
-    // configure traged server and url
-    //http.begin("https://www.howsmyssl.com/a/check", ca); //HTTPS
-    //http.begin("http://example.com/index.html"); //HTTP
-    String myurl = "https://" + (String)host + "/files_for_esp_webserver/" + (String)fversion + "/" + (String)fileName;
-    DebugPrintln(3, myurl);
-    http.begin(myurl);
+  if (!http.begin(client, myurl)) {
+    DebugPrintln(1, "- failed to initialize HTTPS request");
+    return;
+  }
 
-    Serial.print("[HTTP] GET...\n");
-    int httpCode = http.GET();
+  Serial.print("[HTTP] GET...\n");
+  const int httpCode = http.GET();
 
-    // httpCode will be negative on error
-    if(httpCode > 0) {
-      // HTTP header has been send and Server response header has been handled
-      Serial.printf("[HTTP] GET... code: %d\n", httpCode);
+  if(httpCode > 0) {
+    Serial.printf("[HTTP] GET... code: %d\n", httpCode);
 
-      // file found at server
-      if(httpCode == HTTP_CODE_OK) {
-        String payload = http.getString();
-        //Serial.println(payload);
-        if (opened2 == false) {
-          opened2 = true;
-          targetFile = LittleFS.open((String("/") + String(fileName)).c_str(), FILE_WRITE);
-          if (!targetFile) {
-            DebugPrintln(1, "- failed to open file for writing");
-            return;
-          }
-        }
-        targetFile.print(payload);
-      } else if (httpCode == HTTP_CODE_NOT_FOUND) {
-        DebugPrintln(1, "- 404 page not found");
+    if(httpCode == HTTP_CODE_OK) {
+      const String targetPath = "/" + String(fileName);
+      if (LittleFS.exists(targetPath)) {
+        LittleFS.remove(targetPath);
       }
-    } else {
-      Serial.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
-    }
 
-    http.end();
-    targetFile.close();
+      targetFile = LittleFS.open(targetPath.c_str(), FILE_WRITE);
+      if (!targetFile) {
+        DebugPrintln(1, "- failed to open file for writing");
+        http.end();
+        return;
+      }
+
+      const int bytesWritten = http.writeToStream(&targetFile);
+      targetFile.close();
+
+      if (bytesWritten < 0) {
+        DebugPrintln(1, "- failed to write downloaded file");
+      }
+    } else if (httpCode == HTTP_CODE_NOT_FOUND) {
+      DebugPrintln(1, "- 404 page not found");
+    }
+  } else {
+    Serial.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
   }
-  else
-  {
-    DebugPrintln(3, "Connection unsucessful");
-  }
+
+  http.end();
   DebugPrintln(3, "end.");
 }
 
 void sendToMDS(configData actconf)
 {
-  WiFiClientSecure client3;
-  #define protocollversion "1"
-  String MacAddress = WiFi.macAddress();
-  StaticJsonDocument<600> allSensors;
-
-  /*HTTPClient http;
-  // Your Domain name with URL path or IP address with path
-  http.begin(actconf.MdsUrl);
-  // Specify content-type header
-  http.addHeader("Content-Type", "application/json");*/
-
-  // Loop through each device, print out temperature data
-  //for (uint8_t i = 0; i < numberOfDevices; i++)
-    //{
-      //allSensors[i] = collectJsonData();
-    //}
-
-    //allSensors[0] = collectJsonData();
-
-    StaticJsonDocument<200> sensorData;
-    String buffer = "srgrdfg";
-    String tempC = "20";
-    String buffDate = "28.07.2023";
-    String buffTime = "12.55";
-    //sensorData["typid"] = 1;
-    sensorData["sensorId"] = 39;
-    //sensorData["sensorAddress"] = buffer;
-    sensorData["sensorAddress"] = 1;
-    sensorData["value1"] = String(tempC);
-    sensorData["date"] = String(buffDate);
-    sensorData["time"] = String(buffTime);
-
-    allSensors[0] = sensorData;
-    allSensors[1] = sensorData;
-
-    StaticJsonDocument<200> board;
-    StaticJsonDocument<1024> docpayload;
-    // Add values in the document
-    board["api_key"] = actconf.MdsApiKey;
-    board["protocollversion"] = protocollversion;
-    board["macaddress"] = MacAddress;
-    docpayload["board"] = board;
-    docpayload["sensors"] = allSensors;
-
-    String requestBody;
-    serializeJson(docpayload, requestBody);
-
-    //DebugPrint(3, "requestBody: ");
-    //DebugPrintln(3, String(requestBody));
-
-    /*int httpResponseCode = http.POST(requestBody);
-    DebugPrint(3, "httppost via json: ");
-    DebugPrintln(3, String(requestBody));
-    DebugPrint(3, "httpResponseCode: ");
-    DebugPrintln(3, String(httpResponseCode));
-    if(httpResponseCode > 0){
-      String response = http.getString();
-      DebugPrintln(3, String(httpResponseCode));
-      DebugPrintln(3, String(response));
-    } else {
-      DebugPrintln(3, "Error code: ");
-      DebugPrintln(3, String(httpResponseCode));
-    }
-
-    // Free resources
-    http.end();*/
-
-    client3.setInsecure();
-    //client3.connect(actconf.MdsUrl, 443);
-
-    DebugPrintln(3, "Starting connection to server...");
-    //if (!client3.connect(actconf.MdsUrl, 443))
-    if (!client3.connect("mds-git.derguntmar.de", 443))
-      DebugPrintln(1, "Connection failed!");
-    else {
-    DebugPrintln(3, "Connected to server!");
-    // Make a HTTP request:
-    //client3.println("GET https://mds-git.derguntmar.de/receiver/receivejson.php HTTP/1.0");
-    //client3.println("Host: mds-git.derguntmar.de");
-    //client3.println("Connection: close");
-    //client3.println();
-
-    client3.println("POST  https://mds-git.derguntmar.de/receiver/receivejson.php HTTP/1.1");
-    client3.println("Host: mds-git.derguntmar.de");
-    client3.println("content-length:"+ String(requestBody.length()));
-    client3.println("Connection: close");
-    client3.println();
-    client3.println(requestBody);
-
-    while (client3.connected()) {
-      String line = client3.readStringUntil('\n');
-      if (line == "\r") {
-        DebugPrintln(3, "headers received");
-        break;
-      }
-    }
-    // if there are incoming bytes available
-    // from the server, read them and print them:
-    while (client3.available()) {
-      char c = client3.read();
-      Serial.write(c);
-    }
-
-    client3.stop();
+  const String mdsUrl = String(actconf.MdsUrl);
+  if (mdsUrl.length() == 0) {
+    DebugPrintln(1, "MDS URL missing, skipping WiFi upload");
+    return;
   }
+
+  DynamicJsonDocument docpayload(2048);
+  JsonObject board = docpayload.createNestedObject("board");
+  JsonObject sensors = docpayload.createNestedObject("sensors");
+
+  board["api_key"] = String(actconf.MdsApiKey);
+  board["protocolVersion"] = "1";
+  board["macAddress"] = WiFi.macAddress();
+  board["deviceId"] = actconf.deviceID;
+  board["firmwareVersion"] = String(actconf.fversion);
+  board["wifiRssi"] = fieldstrength;
+  board["wifiQuality"] = quality;
+
+  struct tm tmstruct;
+  if (getLocalTime(&tmstruct, 1000)) {
+    char isoTimestamp[25];
+    strftime(isoTimestamp, sizeof(isoTimestamp), "%Y-%m-%dT%H:%M:%S", &tmstruct);
+    board["timestamp"] = isoTimestamp;
+  }
+
+  sensors["batteryVoltage"] = voltage;
+  sensors["batteryCapacity"] = capacity;
+  sensors["tank1Percent"] = tank1p;
+  sensors["tank1Adc"] = tank1adc;
+  sensors["tank2Percent"] = tank2p;
+  sensors["tank2Adc"] = tank2adc;
+  sensors["alarm1"] = alarm1;
+  sensors["relay"] = actconf.relay;
+  sensors["temp1wire"] = temp1wire;
+  sensors["latitude"] = latitude;
+  sensors["longitude"] = longitude;
+  sensors["gpsStatus"] = gpsStatus;
+  sensors["gpsSpeed"] = gpsspeed;
+  sensors["course"] = course;
+
+  if (String(actconf.envSensor) == "BME280") {
+    sensors["airTemperature"] = temperature;
+    sensors["airPressure"] = pressure;
+    sensors["airHumidity"] = humidity;
+    sensors["dewpoint"] = dewp;
+    sensors["altitude"] = altitude;
+  }
+
+  if (String(actconf.envSensor) == "VEdirect-Read") {
+    sensors["veDirectVoltage"] = vedirectVoltage;
+    sensors["veDirectCurrent"] = vedirectCurrent;
+    sensors["veDirectTemperature"] = vedirectTemp;
+  }
+
+  String requestBody;
+  serializeJson(docpayload, requestBody);
+
+  HTTPClient http;
+  int httpResponseCode = -1;
+
+  DebugPrintln(3, "Starting connection to server...");
+  DebugPrintln(3, "MDS URL: " + mdsUrl);
+
+  if (mdsUrl.startsWith("https://")) {
+    WiFiClientSecure client;
+    client.setInsecure();
+    if (!http.begin(client, mdsUrl)) {
+      DebugPrintln(1, "Failed to initialize HTTPS MDS request");
+      return;
+    }
+    http.addHeader("Content-Type", "application/json");
+    httpResponseCode = http.POST(requestBody);
+  } else {
+    WiFiClient client;
+    if (!http.begin(client, mdsUrl)) {
+      DebugPrintln(1, "Failed to initialize HTTP MDS request");
+      return;
+    }
+    http.addHeader("Content-Type", "application/json");
+    httpResponseCode = http.POST(requestBody);
+  }
+
+  DebugPrint(3, "HTTP POST payload: ");
+  DebugPrintln(3, requestBody);
+  DebugPrint(3, "HTTP response: ");
+  DebugPrintln(3, httpResponseCode);
+
+  if (httpResponseCode > 0) {
+    DebugPrintln(3, http.getString());
+  } else {
+    DebugPrintln(1, "WiFi upload failed: " + http.errorToString(httpResponseCode));
+  }
+
+  http.end();
 }
-
-/*StaticJsonDocument<200> collectJsonData()
-{
-  StaticJsonDocument<200> sensorData;
-  String buffer = "srgrdfg";
-  String tempC = "20";
-  String buffDate = "28.07.2023";
-  String buffTime = "12.55";
-  sensorData["typid"] = 1;
-  sensorData["sensorAddress"] = buffer;
-  sensorData["value1"] = String(tempC);
-  sensorData["date"] = String(buffDate);
-  sensorData["time"] = String(buffTime);
-
-  return sensorData;
-}*/

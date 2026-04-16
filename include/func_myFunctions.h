@@ -18,6 +18,7 @@
 #define TXD2 13               // GPS RX GPIO13
 
 extern configData actconf;
+extern configData defconf;
 extern int sizeEEPROM;
 extern int cfgStart;
 extern String transactionID;
@@ -118,6 +119,7 @@ void DebugPrint(int type, unsigned int num, int base);
 void eraseEEPROMConfig(configData cfg);
 void saveEEPROMConfig(configData cfg);
 configData loadEEPROMConfig();
+bool hasEEPROMConfigHeader();
 int boolToInt(bool value);
 int toInteger(String settingValue);
 float toFloat(String settingValue);

@@ -6,7 +6,7 @@
    test or else use the LITTLEFS plugin to create a partition
    https://github.com/lorol/arduino-esp32littlefs-plugin */
    
-#define FORMAT_LITTLEFS_IF_FAILED true
+#define FORMAT_LITTLEFS_IF_FAILED false
 
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
     DebugPrintln(3, "Listing directory: " + String(dirname));
