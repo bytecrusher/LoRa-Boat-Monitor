@@ -4,3 +4,7 @@
 .vscode/launch.json
 .vscode/ipch
 .DS_Store
+.aider*
+firmware 2.bin
+firmware 3.bin
+firmware 4.bin

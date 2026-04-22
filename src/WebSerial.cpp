@@ -74,12 +74,19 @@ void WebSerialClass::begin(AsyncWebServer *server) {
   });
 
   server->addHandler(events_);
-
   server->on("/webserial", HTTP_GET, [](AsyncWebServerRequest *request) {
     if (actconf.crypt == 1 && !request->authenticate(actconf.username, actconf.password)) {
       return request->requestAuthentication();
     }
     request->send_P(200, "text/html", webserial_html);
+  });
+
+  server->on("/webserial/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->redirect("/webserial");
+  });
+
+  server->on("/webserial/index.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->redirect("/webserial");
   });
 
   server->on("/webserial/send", HTTP_GET, [this](AsyncWebServerRequest *request) {

@@ -238,7 +238,7 @@ void WebServerHandler()
       }
     }
     String inputMessage;
-    StaticJsonDocument<100> data;
+    JsonDocument data;
 
     if (request->hasParam("data")) {
       int paramsNr = request->params();
@@ -884,7 +884,7 @@ void WebServerHandler()
         return request->requestAuthentication();
       }
     }
-    DynamicJsonDocument json_Device(8048);
+    JsonDocument json_Device;
     json_Device["Device"]["Type"] = String(actconf.devname);
     json_Device["Device"]["CopyRights"] = String(actconf.crights);
     json_Device["Device"]["FirmwareVersion"] = String(actconf.fversion);
@@ -947,7 +947,7 @@ void WebServerHandler()
     //unsigned long elapsedMillis = 0;
     //previousMillis = millis();
   
-    DynamicJsonDocument json_Device(8048);
+    JsonDocument json_Device;
     json_Device["Device"]["ESP32"]["FreeHeapSize"]["Value"] = String(ESP.getFreeHeap());
     json_Device["Device"]["ESP32"]["FreeHeapSize"]["Unit"] = "Byte";  // TODO: bring into staticdata.json
 
@@ -1123,15 +1123,15 @@ void WebServerHandler()
 
   httpServer.serveStatic("/gauge.min.js", LittleFS, "/gauge.min.js").setCacheControl("max-age=600");
 
-  httpServer.on("/doUpdate", HTTP_POST,
-    [](AsyncWebServerRequest *request) {
+  auto handleOtaPost = [](AsyncWebServerRequest *request) {
       if (actconf.crypt == 1) {
         if(!request->authenticate(actconf.username, actconf.password)) {
           return request->requestAuthentication();
         }
       }
-    },
-    [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data,
+    };
+
+  auto handleOtaUpload = [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data,
                   size_t len, bool final) {
                     if (actconf.crypt == 1) {
                       if(!request->authenticate(actconf.username, actconf.password)) {
@@ -1139,7 +1139,17 @@ void WebServerHandler()
                       }
                     }
                     handleDoUpdate(request, filename, index, data, len, final);
-                  }
+                  };
+
+  httpServer.on("/doUpdate", HTTP_POST,
+    handleOtaPost,
+    handleOtaUpload
+  );
+
+  // Backward-compatible alias for older firmware update pages that still post to /update.
+  httpServer.on("/update", HTTP_POST,
+    handleOtaPost,
+    handleOtaUpload
   );
 
   #ifdef ESP32
@@ -1257,6 +1267,7 @@ void WebServerHandler()
       String content = readFile2(LittleFS, "/error.html");
       content.replace("%header%", getheader(actconf));
       content.replace("%devname%", String(actconf.devname));
+      content.replace("%path%", request->url());
       request->send(404, "text/html", content);
     }
   });
@@ -1283,13 +1294,28 @@ void WebServerHandler()
 
 size_t content_len;
 
+static bool isFilesystemUpdateRequest(AsyncWebServerRequest *request, const String& filename) {
+  String loweredFilename = filename;
+  loweredFilename.toLowerCase();
+
+  if (request != nullptr) {
+    if (request->hasParam("filesystem", true, true) || request->hasParam("filesystem", true)) {
+      return true;
+    }
+  }
+
+  return loweredFilename.indexOf("spiffs") > -1 ||
+         loweredFilename.indexOf("littlefs") > -1 ||
+         loweredFilename.indexOf("filesystem") > -1;
+}
+
 // TODO create new function for downloading beta file and run this funciton (from beta)
 void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
   if (!index){
     Serial.println("Update");
     content_len = request->contentLength();
-    // if filename includes spiffs, update the spiffs partition
-    int cmd = (filename.indexOf("spiffs") > -1) ? U_PART : U_FLASH;
+    // Detect filesystem uploads both from modern field names and legacy filenames.
+    int cmd = isFilesystemUpdateRequest(request, filename) ? U_PART : U_FLASH;
 #ifdef ESP8266
     Update.runAsync(true);
     if (!Update.begin(content_len, cmd)) {

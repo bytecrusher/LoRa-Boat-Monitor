@@ -147,7 +147,7 @@
 
     function send_file() {
       var xhr = new XMLHttpRequest();
-      xhr.open('POST', '/update', true);
+      xhr.open('POST', '/doUpdate', true);
       var formData = new FormData();
 
       var file = document.upform.image.files[0];
@@ -181,7 +181,7 @@
 
     function send_image() {
       var xhr = new XMLHttpRequest();
-      xhr.open('POST', '/update', true);
+      xhr.open('POST', '/doUpdate', true);
       var formData = new FormData();
 
       var hash = md5(data)
@@ -278,7 +278,7 @@
   <div id="loader"></div>
   <div style="display:none;" id="myDiv" class="animate-bottom">
     <h3>Firmware Update</h3>
-    <form name='upform' action='/update' method='post' enctype='multipart/form-data'>Select a local file for firmware
+    <form name='upform' action='/doUpdate' method='post' enctype='multipart/form-data'>Select a local file for firmware
       upload (firmware_xxxx.bmb):
       <p>
         <input type='file' required name='image' onchange='check_file()'>
@@ -287,7 +287,7 @@
         <button type='button' id='sub' onclick='send_file()'>Update Firmware</button>
     </form>
     <hr>
-    <form name='upform1' action='/update' method='post' enctype='multipart/form-data'>Or use the actual online firmware on
+    <form name='upform1' action='/doUpdate' method='post' enctype='multipart/form-data'>Or use the actual online firmware on
       GitLab:
       <p>
         <input type='text' name='firmware' size='20' value='' onchange='check_file()'> Version:
@@ -298,7 +298,7 @@
     <button type='submit' id='sub2' onclick='send_image()'>Update Firmware</button>
     <hr>
 
-    <form name='upform2' action='/update' method='post' enctype='multipart/form-data'>Beta Firmware from derguntmar.de
+    <form name='upform2' action='/doUpdate' method='post' enctype='multipart/form-data'>Beta Firmware from derguntmar.de
       <p>
         <input type='text' name='firmware2' size='20' value='%baseUrl%/%version2%/firmware.bin' onchange=''> Version:
         <input type='text' name='version2' size='5' value='%version2%' maxlength='20'> ( %serverAvailable% )

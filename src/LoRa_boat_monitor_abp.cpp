@@ -130,12 +130,19 @@ void IRAM_ATTR onTimer(){
   sendLoraQueue = true;
 }
 
+void rebuildNetworkServersFromConfig() {
+  new (&httpServer) AsyncWebServer(actconf.httpport);
+  new (&server) WiFiServer(actconf.dataport);
+}
+
 void initWiFiServicesOnce() {
   if (wifiServicesInitialized) {
     return;
   }
 
   WebServerHandler();
+  // Register WebSerial on the same server instance that is started below.
+  WebSerial.begin(&httpServer);
 
   DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
   DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, PUT");
@@ -836,8 +843,7 @@ void setup() {
   }
 
   // Rebuild network servers with the persisted ports before first use.
-  new (&httpServer) AsyncWebServer(actconf.httpport);
-  new (&server) WiFiServer(actconf.dataport);
+  rebuildNetworkServersFromConfig();
 
   // If the firmware version in EEPROM is different to the default config,
   // only update the stored version string and preserve the rest of the config.
@@ -846,8 +852,6 @@ void setup() {
     fver.toCharArray(actconf.fversion, sizeof(actconf.fversion));
     saveEEPROMConfig(actconf);
   }
-
-  WebSerial.begin(&httpServer);
 
   /* Attach Message Callback */
   WebSerial.onMessage([&](uint8_t *data, size_t len) {
