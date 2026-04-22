@@ -3,8 +3,8 @@
 
 #include <Configuration.h>
 
-void DownloadFile(const char *fileName, char *fversion);
-void DownloadFilesFromWeb(char *fversion);
+bool DownloadFile(const char *fileName, char *fversion);
+bool DownloadFilesFromWeb(char *fversion);
 void sendToMDS(configData actconf);
 //StaticJsonDocument<200> collectJsonData();
 

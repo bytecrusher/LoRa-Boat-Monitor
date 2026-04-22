@@ -228,3 +228,87 @@ function logoutButton() {
     xhr.send();
     setTimeout(function(){ window.open("/logged-out","_self"); }, 1000);
 }
+
+function setBusyState(message) {
+    document.getElementById("loader").style.display = "block";
+    document.getElementById("myDiv").style.display = "none";
+    if (message) {
+        console.log(message);
+    }
+}
+
+function clearBusyState() {
+    document.getElementById("loader").style.display = "none";
+    document.getElementById("myDiv").style.display = "block";
+}
+
+function waitForDeviceAndRedirect(targetUrl, retries) {
+    if (retries <= 0) {
+        clearBusyState();
+        alert("Device did not come back online in time. Please reload the page manually.");
+        return;
+    }
+
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", "/staticdata.json?ts=" + Date.now(), true);
+    xhr.timeout = 2000;
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState !== 4) {
+            return;
+        }
+
+        if (xhr.status === 200) {
+            window.location.replace(targetUrl);
+            return;
+        }
+
+        setTimeout(function () {
+            waitForDeviceAndRedirect(targetUrl, retries - 1);
+        }, 2000);
+    };
+    xhr.onerror = xhr.ontimeout = function () {
+        setTimeout(function () {
+            waitForDeviceAndRedirect(targetUrl, retries - 1);
+        }, 2000);
+    };
+    xhr.send();
+}
+
+function restoreConfigBackup() {
+    if (!confirm("Restore the last automatic OTA config backup from LittleFS and reboot the device?")) {
+        return;
+    }
+
+    setBusyState("Restoring config backup...");
+
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "/restoreconfigbackup", true);
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState !== 4) {
+            return;
+        }
+
+        if (xhr.status === 200) {
+            setTimeout(function () {
+                waitForDeviceAndRedirect("/settings.html", 45);
+            }, 3000);
+            return;
+        }
+
+        clearBusyState();
+        var message = "Restore failed.";
+        try {
+            var response = JSON.parse(xhr.responseText);
+            if (response.message) {
+                message = response.message;
+            }
+        } catch (e) {
+        }
+        alert(message);
+    };
+    xhr.onerror = function () {
+        clearBusyState();
+        alert("Restore request failed.");
+    };
+    xhr.send();
+}

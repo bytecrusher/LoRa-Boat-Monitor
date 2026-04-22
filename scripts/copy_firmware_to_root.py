@@ -11,6 +11,8 @@ def copy_firmware_to_project_root(source, target, env):
     target_bin = project_dir / "firmware.bin"
 
     if firmware_bin.exists():
+        for old_firmware in project_dir.glob("firmware *.bin"):
+            old_firmware.unlink(missing_ok=True)
         copy2(firmware_bin, target_bin)
         print(f"Copied {firmware_bin} -> {target_bin}")
 

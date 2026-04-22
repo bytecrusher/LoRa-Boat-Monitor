@@ -12,31 +12,47 @@
 #include <Configuration.h>
 #include "func_myFunctions.h"
 
-void DownloadFilesFromWeb(char *fversion)
+extern const uint8_t cert_cacert_pem_start[] asm("_binary_cert_cacert_pem_start");
+
+bool DownloadFilesFromWeb(char *fversion)
 {
-  DownloadFile("css_black.css", fversion);
-  DownloadFile("css_red.css", fversion);
-  DownloadFile("css_white.css", fversion);
-  DownloadFile("devinfo.html", fversion);
-  DownloadFile("error.html", fversion);
-  DownloadFile("favicon.ico", fversion);
-  DownloadFile("firmware.html", fversion);
-  DownloadFile("gauge.min.js", fversion);
-  DownloadFile("header.html", fversion);
-  DownloadFile("app.js", fversion);
-  DownloadFile("lora.html", fversion);
-  DownloadFile("index.html", fversion);
-  DownloadFile("md5.js", fversion);
-  DownloadFile("md5.min.js", fversion);
-  DownloadFile("md5.min.js.map", fversion);
-  DownloadFile("password.html", fversion);
-  DownloadFile("restart.html", fversion);
-  DownloadFile("sensorv.html", fversion);
-  DownloadFile("settings.html", fversion);
-  DownloadFile("settings.js", fversion);
+  const char *webFiles[] = {
+    "css_black.css",
+    "css_red.css",
+    "css_white.css",
+    "devinfo.html",
+    "error.html",
+    "favicon.ico",
+    "firmware.html",
+    "firmware_ota.html",
+    "gauge.min.js",
+    "header.html",
+    "app.js",
+    "lora.html",
+    "index.html",
+    "md5.js",
+    "md5.min.js",
+    "md5.min.js.map",
+    "password.html",
+    "restart.html",
+    "sensorv.html",
+    "settings.html",
+    "settings.js"
+  };
+
+  bool allFilesUpdated = true;
+  for (size_t i = 0; i < (sizeof(webFiles) / sizeof(webFiles[0])); ++i) {
+    allFilesUpdated = DownloadFile(webFiles[i], fversion) && allFilesUpdated;
+  }
+
+  if (allFilesUpdated) {
+    saveWebFilesVersion(fversion);
+  }
+
+  return allFilesUpdated;
 }
 
-void DownloadFile(const char *fileName, char *fversion)
+bool DownloadFile(const char *fileName, char *fversion)
 {
   File targetFile;
   const char *host = actconf.firmwareUpdateUrl;
@@ -48,16 +64,17 @@ void DownloadFile(const char *fileName, char *fversion)
   DebugPrintln(3, String(host));
   DebugPrintln(3, myurl);
 
-  client.setInsecure();
+  client.setCACert(reinterpret_cast<const char*>(cert_cacert_pem_start));
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
 
   if (!http.begin(client, myurl)) {
     DebugPrintln(1, "- failed to initialize HTTPS request");
-    return;
+    return false;
   }
 
   Serial.print("[HTTP] GET...\n");
   const int httpCode = http.GET();
+  bool downloadSuccess = false;
 
   if(httpCode > 0) {
     Serial.printf("[HTTP] GET... code: %d\n", httpCode);
@@ -72,7 +89,7 @@ void DownloadFile(const char *fileName, char *fversion)
       if (!targetFile) {
         DebugPrintln(1, "- failed to open file for writing");
         http.end();
-        return;
+        return false;
       }
 
       const int bytesWritten = http.writeToStream(&targetFile);
@@ -80,6 +97,8 @@ void DownloadFile(const char *fileName, char *fversion)
 
       if (bytesWritten < 0) {
         DebugPrintln(1, "- failed to write downloaded file");
+      } else {
+        downloadSuccess = true;
       }
     } else if (httpCode == HTTP_CODE_NOT_FOUND) {
       DebugPrintln(1, "- 404 page not found");
@@ -90,6 +109,7 @@ void DownloadFile(const char *fileName, char *fversion)
 
   http.end();
   DebugPrintln(3, "end.");
+  return downloadSuccess;
 }
 
 void sendToMDS(configData actconf)
@@ -100,52 +120,60 @@ void sendToMDS(configData actconf)
     return;
   }
 
-  DynamicJsonDocument docpayload(2048);
-  JsonObject board = docpayload.createNestedObject("board");
-  JsonObject sensors = docpayload.createNestedObject("sensors");
-
-  board["api_key"] = String(actconf.MdsApiKey);
-  board["protocolVersion"] = "1";
-  board["macAddress"] = WiFi.macAddress();
-  board["deviceId"] = actconf.deviceID;
-  board["firmwareVersion"] = String(actconf.fversion);
-  board["wifiRssi"] = fieldstrength;
-  board["wifiQuality"] = quality;
-
-  struct tm tmstruct;
-  if (getLocalTime(&tmstruct, 1000)) {
-    char isoTimestamp[25];
-    strftime(isoTimestamp, sizeof(isoTimestamp), "%Y-%m-%dT%H:%M:%S", &tmstruct);
-    board["timestamp"] = isoTimestamp;
+  if (!mdsUrl.startsWith("https://")) {
+    DebugPrintln(1, "Refusing insecure MDS URL. Please use https://");
+    return;
   }
 
-  sensors["batteryVoltage"] = voltage;
-  sensors["batteryCapacity"] = capacity;
-  sensors["tank1Percent"] = tank1p;
-  sensors["tank1Adc"] = tank1adc;
-  sensors["tank2Percent"] = tank2p;
-  sensors["tank2Adc"] = tank2adc;
-  sensors["alarm1"] = alarm1;
-  sensors["relay"] = actconf.relay;
-  sensors["temp1wire"] = temp1wire;
-  sensors["latitude"] = latitude;
-  sensors["longitude"] = longitude;
-  sensors["gpsStatus"] = gpsStatus;
-  sensors["gpsSpeed"] = gpsspeed;
-  sensors["course"] = course;
+  JsonDocument docpayload;
+  JsonObject board = docpayload["board"].to<JsonObject>();
+  JsonArray sensors = docpayload["sensors"].to<JsonArray>();
+
+  // MDS ingest expects board.apiKey.
+  board["apiKey"] = String(actconf.MdsApiKey);
+  board["protocolVersion"] = "1";
+  board["macAddress"] = WiFi.macAddress();
+
+  char mdsDate[11] = "01.01.1970";
+  char mdsTime[9] = "00:00:00";
+  struct tm tmstruct;
+  if (getLocalTime(&tmstruct, 1000)) {
+    strftime(mdsDate, sizeof(mdsDate), "%d.%m.%Y", &tmstruct);
+    strftime(mdsTime, sizeof(mdsTime), "%H:%M:%S", &tmstruct);
+  }
+
+  const char* transmissionPath = "1";
+  auto addSensorRecord = [&](int enabledMarker, const char* sensorType, const char* sensorName,
+                             float value1, float value2, float value3, float value4) {
+    if (enabledMarker <= 0 || sensorType == nullptr || sensorType[0] == '\0') {
+      return;
+    }
+    JsonObject sensor = sensors.add<JsonObject>();
+    sensor["sensorType"] = sensorType;
+    if (sensorName != nullptr && sensorName[0] != '\0') {
+      sensor["sensorName"] = sensorName;
+    }
+    sensor["value1"] = value1;
+    sensor["value2"] = value2;
+    sensor["value3"] = value3;
+    sensor["value4"] = value4;
+    sensor["date"] = mdsDate;
+    sensor["time"] = mdsTime;
+    sensor["transmissionPath"] = transmissionPath;
+  };
+
+  addSensorRecord(actconf.MdsSensorIdBattery, "ADC", "Battery", voltage, capacity, 0, 0);
+  addSensorRecord(actconf.MdsSensorIdTanks, "ADC", "Tanks", tank1p, tank1adc, tank2p, tank2adc);
+  addSensorRecord(actconf.MdsSensorIdStatus, "Digital", "Status", alarm1, actconf.relay, temp1wire, 0);
+  addSensorRecord(actconf.MdsSensorIdGps, "GPS", "GPS", latitude, longitude, gpsspeed, course);
 
   if (String(actconf.envSensor) == "BME280") {
-    sensors["airTemperature"] = temperature;
-    sensors["airPressure"] = pressure;
-    sensors["airHumidity"] = humidity;
-    sensors["dewpoint"] = dewp;
-    sensors["altitude"] = altitude;
+    addSensorRecord(actconf.MdsSensorIdEnv, "BME280", "Environment", temperature, humidity, pressure, altitude);
+    addSensorRecord(actconf.MdsSensorIdDewpoint, "BME280", "Dewpoint", dewp, 0, 0, 0);
   }
 
   if (String(actconf.envSensor) == "VEdirect-Read") {
-    sensors["veDirectVoltage"] = vedirectVoltage;
-    sensors["veDirectCurrent"] = vedirectCurrent;
-    sensors["veDirectTemperature"] = vedirectTemp;
+    addSensorRecord(actconf.MdsSensorIdVedirect, "DS2438", "VEdirect", vedirectVoltage, vedirectCurrent, vedirectTemp, 0);
   }
 
   String requestBody;
@@ -157,24 +185,14 @@ void sendToMDS(configData actconf)
   DebugPrintln(3, "Starting connection to server...");
   DebugPrintln(3, "MDS URL: " + mdsUrl);
 
-  if (mdsUrl.startsWith("https://")) {
-    WiFiClientSecure client;
-    client.setInsecure();
-    if (!http.begin(client, mdsUrl)) {
-      DebugPrintln(1, "Failed to initialize HTTPS MDS request");
-      return;
-    }
-    http.addHeader("Content-Type", "application/json");
-    httpResponseCode = http.POST(requestBody);
-  } else {
-    WiFiClient client;
-    if (!http.begin(client, mdsUrl)) {
-      DebugPrintln(1, "Failed to initialize HTTP MDS request");
-      return;
-    }
-    http.addHeader("Content-Type", "application/json");
-    httpResponseCode = http.POST(requestBody);
+  WiFiClientSecure client;
+  client.setCACert(reinterpret_cast<const char*>(cert_cacert_pem_start));
+  if (!http.begin(client, mdsUrl)) {
+    DebugPrintln(1, "Failed to initialize HTTPS MDS request");
+    return;
   }
+  http.addHeader("Content-Type", "application/json");
+  httpResponseCode = http.POST(requestBody);
 
   DebugPrint(3, "HTTP POST payload: ");
   DebugPrintln(3, requestBody);

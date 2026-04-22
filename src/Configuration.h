@@ -6,13 +6,13 @@
 // Default configuration
 // Types 'byte' und 'word' doesn't work!
 typedef struct {
-  int valid = 10;                            // Number of configuration (Please change when the structure or values are changed)
+  int valid = 11;                            // Number of configuration (Please change when the structure or values are changed)
   int crypt = 0;                            // Activate for critical webside a password query [0 = off|1 = on]
   char username[31] = "admin";
   char password[31] = "12345678";           // Password for critical websites (settings, update and reboot)
   char devname[21] = "LoRa Boat Monitor";   // Device name for web configuration
   char crights[29] = "NoWa (C) (mod by Gunni) 2023";       // Copy rights
-  char fversion[7] = "V1.07d";               // Firmware version
+  char fversion[7] = "V1.08b";               // Firmware version
   char license[12] = "GPL3";                // License type
   int debug = 3;                            // Debug mode 0=off 1=Errors 2=Errors + Warnings 3=Errors + Warnings + Messages
   int corder1 = 1;                          // Set the Order or Priority for connecting to wifi
@@ -83,8 +83,17 @@ typedef struct {
   char WifiStandbyMode[8] = "No";           // Select if Wifi used in Standby mode [Yes|No] // obsolete?
   char SendDataViaWifi[8] = "No";           // Select if Wifi sends in Standby mode data to MDS [Yes|No]
 
-  char MdsUrl[100] = "http://yourservername/maritimedataserver/receiver/receivejson.php";
+  char MdsUrl[100] = "https://yourservername/ingest/receivejson.php";
   char MdsApiKey[30] = "123456789";
+
+  // MDS sensor switches (set >0 to enable sending for this sensor group)
+  int MdsSensorIdBattery = 0;                // sensorType=ADC, value1=voltage, value2=capacity
+  int MdsSensorIdTanks = 0;                  // sensorType=ADC, value1=tank1%, value2=tank1adc, value3=tank2%, value4=tank2adc
+  int MdsSensorIdStatus = 0;                 // sensorType=Digital, value1=alarm1, value2=relay, value3=temp1wire
+  int MdsSensorIdGps = 0;                    // sensorType=GPS, value1=lat, value2=lon, value3=speed, value4=course
+  int MdsSensorIdEnv = 0;                    // sensorType=BME280, value1=temp, value2=hum, value3=pressure, value4=altitude
+  int MdsSensorIdDewpoint = 0;               // sensorType=BME280, value1=dewpoint
+  int MdsSensorIdVedirect = 0;               // sensorType=DS2438, value1=veV, value2=veA, value3=veTemp
   
   // Web configs
   int cssStyle = 0;                         // css Style: 0 = black, 1 = red, 2 = white

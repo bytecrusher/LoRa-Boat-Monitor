@@ -1,6 +1,137 @@
 #include "func_webServerHandler.h"
 #include <HTTPClient.h>
 
+namespace {
+String settingsTemplateProcessor(const String &var) {
+  if (var == "header") return getheader(actconf);
+  if (var == "devname") return String(actconf.devname);
+  if (var == "cssid1") return String(actconf.cssid1);
+  if (var == "cpassword1") return String(actconf.cpassword1);
+  if (var == "cssid2") return String(actconf.cssid2);
+  if (var == "cpassword2") return String(actconf.cpassword2);
+  if (var == "cssid3") return String(actconf.cssid3);
+  if (var == "cpassword3") return String(actconf.cpassword3);
+  if (var == "username") return String(actconf.username);
+  if (var == "password") return String(actconf.password);
+  if (var == "SendDataViaWifi") return String(getindex(SendDataViaWifi, String(actconf.SendDataViaWifi)));
+  if (var == "firmwareUpdateUrl") return String(actconf.firmwareUpdateUrl);
+
+  if (var == "MdsUrl") return String(actconf.MdsUrl);
+  if (var == "MdsApiKey") return String(actconf.MdsApiKey);
+  if (var == "MdsSensorIdBattery") return String(actconf.MdsSensorIdBattery);
+  if (var == "MdsSensorIdTanks") return String(actconf.MdsSensorIdTanks);
+  if (var == "MdsSensorIdStatus") return String(actconf.MdsSensorIdStatus);
+  if (var == "MdsSensorIdGps") return String(actconf.MdsSensorIdGps);
+  if (var == "MdsSensorIdEnv") return String(actconf.MdsSensorIdEnv);
+  if (var == "MdsSensorIdDewpoint") return String(actconf.MdsSensorIdDewpoint);
+  if (var == "MdsSensorIdVedirect") return String(actconf.MdsSensorIdVedirect);
+
+  if (var == "hostname") return String(actconf.hostname);
+  if (var == "sssid") return String(actconf.sssid);
+  if (var == "spassword") return String(actconf.spassword);
+
+  if (var == "crypt") return String(getindex(usepassword, String(actconf.crypt)));
+  if (var == "instrumentSize") return String(getindex(isize, String(actconf.instrumentSize)));
+  if (var == "timeout") return String(getindex(timeout, String(actconf.timeout)));
+  if (var == "apchannel") return String(getindex(apchannel, String(actconf.apchannel)));
+  if (var == "serverMode") return String(getindex(servermode, String(actconf.serverMode)));
+  if (var == "mDNS") return String(getindex(mdnsservice, String(actconf.mDNS)));
+
+  if (var == "lorafrequency") return String(getindex(lorafrequencys, String(actconf.lorafrequency)));
+  if (var == "lchannel") return String(getindex(lchannel, String(actconf.lchannel)));
+  if (var == "spreadf") return String(getindex(spreadf, String(actconf.spreadf)));
+  if (var == "dynsf") return String(getindex(dynsf, String(actconf.dynsf)));
+  if (var == "tinterval") return String(actconf.tinterval);
+  if (var == "relay") return String(getindex(relay, String(actconf.relay)));
+
+  if (var == "devaddr") {
+    String mystring = String(actconf.devaddr, HEX);
+    mystring.toUpperCase();
+    return mystring;
+  }
+
+  if (var == "nskey") {
+    String nskey = "";
+    for (int i = 0; i < 16; i++) {
+      String mystring = String(actconf.nskey[i], HEX);
+      if (mystring.length() == 1) {
+        mystring = "0" + mystring;
+      }
+      mystring.toUpperCase();
+      nskey += mystring;
+    }
+    return nskey;
+  }
+
+  if (var == "appkey") {
+    String appkey = "";
+    for (int i = 0; i < 16; i++) {
+      String mystring = String(actconf.appkey[i], HEX);
+      if (mystring.length() == 1) {
+        mystring = "0" + mystring;
+      }
+      mystring.toUpperCase();
+      appkey += mystring;
+    }
+    return appkey;
+  }
+
+  auto fmt5 = [](float value) {
+    char buf[20];
+    sprintf(buf, "%.5f", value);
+    return String(buf);
+  };
+
+  if (var == "a1t1slope") return fmt5(actconf.a1t1slope);
+  if (var == "a2t1slope") return fmt5(actconf.a2t1slope);
+  if (var == "t1offset") return fmt5(actconf.t1offset);
+  if (var == "a2t2slope") return fmt5(actconf.a2t2slope);
+  if (var == "a1t2slope") return fmt5(actconf.a1t2slope);
+  if (var == "t2offset") return fmt5(actconf.t2offset);
+
+  if (var == "userpassword") return String(cryptPassword(String(actconf.password)));
+
+  if (var == "voffset") return fmt5(actconf.voffset);
+  if (var == "a2vslope") return fmt5(actconf.a2vslope);
+  if (var == "a1vslope") return fmt5(actconf.a1vslope);
+
+  if (var == "debug") return String(getindex(debugmode, String(actconf.debug)));
+  if (var == "serspeed") return String(getindex(serspeed, String(actconf.serspeed)));
+  if (var == "WebSerialDebug") return String(getindex(WebSerialDebug, String(actconf.WebSerialDebug)));
+  if (var == "deviceID") return String(getindex(deviceid, String(actconf.deviceID)));
+  if (var == "senddata") return String(getindex(senddata, String(actconf.senddata)));
+  if (var == "vaverage") return String(getindex(vaverage, String(actconf.vaverage)));
+  if (var == "t1average") return String(getindex(t1average, String(actconf.t1average)));
+  if (var == "t2average") return String(getindex(t2average, String(actconf.t2average)));
+  if (var == "tempSensorType") return String(getindex(tstype, String(actconf.tempSensorType)));
+  if (var == "tempUnit") return String(getindex(tempunits, String(actconf.tempUnit)));
+  if (var == "envSensor") return String(getindex(envSensor, String(actconf.envSensor)));
+  if (var == "standbyMode") return String(getindex(standbyMode, String(actconf.standbyMode)));
+  if (var == "standbySleepDuration") return String(actconf.standbySleepDuration);
+  if (var == "loraOperationMode") return String(getindex(loraOperationMode, String(actconf.loraOperationMode)));
+  if (var == "WifiStandbyMode") return String(getindex(WifiStandbyMode, String(actconf.WifiStandbyMode)));
+  if (var == "cssStyle") return String(getindex(cssStyle, String(actconf.cssStyle)));
+  if (var == "OledDisplayRotation") return String(getindex(OledDisplayRotation, String(actconf.OledDisplayRotation)));
+
+  return String();
+}
+
+String buildOtaResponse(const char *status, const String &message, bool rebooting, bool checkWebFiles, bool backupSaved) {
+  String response = "{\"status\":\"";
+  response += status;
+  response += "\",\"message\":\"";
+  response += message;
+  response += "\",\"rebooting\":";
+  response += rebooting ? "true" : "false";
+  response += ",\"checkWebFiles\":";
+  response += checkWebFiles ? "true" : "false";
+  response += ",\"backupSaved\":";
+  response += backupSaved ? "true" : "false";
+  response += "}";
+  return response;
+}
+}  // namespace
+
 //const int relayPin = 25;      // Pin GPIO25, Relay is high activ
 
 const char logout_html2[] PROGMEM = R"rawliteral(
@@ -353,6 +484,27 @@ void WebServerHandler()
       if (vname[i] == "MdsApiKey") {
         value[i].toCharArray(actconf.MdsApiKey, sizeof(actconf.MdsApiKey));
       }
+      if (vname[i] == "MdsSensorIdBattery") {
+        actconf.MdsSensorIdBattery = toInteger(value[i]);
+      }
+      if (vname[i] == "MdsSensorIdTanks") {
+        actconf.MdsSensorIdTanks = toInteger(value[i]);
+      }
+      if (vname[i] == "MdsSensorIdStatus") {
+        actconf.MdsSensorIdStatus = toInteger(value[i]);
+      }
+      if (vname[i] == "MdsSensorIdGps") {
+        actconf.MdsSensorIdGps = toInteger(value[i]);
+      }
+      if (vname[i] == "MdsSensorIdEnv") {
+        actconf.MdsSensorIdEnv = toInteger(value[i]);
+      }
+      if (vname[i] == "MdsSensorIdDewpoint") {
+        actconf.MdsSensorIdDewpoint = toInteger(value[i]);
+      }
+      if (vname[i] == "MdsSensorIdVedirect") {
+        actconf.MdsSensorIdVedirect = toInteger(value[i]);
+      }
       // LoRa Settings
       //**************
       if (vname[i] == "devaddr") {
@@ -536,9 +688,6 @@ void WebServerHandler()
   });
 
   httpServer.on("/settings.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-    // Send page
-    String content = "";
-
     // Check page password
     if (actconf.crypt == 1) {
       if(!request->authenticate(actconf.username, actconf.password)) {
@@ -548,132 +697,7 @@ void WebServerHandler()
 
     // Generate a new transaction ID
     transID();
-    content = readFile2(LittleFS, "/settings.html");
-    content.replace("%header%", getheader(actconf));
-    content.replace("%devname%", String(actconf.devname));
-    content.replace("%cssid1%", String(actconf.cssid1));
-    content.replace("%cpassword1%", String(actconf.cpassword1));
-    content.replace("%cssid2%", String(actconf.cssid2));
-    content.replace("%cpassword2%", String(actconf.cpassword2));
-    content.replace("%cssid3%", String(actconf.cssid3));
-    content.replace("%cpassword3%", String(actconf.cpassword3));
-    content.replace("%username%", String(actconf.username));
-    content.replace("%password%", String(actconf.password));
-    content.replace("%SendDataViaWifi%", String(getindex(SendDataViaWifi, String(actconf.SendDataViaWifi))));
-    content.replace("%firmwareUpdateUrl%", String(actconf.firmwareUpdateUrl));
-
-    content.replace("%MdsUrl%", String(actconf.MdsUrl));
-    content.replace("%MdsApiKey%", String(actconf.MdsApiKey));
-
-    content.replace("%hostname%", String(actconf.hostname));
-    content.replace("%sssid%", String(actconf.sssid));
-    content.replace("%spassword%", String(actconf.spassword));
-
-    content.replace("%crypt%", String(getindex(usepassword, String(actconf.crypt))));
-    content.replace("%instrumentSize%", String(getindex(isize, String(actconf.instrumentSize))));
-
-    content.replace("%timeout%", String(getindex(timeout, String(actconf.timeout))));
-    content.replace("%apchannel%", String(getindex(apchannel, String(actconf.apchannel))));
-    content.replace("%serverMode%", String(getindex(servermode, String(actconf.serverMode))));
-    content.replace("%mDNS%", String(getindex(mdnsservice, String(actconf.mDNS))));
-
-    content.replace("%lorafrequency%", String(getindex(lorafrequencys, String(actconf.lorafrequency))));
-    content.replace("%lchannel%", String(getindex(lchannel, String(actconf.lchannel))));
-    content.replace("%spreadf%", String(getindex(spreadf, String(actconf.spreadf))));
-    content.replace("%dynsf%", String(getindex(dynsf, String(actconf.dynsf))));
-    content.replace("%tinterval%", String(actconf.tinterval));
-    content.replace("%relay%", String(getindex(relay, String(actconf.relay))));
-
-    String mystring = String(actconf.devaddr, HEX);
-    mystring.toUpperCase();
-    String devaddr = mystring;
-    content.replace("%devaddr%", String(devaddr));
-
-    String nskey = "";
-    //DebugPrintln(3, "nskey: ");
-    for (int i = 0; i < 16; i++){
-      String mystring = String(actconf.nskey[i], HEX);
-      //DebugPrint(3, String(mystring));
-      if(mystring.length() == 1){
-        mystring = "0" + mystring;
-      }
-      mystring.toUpperCase();
-      nskey += mystring;
-    }
-    //DebugPrint(3, ", komplett: ");
-    //DebugPrintln(3, String(nskey));
-    content.replace("%nskey%", String(nskey));
-
-    String appkey = "";
-    for (int i = 0; i < 16; i++){
-      String mystring = String(actconf.appkey[i], HEX);
-      if(mystring.length() == 1){
-        mystring = "0" + mystring;
-      }
-      mystring.toUpperCase();
-      appkey += mystring;
-    }
-    content.replace("%appkey%", String(appkey));
-
-    char a1t1slope[20];
-    sprintf(a1t1slope, "%.5f", actconf.a1t1slope);
-    content.replace("%a1t1slope%", String(a1t1slope));
-
-    char a2t1slope[20];
-    sprintf(a2t1slope, "%.5f", actconf.a2t1slope);
-    content.replace("%a2t1slope%", String(a2t1slope));
-
-    char t1offset[20];
-    sprintf(t1offset, "%.5f", actconf.t1offset);
-    content.replace("%t1offset%", String(t1offset));
-
-    char a2t2slope[20];
-    sprintf(a2t2slope, "%.5f", actconf.a2t2slope);
-    content.replace("%a2t2slope%", String(a2t2slope));
-
-    char a1t2slope[20];
-    sprintf(a1t2slope, "%.5f", actconf.a1t2slope);
-    content.replace("%a1t2slope%", String(a1t2slope));
-
-    char t2offset[20];
-    sprintf(t2offset, "%.5f", actconf.t2offset);
-    content.replace("%t2offset%", String(t2offset));
-
-    content.replace("%userpassword%", String(cryptPassword(String(actconf.password))));
-
-    char voffset[20];
-    sprintf(voffset, "%.5f", actconf.voffset);
-    content.replace("%voffset%", String(voffset));
-
-    char a2vslope[20];
-    sprintf(a2vslope, "%.5f", actconf.a2vslope);
-    content.replace("%a2vslope%", String(a2vslope));
-
-    char a1vslope[20];
-    sprintf(a1vslope, "%.5f", actconf.a1vslope);
-    content.replace("%a1vslope%", String(a1vslope));
-
-    content.replace("%debug%", String(getindex(debugmode, String(actconf.debug))));
-    content.replace("%serspeed%", String(getindex(serspeed, String(actconf.serspeed))));
-    content.replace("%WebSerialDebug%", String(getindex(WebSerialDebug, String(actconf.WebSerialDebug))));
-
-    content.replace("%deviceID%", String(getindex(deviceid, String(actconf.deviceID))));
-    //content.replace("%sendlora%", String(getindex(sendlora, String(actconf.sendlora))));
-    content.replace("%senddata%", String(getindex(senddata, String(actconf.senddata))));
-    content.replace("%vaverage%", String(getindex(vaverage, String(actconf.vaverage))));
-    content.replace("%t1average%", String(getindex(t1average, String(actconf.t1average))));
-    content.replace("%t2average%", String(getindex(t2average, String(actconf.t2average))));
-    content.replace("%tempSensorType%", String(getindex(tstype, String(actconf.tempSensorType))));
-    content.replace("%tempUnit%", String(getindex(tempunits, String(actconf.tempUnit))));
-    content.replace("%envSensor%", String(getindex(envSensor, String(actconf.envSensor))));
-    content.replace("%standbyMode%", String(getindex(standbyMode, String(actconf.standbyMode))));
-    content.replace("%standbySleepDuration%", String(actconf.standbySleepDuration));
-    content.replace("%loraOperationMode%", String(getindex(loraOperationMode, String(actconf.loraOperationMode))));
-    content.replace("%WifiStandbyMode%", String(getindex(WifiStandbyMode, String(actconf.WifiStandbyMode))));
-    content.replace("%cssStyle%", String(getindex(cssStyle, String(actconf.cssStyle))));
-    content.replace("%OledDisplayRotation%", String(getindex(OledDisplayRotation, String(actconf.OledDisplayRotation))));
-
-    request->send(200, "text/html", content);
+    request->send(LittleFS, "/settings.html", String(), false, settingsTemplateProcessor);
   });
 
   httpServer.on("/restart.html", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -906,7 +930,7 @@ void WebServerHandler()
     json_Device["Device"]["NetworkParameter"]["ServerHostName"] = String(actconf.hostname);
 
     json_Device["Device"]["NetworkParameter"]["MdsUrl"] = String(actconf.MdsUrl);
-    json_Device["Device"]["NetworkParameter"]["MdsApiKey"] = String(actconf.MdsApiKey);
+    json_Device["Device"]["NetworkParameter"]["MdsApiKey"] = String(strlen(actconf.MdsApiKey) > 0 ? "***hidden***" : "");
 
     // Unused ?
     //json_Device["Device"]["DeviceSettings"]["SerialDebugMode"] = String(actconf.debug);
@@ -1106,6 +1130,30 @@ void WebServerHandler()
     actconf = defconf;
     saveEEPROMConfig(defconf);
     request->send(200, "text/javascript", "ok, EEPROM erased.");
+    ESP.restart();
+  });
+
+  httpServer.on("/restoreconfigbackup", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
+
+    configData restoredConfig;
+    if (!restoreConfigBackupFromLittleFS(restoredConfig)) {
+      request->send(404, "application/json", buildOtaResponse("error", "No valid config backup found in LittleFS.", false, false, false));
+      return;
+    }
+
+    String currentVersion = String(defconf.fversion);
+    currentVersion.toCharArray(restoredConfig.fversion, sizeof(restoredConfig.fversion));
+    restoredConfig.valid = defconf.valid;
+    actconf = restoredConfig;
+    saveEEPROMConfig(actconf);
+
+    request->send(200, "application/json", buildOtaResponse("ok", "Config backup restored. Device reboots now.", true, false, true));
+    delay(250);
     ESP.restart();
   });
 
@@ -1311,11 +1359,17 @@ static bool isFilesystemUpdateRequest(AsyncWebServerRequest *request, const Stri
 
 // TODO create new function for downloading beta file and run this funciton (from beta)
 void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
+  const bool filesystemUpdate = isFilesystemUpdateRequest(request, filename);
+
   if (!index){
     Serial.println("Update");
     content_len = request->contentLength();
     // Detect filesystem uploads both from modern field names and legacy filenames.
-    int cmd = isFilesystemUpdateRequest(request, filename) ? U_PART : U_FLASH;
+    int cmd = filesystemUpdate ? U_PART : U_FLASH;
+    if (!filesystemUpdate && !saveConfigBackupToLittleFS(actconf)) {
+      request->send(500, "application/json", buildOtaResponse("error", "Config backup failed. Firmware update cancelled.", false, false, false));
+      return;
+    }
 #ifdef ESP8266
     Update.runAsync(true);
     if (!Update.begin(content_len, cmd)) {
@@ -1323,6 +1377,8 @@ void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size
     if (!Update.begin(UPDATE_SIZE_UNKNOWN, cmd)) {
 #endif
       Update.printError(Serial);
+      request->send(500, "application/json", buildOtaResponse("error", "Unable to start OTA update.", false, false, !filesystemUpdate));
+      return;
     }
   }
 
@@ -1335,15 +1391,20 @@ void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size
   }
   //Serial.printf("Progress: %d%%\n", (Update.progress()*100)/Update.size());
   if (final) {
-    AsyncWebServerResponse *response = request->beginResponse(302, "text/plain", "Please wait while the device reboots");
-    response->addHeader("Refresh", "20");  
-    response->addHeader("Location", "/");
-    request->send(response);
     if (!Update.end(true)){
       Update.printError(Serial);
+      request->send(500, "application/json", buildOtaResponse("error", "Update failed. See serial log for details.", false, false, !filesystemUpdate));
     } else {
+      if (filesystemUpdate) {
+        saveWebFilesVersion(actconf.fversion);
+      }
       Serial.println("Update complete");
+      const String message = filesystemUpdate
+        ? "FileSystem update complete. Device reboots now."
+        : "Firmware update complete. Device reboots and checks web files.";
+      request->send(200, "application/json", buildOtaResponse("ok", message, true, !filesystemUpdate, !filesystemUpdate));
       Serial.flush();
+      delay(250);
       ESP.restart();
     }
   }

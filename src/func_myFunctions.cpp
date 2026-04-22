@@ -9,8 +9,19 @@ struct ConfigStorageHeader {
   uint32_t checksum;
 };
 
+struct ConfigBackupHeader {
+  uint32_t magic;
+  uint16_t version;
+  uint16_t length;
+  uint32_t checksum;
+};
+
 constexpr uint32_t CONFIG_STORAGE_MAGIC = 0x43464731UL;  // "CFG1"
 constexpr uint16_t CONFIG_STORAGE_VERSION = 1;
+constexpr uint32_t CONFIG_BACKUP_MAGIC = 0x43424631UL;   // "CBF1"
+constexpr uint16_t CONFIG_BACKUP_VERSION = 1;
+constexpr char CONFIG_BACKUP_PATH[] = "/config-backup.bin";
+constexpr char WEB_FILES_VERSION_PATH[] = "/webfiles-version.txt";
 
 int configHeaderStart() {
   return cfgStart - int(sizeof(ConfigStorageHeader));
@@ -35,6 +46,20 @@ bool readConfigStorageHeader(ConfigStorageHeader &header) {
          header.version == CONFIG_STORAGE_VERSION &&
          header.length > 0 &&
          header.length <= sizeof(configData);
+}
+
+bool readConfigBackupHeader(File &file, ConfigBackupHeader &header) {
+  if (!file || file.size() < int(sizeof(ConfigBackupHeader) + sizeof(configData))) {
+    return false;
+  }
+
+  if (file.read(reinterpret_cast<uint8_t*>(&header), sizeof(header)) != sizeof(header)) {
+    return false;
+  }
+
+  return header.magic == CONFIG_BACKUP_MAGIC &&
+         header.version == CONFIG_BACKUP_VERSION &&
+         header.length == sizeof(configData);
 }
 
 void flushSerial2UntilSentenceStart() {
@@ -285,6 +310,108 @@ bool hasEEPROMConfigHeader() {
   const bool hasHeader = readConfigStorageHeader(header);
   EEPROM.end();
   return hasHeader;
+}
+
+bool saveConfigBackupToLittleFS(const configData &cfg) {
+  const ConfigBackupHeader header = {
+    CONFIG_BACKUP_MAGIC,
+    CONFIG_BACKUP_VERSION,
+    uint16_t(sizeof(configData)),
+    calculateConfigChecksum(reinterpret_cast<const uint8_t*>(&cfg), sizeof(configData))
+  };
+
+  if (LittleFS.exists(CONFIG_BACKUP_PATH)) {
+    LittleFS.remove(CONFIG_BACKUP_PATH);
+  }
+
+  File backupFile = LittleFS.open(CONFIG_BACKUP_PATH, FILE_WRITE);
+  if (!backupFile) {
+    DebugPrintln(1, "Failed to open config backup file");
+    return false;
+  }
+
+  const bool headerWritten = backupFile.write(reinterpret_cast<const uint8_t*>(&header), sizeof(header)) == sizeof(header);
+  const bool configWritten = backupFile.write(reinterpret_cast<const uint8_t*>(&cfg), sizeof(cfg)) == sizeof(cfg);
+  backupFile.close();
+
+  if (!headerWritten || !configWritten) {
+    LittleFS.remove(CONFIG_BACKUP_PATH);
+    DebugPrintln(1, "Failed to write config backup");
+    return false;
+  }
+
+  DebugPrintln(3, "Config backup saved to LittleFS");
+  return true;
+}
+
+bool restoreConfigBackupFromLittleFS(configData &cfg) {
+  File backupFile = LittleFS.open(CONFIG_BACKUP_PATH, FILE_READ);
+  ConfigBackupHeader header;
+  if (!readConfigBackupHeader(backupFile, header)) {
+    if (backupFile) {
+      backupFile.close();
+    }
+    DebugPrintln(1, "Config backup missing or invalid");
+    return false;
+  }
+
+  configData restoredCfg = configData();
+  if (backupFile.read(reinterpret_cast<uint8_t*>(&restoredCfg), sizeof(restoredCfg)) != sizeof(restoredCfg)) {
+    backupFile.close();
+    DebugPrintln(1, "Failed to read config backup");
+    return false;
+  }
+  backupFile.close();
+
+  const uint32_t checksum = calculateConfigChecksum(reinterpret_cast<const uint8_t*>(&restoredCfg), sizeof(restoredCfg));
+  if (checksum != header.checksum) {
+    DebugPrintln(1, "Config backup checksum mismatch");
+    return false;
+  }
+
+  cfg = restoredCfg;
+  return true;
+}
+
+bool hasConfigBackupInLittleFS() {
+  return LittleFS.exists(CONFIG_BACKUP_PATH);
+}
+
+bool saveWebFilesVersion(const char *version) {
+  if (version == nullptr || version[0] == '\0') {
+    return false;
+  }
+
+  if (LittleFS.exists(WEB_FILES_VERSION_PATH)) {
+    LittleFS.remove(WEB_FILES_VERSION_PATH);
+  }
+
+  File versionFile = LittleFS.open(WEB_FILES_VERSION_PATH, FILE_WRITE);
+  if (!versionFile) {
+    DebugPrintln(1, "Failed to open web files version marker");
+    return false;
+  }
+
+  versionFile.print(version);
+  versionFile.close();
+  return true;
+}
+
+bool areWebFilesCurrent(const char *version) {
+  if (version == nullptr || version[0] == '\0' || !LittleFS.exists(WEB_FILES_VERSION_PATH)) {
+    return false;
+  }
+
+  File versionFile = LittleFS.open(WEB_FILES_VERSION_PATH, FILE_READ);
+  if (!versionFile) {
+    return false;
+  }
+
+  String storedVersion = versionFile.readString();
+  versionFile.close();
+  storedVersion.trim();
+
+  return storedVersion == String(version);
 }
 
 //**************************************************************************************

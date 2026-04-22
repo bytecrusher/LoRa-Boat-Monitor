@@ -795,10 +795,12 @@ void state1(){
     //readGPSValues();
   }
 
-  if (runDownloadingFiles) {
+  static unsigned long nextWebFilesDownloadAttempt = 0;
+  if (runDownloadingFiles && WiFi.status() == WL_CONNECTED && millis() >= nextWebFilesDownloadAttempt) {
     runDownloadingFilesStatus = true;
-    DownloadFilesFromWeb(actconf.fversion);
-    runDownloadingFiles = false;
+    const bool webFilesCurrent = DownloadFilesFromWeb(actconf.fversion);
+    runDownloadingFiles = !webFilesCurrent;
+    nextWebFilesDownloadAttempt = webFilesCurrent ? 0 : (millis() + 30000UL);
     runDownloadingFilesStatus = false;
   }
 
@@ -1109,6 +1111,11 @@ void setup() {
   if(!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED)){
     DebugPrintln(1, "LittleFS Mount Failed");
     return;
+  }
+
+  if (!areWebFilesCurrent(actconf.fversion)) {
+    DebugPrintln(2, "Web files version mismatch detected, scheduling update");
+    runDownloadingFiles = true;
   }
 
   sendedLoraAfterSleepOneTime = false;
