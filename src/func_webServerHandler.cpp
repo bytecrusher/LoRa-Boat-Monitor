@@ -27,7 +27,34 @@ String normalizeFirmwareUpdateBaseUrl(const String &configuredValue) {
   return "https://" + normalized + suffix;
 }
 
-bool fetchHttpsText(const String &url, String &payload, uint16_t timeoutMs = 10000) {
+String normalizeFirmwareUpdateValueForStorage(const String &configuredValue) {
+  String normalized = configuredValue;
+  normalized.trim();
+
+  if (normalized.startsWith("https://")) {
+    normalized.remove(0, 8);
+  } else if (normalized.startsWith("http://")) {
+    normalized.remove(0, 7);
+  }
+
+  while (normalized.endsWith("/")) {
+    normalized.remove(normalized.length() - 1);
+  }
+
+  const String suffix = "/files_for_esp_webserver";
+  if (normalized.endsWith(suffix)) {
+    normalized.remove(normalized.length() - suffix.length());
+  }
+
+  const int slashIndex = normalized.indexOf('/');
+  if (slashIndex >= 0) {
+    normalized = normalized.substring(0, slashIndex);
+  }
+
+  return normalized;
+}
+
+bool fetchHttpsText(const String &url, String &payload, String *errorMessage = nullptr, uint16_t timeoutMs = 10000) {
   WiFiClientSecure client;
   HTTPClient http;
 
@@ -36,11 +63,21 @@ bool fetchHttpsText(const String &url, String &payload, uint16_t timeoutMs = 100
   http.setTimeout(timeoutMs);
 
   if (!http.begin(client, url)) {
+    if (errorMessage != nullptr) {
+      *errorMessage = "Unable to initialize HTTPS request";
+    }
     return false;
   }
 
   const int httpCode = http.GET();
   if (httpCode != HTTP_CODE_OK) {
+    if (errorMessage != nullptr) {
+      if (httpCode > 0) {
+        *errorMessage = "HTTP " + String(httpCode);
+      } else {
+        *errorMessage = http.errorToString(httpCode);
+      }
+    }
     http.end();
     return false;
   }
@@ -48,6 +85,9 @@ bool fetchHttpsText(const String &url, String &payload, uint16_t timeoutMs = 100
   payload = http.getString();
   payload.trim();
   http.end();
+  if (payload.length() == 0 && errorMessage != nullptr) {
+    *errorMessage = "Empty response";
+  }
   return payload.length() > 0;
 }
 
@@ -70,7 +110,7 @@ String getConfiguredFirmwareBaseUrl() {
   return normalizeFirmwareUpdateBaseUrl(String(actconf.firmwareUpdateUrl));
 }
 
-bool resolveStableFirmware(String &firmwareUrl, String &version) {
+bool resolveStableFirmware(String &firmwareUrl, String &version, String *errorMessage = nullptr) {
   const String baseUrl = getConfiguredFirmwareBaseUrl();
   const char *candidateFiles[] = {
     "latestVersion.txt",
@@ -80,8 +120,9 @@ bool resolveStableFirmware(String &firmwareUrl, String &version) {
   };
 
   String payload;
+  String lastError;
   for (size_t i = 0; i < (sizeof(candidateFiles) / sizeof(candidateFiles[0])); ++i) {
-    if (!fetchHttpsText(baseUrl + "/" + candidateFiles[i], payload)) {
+    if (!fetchHttpsText(baseUrl + "/" + candidateFiles[i], payload, &lastError)) {
       continue;
     }
 
@@ -96,13 +137,16 @@ bool resolveStableFirmware(String &firmwareUrl, String &version) {
     return version.length() > 0;
   }
 
+  if (errorMessage != nullptr) {
+    *errorMessage = lastError.length() ? lastError : "No stable version marker found";
+  }
   return false;
 }
 
-bool resolveBetaFirmware(String &firmwareUrl, String &version) {
+bool resolveBetaFirmware(String &firmwareUrl, String &version, String *errorMessage = nullptr) {
   const String baseUrl = getConfiguredFirmwareBaseUrl();
   String payload;
-  if (!fetchHttpsText(baseUrl + "/latestBetaVersion.txt", payload)) {
+  if (!fetchHttpsText(baseUrl + "/latestBetaVersion.txt", payload, errorMessage)) {
     return false;
   }
 
@@ -263,6 +307,277 @@ const char logout_html2[] PROGMEM = R"rawliteral(
 
 void WebServerHandler()
 {
+  auto handleSaveSettings = [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
+
+    // Read all received get arguments and save in a array
+    int num = request->args();
+    String vname[num];
+    String value[num];
+    for (int i = 0; i < num; i++) {
+      vname[i] = request->argName(i);
+      value[i] = request->arg(i);  
+    } 
+    String hash = "";
+  //  bool reboot = false;
+
+    // Check new settings and save it in configuration
+    for (int i = 0; i < num; i++)
+    {
+      // Passwort Settings
+      //******************
+      if(vname[i] == "password"){
+        hash = value[i];
+      }
+      if (vname[i] == "usepassword") {
+        actconf.crypt = toInteger(value[i]);
+      }
+      if (vname[i] == "pagepasswd") {
+        value[i].toCharArray(actconf.password, sizeof(actconf.password));
+      }
+      // Display Settings
+      //*****************
+      if (vname[i] == "isize") {
+        actconf.instrumentSize = toInteger(value[i]);
+      }
+      // Network Settings
+      //*****************
+      if (vname[i] == "cssid1") {
+        value[i].toCharArray(actconf.cssid1, sizeof(actconf.cssid1));
+      }
+      if (vname[i] == "cpasswd1") {
+        value[i].toCharArray(actconf.cpassword1, sizeof(actconf.cpassword1));
+      }
+      if (vname[i] == "cssid2") {
+        value[i].toCharArray(actconf.cssid2, sizeof(actconf.cssid2));
+      }
+      if (vname[i] == "cpasswd2") {
+        value[i].toCharArray(actconf.cpassword2, sizeof(actconf.cpassword2));
+      }
+      if (vname[i] == "cssid3") {
+        value[i].toCharArray(actconf.cssid3, sizeof(actconf.cssid3));
+      }
+      if (vname[i] == "cpasswd3") {
+        value[i].toCharArray(actconf.cpassword3, sizeof(actconf.cpassword3));
+      }
+      if (vname[i] == "timeout") {
+        actconf.timeout = toInteger(value[i]);
+      }
+      if (vname[i] == "sssid") {
+        value[i].toCharArray(actconf.sssid, sizeof(actconf.sssid));
+      }
+      if (vname[i] == "spasswd") {
+        value[i].toCharArray(actconf.spassword, sizeof(actconf.spassword));
+      }
+      if (vname[i] == "apchannel") {
+        actconf.apchannel = toInteger(value[i]);
+      }
+      if (vname[i] == "firmwareUpdateUrl") {
+        String normalizedFirmwareUpdateUrl = normalizeFirmwareUpdateValueForStorage(value[i]);
+        normalizedFirmwareUpdateUrl.toCharArray(actconf.firmwareUpdateUrl, sizeof(actconf.firmwareUpdateUrl));
+      }
+      if (vname[i] == "servermode") {
+        actconf.serverMode = toInteger(value[i]);
+      }
+      if (vname[i] == "mdnsservice") {
+        actconf.mDNS = toInteger(value[i]);
+      }
+      if (vname[i] == "SendDataViaWifi") {
+        value[i].toCharArray(actconf.SendDataViaWifi, sizeof(actconf.SendDataViaWifi));
+      }
+      if (vname[i] == "MdsUrl") {
+        value[i].toCharArray(actconf.MdsUrl, sizeof(actconf.MdsUrl));
+      }
+      if (vname[i] == "MdsApiKey") {
+        value[i].toCharArray(actconf.MdsApiKey, sizeof(actconf.MdsApiKey));
+      }
+      if (vname[i] == "MdsSensorIdBattery") {
+        actconf.MdsSensorIdBattery = toInteger(value[i]);
+      }
+      if (vname[i] == "MdsSensorIdTanks") {
+        actconf.MdsSensorIdTanks = toInteger(value[i]);
+      }
+      if (vname[i] == "MdsSensorIdStatus") {
+        actconf.MdsSensorIdStatus = toInteger(value[i]);
+      }
+      if (vname[i] == "MdsSensorIdGps") {
+        actconf.MdsSensorIdGps = toInteger(value[i]);
+      }
+      if (vname[i] == "MdsSensorIdEnv") {
+        actconf.MdsSensorIdEnv = toInteger(value[i]);
+      }
+      if (vname[i] == "MdsSensorIdDewpoint") {
+        actconf.MdsSensorIdDewpoint = toInteger(value[i]);
+      }
+      if (vname[i] == "MdsSensorIdVedirect") {
+        actconf.MdsSensorIdVedirect = toInteger(value[i]);
+      }
+      // LoRa Settings
+      //**************
+      if (vname[i] == "devaddr") {
+        char hexstring[9];
+        value[i].toCharArray(hexstring, sizeof(hexstring));
+        actconf.devaddr = HexToInt(hexstring);
+      }
+      if (vname[i] == "nskey") {
+        char mystring[33];
+        char hexstring[3];
+        value[i].toCharArray(mystring, sizeof(mystring));
+        DebugPrintln(3, mystring);
+        for (int j = 0; j < 16; j++){
+          hexstring[0] = mystring[j*2];
+          hexstring[1] = mystring[j*2+1];
+          hexstring[2] = '\0';
+          actconf.nskey[j] = HexToInt(hexstring);
+          DebugPrint(3, j);
+          DebugPrint(3, " ");
+          DebugPrint(3, HexToInt(hexstring));
+          DebugPrint(3, " ");
+          DebugPrintln(3, hexstring);
+        }
+      }
+      if (vname[i] == "appkey") {
+        char mystring[33];
+        char hexstring[3];
+        value[i].toCharArray(mystring, sizeof(mystring));
+        DebugPrintln(3, mystring);
+        for (int j = 0; j < 16; j++){
+          hexstring[0] = mystring[j*2];
+          hexstring[1] = mystring[j*2+1];
+          hexstring[2] = '\0';
+          actconf.appkey[j] = HexToInt(hexstring);
+          DebugPrint(3, j);
+          DebugPrint(3, " ");
+          DebugPrint(3, HexToInt(hexstring));
+          DebugPrint(3, " ");
+          DebugPrintln(3, hexstring);
+        }
+      } 
+      if (vname[i] == "lorafrequency") {
+        value[i].toCharArray(actconf.lorafrequency, sizeof(actconf.lorafrequency));
+      }
+      if (vname[i] == "lchannel") {
+        actconf.lchannel = toInteger(value[i]);
+      }
+      if (vname[i] == "dynsf") {
+        actconf.dynsf = toInteger(value[i]);
+      }
+      if (vname[i] == "spreadf") {
+        actconf.spreadf = toInteger(value[i]);
+      }
+      if (vname[i] == "tinterval") {
+        if(actconf.tinterval != toInteger(value[i])){
+          actconf.tinterval = toInteger(value[i]);
+          TX_INTERVAL = actconf.tinterval * 60;
+          reboot = true;
+        }
+      }
+      if (vname[i] == "relay") {
+        actconf.relay = toInteger(value[i]);
+        if(actconf.relay == 0){
+          digitalWrite(relayPin, LOW);
+          relaytimer = 0;
+        }
+        else{
+          digitalWrite(relayPin, HIGH);
+        }
+      }
+      if (vname[i] == "debugmode") {
+        actconf.debug = toInteger(value[i]);
+      }
+      if (vname[i] == "serspeed") {
+        actconf.serspeed = toInteger(value[i]);
+      }
+      if (vname[i] == "WebSerialDebug") {
+        actconf.WebSerialDebug = toInteger(value[i]);
+      }
+      if (vname[i] == "deviceid") {
+        actconf.deviceID = toInteger(value[i]);
+      }
+      if (vname[i] == "senddata") {
+        actconf.senddata = toInteger(value[i]);
+      }    
+      if (vname[i] == "vaverage") {
+        actconf.vaverage = toInteger(value[i]);
+      }
+      if (vname[i] == "t1average") {
+        actconf.t1average = toInteger(value[i]);
+      }
+      if (vname[i] == "t2average") {
+        actconf.t2average = toInteger(value[i]);
+      }   
+      if (vname[i] == "tstype") {
+        value[i].toCharArray(actconf.tempSensorType, sizeof(actconf.tempSensorType));
+      }
+      if (vname[i] == "tempunit") {
+        value[i].toCharArray(actconf.tempUnit, sizeof(actconf.tempUnit));
+      }
+      if (vname[i] == "envSensor") {
+        value[i].toCharArray(actconf.envSensor, sizeof(actconf.envSensor));
+      }
+      if (vname[i] == "standbyMode") {
+        value[i].toCharArray(actconf.standbyMode, sizeof(actconf.standbyMode));
+      }
+      if (vname[i] == "standbySleepDuration") {
+        actconf.standbySleepDuration = toInteger(value[i]);
+      }
+      if (vname[i] == "loraOperationMode") {
+        value[i].toCharArray(actconf.loraOperationMode, sizeof(actconf.loraOperationMode));
+      }
+      if (vname[i] == "WifiStandbyMode") {
+        value[i].toCharArray(actconf.WifiStandbyMode, sizeof(actconf.WifiStandbyMode));
+      }
+      if (vname[i] == "a1vslope") {
+        actconf.a1vslope = toFloat(value[i]);
+      }
+      if (vname[i] == "a2vslope") {
+        actconf.a2vslope = toFloat(value[i]);
+      }
+      if (vname[i] == "voffset") {
+        actconf.voffset = toFloat(value[i]);
+      }
+      if (vname[i] == "a1t1slope") {
+        actconf.a1t1slope = toFloat(value[i]);
+      }
+      if (vname[i] == "a2t1slope") {
+        actconf.a2t1slope = toFloat(value[i]);
+      }
+      if (vname[i] == "t1offset") {
+        actconf.t1offset = toFloat(value[i]);
+      }
+      if (vname[i] == "a1t2slope") {
+        actconf.a1t2slope = toFloat(value[i]);
+      }
+      if (vname[i] == "a2t2slope") {
+        actconf.a2t2slope = toFloat(value[i]);
+      }
+      if (vname[i] == "t2offset") {
+        actconf.t2offset = toFloat(value[i]);
+      }
+      if (vname[i] == "cssStyle") {
+        actconf.cssStyle = toFloat(value[i]);
+      }
+      if (vname[i] == "OledDisplayRotation") {
+        actconf.OledDisplayRotation = toFloat(value[i]);
+      }
+    }
+
+    if(num > 0) {  
+      saveEEPROMConfig(actconf);
+      DebugPrintln(3, "New settings saved");
+    }
+    DebugPrintln(3, "Send settings.html");
+    if(reboot){
+      DebugPrintln(3, "Reboot");
+      ESP.restart();
+    }
+    request->redirect("/settings.html");
+  };
+
   httpServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     if (actconf.crypt == 1 && request->hasArg("restart")) {
       if(!request->authenticate(actconf.username, actconf.password)) {
@@ -293,6 +608,10 @@ void WebServerHandler()
     }
   });
 
+  httpServer.on("/", HTTP_HEAD, [](AsyncWebServerRequest *request) {
+    request->redirect("/index.html");
+  });
+
   httpServer.on("/index.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     String content = readFile2(LittleFS, "/index.html");
     //content.replace("%header%", String(readFile2(LittleFS, "/header.html")));
@@ -303,6 +622,14 @@ void WebServerHandler()
       request->redirect("/initialsetup.html");
     } else {
       request->send(200, "text/html", content);
+    }
+  });
+
+  httpServer.on("/index.html", HTTP_HEAD, [](AsyncWebServerRequest *request) {
+    if (LittleFS.exists("/index.html")) {
+      request->send(200, "text/html", "");
+    } else {
+      request->redirect("/initialsetup.html");
     }
   });
 
@@ -511,296 +838,8 @@ void WebServerHandler()
     request->send(200, "application/json", response);
   });
 
-  httpServer.on("/savesettings", HTTP_GET, [](AsyncWebServerRequest *request) {
-    if (actconf.crypt == 1) {
-      if(!request->authenticate(actconf.username, actconf.password)) {
-        return request->requestAuthentication();
-      }
-    }
-
-    // Read all received get arguments and save in a array
-    int num = request->args();
-    String vname[num];
-    String value[num];
-    for (int i = 0; i < num; i++) {
-      vname[i] = request->argName(i);
-      value[i] = request->arg(i);  
-    } 
-    String hash = "";
-  //  bool reboot = false;
-
-    // Check new settings and save it in configuration
-    for (int i = 0; i < num; i++)
-    {
-      // Passwort Settings
-      //******************
-      if(vname[i] == "password"){
-        hash = value[i];
-      }
-      if (vname[i] == "usepassword") {
-        actconf.crypt = toInteger(value[i]);
-      }
-      if (vname[i] == "pagepasswd") {
-        value[i].toCharArray(actconf.password, sizeof(actconf.password));
-      }
-      // Display Settings
-      //*****************
-      if (vname[i] == "isize") {
-        actconf.instrumentSize = toInteger(value[i]);
-      }
-      // Network Settings
-      //*****************
-      if (vname[i] == "cssid1") {
-        value[i].toCharArray(actconf.cssid1, sizeof(actconf.cssid1));
-      }
-      if (vname[i] == "cpasswd1") {
-        value[i].toCharArray(actconf.cpassword1, sizeof(actconf.cpassword1));
-      }
-      if (vname[i] == "cssid2") {
-        value[i].toCharArray(actconf.cssid2, sizeof(actconf.cssid2));
-      }
-      if (vname[i] == "cpasswd2") {
-        value[i].toCharArray(actconf.cpassword2, sizeof(actconf.cpassword2));
-      }
-      if (vname[i] == "cssid3") {
-        value[i].toCharArray(actconf.cssid3, sizeof(actconf.cssid3));
-      }
-      if (vname[i] == "cpasswd3") {
-        value[i].toCharArray(actconf.cpassword3, sizeof(actconf.cpassword3));
-      }
-      if (vname[i] == "timeout") {
-        actconf.timeout = toInteger(value[i]);
-      }
-      if (vname[i] == "sssid") {
-        value[i].toCharArray(actconf.sssid, sizeof(actconf.sssid));
-      }
-      if (vname[i] == "spasswd") {
-        value[i].toCharArray(actconf.spassword, sizeof(actconf.spassword));
-      }
-      if (vname[i] == "apchannel") {
-        actconf.apchannel = toInteger(value[i]);
-      }
-      if (vname[i] == "firmwareUpdateUrl") {
-        value[i].toCharArray(actconf.firmwareUpdateUrl, sizeof(actconf.firmwareUpdateUrl));
-      }
-      if (vname[i] == "servermode") {
-        actconf.serverMode = toInteger(value[i]);
-      }
-      if (vname[i] == "mdnsservice") {
-        actconf.mDNS = toInteger(value[i]);
-      }
-      if (vname[i] == "SendDataViaWifi") {
-        //actconf.SendDataViaWifi = toInteger(value[i]);
-        value[i].toCharArray(actconf.SendDataViaWifi, sizeof(actconf.SendDataViaWifi));
-      }
-      if (vname[i] == "MdsUrl") {
-        value[i].toCharArray(actconf.MdsUrl, sizeof(actconf.MdsUrl));
-      }
-      if (vname[i] == "MdsApiKey") {
-        value[i].toCharArray(actconf.MdsApiKey, sizeof(actconf.MdsApiKey));
-      }
-      if (vname[i] == "MdsSensorIdBattery") {
-        actconf.MdsSensorIdBattery = toInteger(value[i]);
-      }
-      if (vname[i] == "MdsSensorIdTanks") {
-        actconf.MdsSensorIdTanks = toInteger(value[i]);
-      }
-      if (vname[i] == "MdsSensorIdStatus") {
-        actconf.MdsSensorIdStatus = toInteger(value[i]);
-      }
-      if (vname[i] == "MdsSensorIdGps") {
-        actconf.MdsSensorIdGps = toInteger(value[i]);
-      }
-      if (vname[i] == "MdsSensorIdEnv") {
-        actconf.MdsSensorIdEnv = toInteger(value[i]);
-      }
-      if (vname[i] == "MdsSensorIdDewpoint") {
-        actconf.MdsSensorIdDewpoint = toInteger(value[i]);
-      }
-      if (vname[i] == "MdsSensorIdVedirect") {
-        actconf.MdsSensorIdVedirect = toInteger(value[i]);
-      }
-      // LoRa Settings
-      //**************
-      if (vname[i] == "devaddr") {
-        char hexstring[9];
-        value[i].toCharArray(hexstring, sizeof(hexstring));
-        actconf.devaddr = HexToInt(hexstring);
-      }
-      if (vname[i] == "nskey") {
-        char mystring[33];
-        char hexstring[3];
-        value[i].toCharArray(mystring, sizeof(mystring));
-        DebugPrintln(3, mystring);
-        for (int j = 0; j < 16; j++){
-          hexstring[0] = mystring[j*2];
-          hexstring[1] = mystring[j*2+1];
-          hexstring[2] = '\0';
-          actconf.nskey[j] = HexToInt(hexstring);
-          DebugPrint(3, j);
-          DebugPrint(3, " ");
-          DebugPrint(3, HexToInt(hexstring));
-          DebugPrint(3, " ");
-          DebugPrintln(3, hexstring);
-        }
-      }
-      if (vname[i] == "appkey") {
-        char mystring[33];
-        char hexstring[3];
-        value[i].toCharArray(mystring, sizeof(mystring));
-        DebugPrintln(3, mystring);
-        for (int j = 0; j < 16; j++){
-          hexstring[0] = mystring[j*2];
-          hexstring[1] = mystring[j*2+1];
-          hexstring[2] = '\0';
-          actconf.appkey[j] = HexToInt(hexstring);
-          DebugPrint(3, j);
-          DebugPrint(3, " ");
-          DebugPrint(3, HexToInt(hexstring));
-          DebugPrint(3, " ");
-          DebugPrintln(3, hexstring);
-        }
-      } 
-      if (vname[i] == "lorafrequency") {
-        value[i].toCharArray(actconf.lorafrequency, sizeof(actconf.lorafrequency));
-      }
-      if (vname[i] == "lchannel") {
-        actconf.lchannel = toInteger(value[i]);
-        // Enable the used LoRa channels
-        //setChannel(actconf.lchannel);
-      }
-      if (vname[i] == "dynsf") {
-        actconf.dynsf = toInteger(value[i]);
-      }
-      if (vname[i] == "spreadf") {
-        actconf.spreadf = toInteger(value[i]);
-        // Set spreading factor and dynamic SF
-        //setSF(slot, actconf.spreadf, actconf.dynsf);
-      }
-      if (vname[i] == "tinterval") {
-        if(actconf.tinterval != toInteger(value[i])){
-          actconf.tinterval = toInteger(value[i]);
-          // Set LoRa transmit interval
-          TX_INTERVAL = actconf.tinterval * 60; // Send interval * 30s
-          reboot = true; // Need a reboot
-        }
-      }
-      //if (vname[i] == "sendlora") {
-      //  actconf.sendlora = toInteger(value[i]);
-      //}
-      if (vname[i] == "relay") {
-        actconf.relay = toInteger(value[i]);
-        if(actconf.relay == 0){
-          digitalWrite(relayPin, LOW);
-          relaytimer = 0;
-        }
-        else{
-          digitalWrite(relayPin, HIGH);
-        }
-      }
-      // DeviceSettings
-      //*************** 
-      if (vname[i] == "debugmode") {
-        actconf.debug = toInteger(value[i]);
-      }
-      if (vname[i] == "serspeed") {
-        actconf.serspeed = toInteger(value[i]);
-      }
-
-      if (vname[i] == "WebSerialDebug") {
-        actconf.WebSerialDebug = toInteger(value[i]);
-      }
-
-      if (vname[i] == "deviceid") {
-        actconf.deviceID = toInteger(value[i]);
-      }
-      if (vname[i] == "senddata") {
-        actconf.senddata = toInteger(value[i]);
-      }    
-      if (vname[i] == "vaverage") {
-        actconf.vaverage = toInteger(value[i]);
-      }
-      if (vname[i] == "t1average") {
-        actconf.t1average = toInteger(value[i]);
-      }
-      if (vname[i] == "t2average") {
-        actconf.t2average = toInteger(value[i]);
-      }   
-      if (vname[i] == "tstype") {
-        value[i].toCharArray(actconf.tempSensorType, sizeof(actconf.tempSensorType));
-      }
-      if (vname[i] == "tempunit") {
-        value[i].toCharArray(actconf.tempUnit, sizeof(actconf.tempUnit));
-      }
-      if (vname[i] == "envSensor") {
-        value[i].toCharArray(actconf.envSensor, sizeof(actconf.envSensor));
-      }
-      if (vname[i] == "standbyMode") {
-        // Check if Alarm is High (?), to prevent the user from locking out.
-        //String(alarm1)
-        value[i].toCharArray(actconf.standbyMode, sizeof(actconf.standbyMode));
-      }
-      if (vname[i] == "standbySleepDuration") {
-        //value[i].toInteger(actconf.standbySleepDuration);
-        actconf.standbySleepDuration = toInteger(value[i]);
-      }
-      if (vname[i] == "loraOperationMode") {
-        value[i].toCharArray(actconf.loraOperationMode, sizeof(actconf.loraOperationMode));
-      }
-      if (vname[i] == "WifiStandbyMode") {
-        value[i].toCharArray(actconf.WifiStandbyMode, sizeof(actconf.WifiStandbyMode));
-      }
-      // Calibration Settings
-      //*********************    
-      if (vname[i] == "a1vslope") {
-        actconf.a1vslope = toFloat(value[i]);
-      }
-      if (vname[i] == "a2vslope") {
-        actconf.a2vslope = toFloat(value[i]);
-      }
-      if (vname[i] == "voffset") {
-        actconf.voffset = toFloat(value[i]);
-      }
-      if (vname[i] == "a1t1slope") {
-        actconf.a1t1slope = toFloat(value[i]);
-      }
-      if (vname[i] == "a2t1slope") {
-        actconf.a2t1slope = toFloat(value[i]);
-      }
-      if (vname[i] == "t1offset") {
-        actconf.t1offset = toFloat(value[i]);
-      }
-      if (vname[i] == "a1t2slope") {
-        actconf.a1t2slope = toFloat(value[i]);
-      }
-      if (vname[i] == "a2t2slope") {
-        actconf.a2t2slope = toFloat(value[i]);
-      }
-      if (vname[i] == "t2offset") {
-        actconf.t2offset = toFloat(value[i]);
-      }
-      if (vname[i] == "cssStyle") {
-        actconf.cssStyle = toFloat(value[i]);
-      }
-      if (vname[i] == "OledDisplayRotation") {
-        actconf.OledDisplayRotation = toFloat(value[i]);
-      }
-    }
-    // Save the settings if the number of return values is greater 0
-    if(num > 0) {  
-      saveEEPROMConfig(actconf);      // Save the new settings in EEPROM
-      DebugPrintln(3, "New settings saved");
-    }
-    // Debug info
-    DebugPrintln(3, "Send settings.html");
-    // Reboot when TX_INTERVAL is changed
-    if(reboot){
-      DebugPrintln(3, "Reboot");
-      ESP.restart(); // Restart ESP32
-    }
-    request->redirect("/settings.html");
-    //request->send(200, "text/plain", "OK");
-  });
+  httpServer.on("/savesettings", HTTP_GET, handleSaveSettings);
+  httpServer.on("/savesettings", HTTP_POST, handleSaveSettings);
 
   httpServer.on("/settings.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     // Check page password
@@ -846,11 +885,13 @@ void WebServerHandler()
 
     String stableFirmwareUrl;
     String stableVersion;
-    const bool stableAvailable = resolveStableFirmware(stableFirmwareUrl, stableVersion);
+    String stableError;
+    const bool stableAvailable = resolveStableFirmware(stableFirmwareUrl, stableVersion, &stableError);
 
     String betaFirmwareUrl;
     String betaVersion;
-    const bool betaAvailable = resolveBetaFirmware(betaFirmwareUrl, betaVersion);
+    String betaError;
+    const bool betaAvailable = resolveBetaFirmware(betaFirmwareUrl, betaVersion, &betaError);
 
     content.replace("%stableServerAvailable%", stableAvailable ? "Server available" : "Server not available");
     content.replace("%stableVersion%", stableAvailable ? stableVersion : "-");
@@ -858,6 +899,10 @@ void WebServerHandler()
     content.replace("%serverAvailable%", betaAvailable ? "Server available" : "Server not available");
     content.replace("%version2%", betaAvailable ? betaVersion : "-");
     content.replace("%betaFirmwareUrl%", betaAvailable ? betaFirmwareUrl : "");
+    content.replace("%configuredFirmwareUpdateUrl%", String(actconf.firmwareUpdateUrl));
+    content.replace("%configuredFirmwareBaseUrl%", getConfiguredFirmwareBaseUrl());
+    content.replace("%stableStatusDetail%", stableAvailable ? "OK" : stableError);
+    content.replace("%betaStatusDetail%", betaAvailable ? "OK" : betaError);
 
     content.replace("%header%", getheader(actconf));
     content.replace("%devname%", String(actconf.devname));
@@ -886,15 +931,20 @@ void WebServerHandler()
 
     String remoteUrl;
     String version;
+    String resolveError;
     bool resolved = false;
     if (source == "stable") {
-      resolved = resolveStableFirmware(remoteUrl, version);
+      resolved = resolveStableFirmware(remoteUrl, version, &resolveError);
     } else if (source == "beta") {
-      resolved = resolveBetaFirmware(remoteUrl, version);
+      resolved = resolveBetaFirmware(remoteUrl, version, &resolveError);
     }
 
     if (!resolved || remoteUrl.length() == 0) {
-      request->send(404, "application/json", buildOtaResponse("error", "Unable to resolve remote firmware URL.", false, false, false));
+      String message = "Unable to resolve remote firmware URL.";
+      if (resolveError.length()) {
+        message += " " + resolveError;
+      }
+      request->send(404, "application/json", buildOtaResponse("error", message, false, false, false));
       return;
     }
 
@@ -1439,6 +1489,31 @@ void WebServerHandler()
     }
     String test = String(runDownloadingFilesStatus || runDownloadingFiles);
     request->send(200, "text/html", test);
+  });
+
+  httpServer.on("/updatefilesinfo", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
+
+    const String firmwareVersion = String(actconf.fversion);
+    const String storedWebFilesVersion = getStoredWebFilesVersion();
+    const bool busy = runDownloadingFilesStatus || runDownloadingFiles;
+    const bool upToDate = areWebFilesCurrent(actconf.fversion);
+
+    String response = "{\"busy\":";
+    response += busy ? "true" : "false";
+    response += ",\"firmwareVersion\":\"";
+    response += firmwareVersion;
+    response += "\",\"storedWebFilesVersion\":\"";
+    response += storedWebFilesVersion;
+    response += "\",\"upToDate\":";
+    response += upToDate ? "true" : "false";
+    response += "}";
+
+    request->send(200, "application/json", response);
   });
 
   httpServer.on("/testMdsUpload", HTTP_POST, [](AsyncWebServerRequest *request) {

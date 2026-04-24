@@ -397,20 +397,28 @@ bool saveWebFilesVersion(const char *version) {
   return true;
 }
 
-bool areWebFilesCurrent(const char *version) {
-  if (version == nullptr || version[0] == '\0' || !LittleFS.exists(WEB_FILES_VERSION_PATH)) {
-    return false;
+String getStoredWebFilesVersion() {
+  if (!LittleFS.exists(WEB_FILES_VERSION_PATH)) {
+    return "";
   }
 
   File versionFile = LittleFS.open(WEB_FILES_VERSION_PATH, FILE_READ);
   if (!versionFile) {
-    return false;
+    return "";
   }
 
   String storedVersion = versionFile.readString();
   versionFile.close();
   storedVersion.trim();
+  return storedVersion;
+}
 
+bool areWebFilesCurrent(const char *version) {
+  if (version == nullptr || version[0] == '\0' || !LittleFS.exists(WEB_FILES_VERSION_PATH)) {
+    return false;
+  }
+
+  String storedVersion = getStoredWebFilesVersion();
   return storedVersion == String(version);
 }
 

@@ -178,6 +178,10 @@
         <input type='text' name='version' size='8' value='%stableVersion%' maxlength='20' readonly>
       <p>
         <font size='2'><data>%stableServerAvailable%</data></font>
+      <p>
+        <font size='2'><data>Stored host: %configuredFirmwareUpdateUrl%</data></font><br>
+        <font size='2'><data>Resolved base URL: %configuredFirmwareBaseUrl%</data></font><br>
+        <font size='2'><data>Stable status: %stableStatusDetail%</data></font>
     </form>
     <button type='submit' id='sub2' onclick='send_image()'>Install Current Server Firmware</button>
     <hr>
@@ -187,7 +191,8 @@
         <input type='text' name='firmware2' size='50' value='%betaFirmwareUrl%' readonly> Version:
         <input type='text' name='version2' size='8' value='%version2%' maxlength='20' readonly> ( %serverAvailable% )
       <p>
-        <font size='2'><data>The device downloads this file directly. No browser cross-origin request is used.</data></font>
+        <font size='2'><data>The device downloads this file directly. No browser cross-origin request is used.</data></font><br>
+        <font size='2'><data>Beta status: %betaStatusDetail%</data></font>
     </form>
     <button type='submit' id='sub3' onclick='send_beta()'>Install Beta Firmware</button>
     <hr>

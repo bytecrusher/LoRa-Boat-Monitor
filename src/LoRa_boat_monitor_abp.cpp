@@ -116,6 +116,7 @@ long LoraSendDurationSeconds = 0;
 boolean runDownloadingFiles = false;
 boolean runDownloadingFilesStatus = false;
 bool wifiServicesInitialized = false;
+bool mdnsInitialized = false;
 
 const unsigned long MDS_UPLOAD_INTERVAL_MS = 300000UL;
 const unsigned long WAKE_MDS_RETRY_INTERVAL_MS = 30000UL;
@@ -150,6 +151,49 @@ bool waitForValidSystemTime(uint32_t timeoutMs) {
   return now >= 1704067200;
 }
 
+void stopMdnsService() {
+  if (!mdnsInitialized) {
+    return;
+  }
+
+  MDNS.end();
+  mdnsInitialized = false;
+  DebugPrintln(2, "mDNS service stopped");
+}
+
+void ensureMdnsService() {
+  if (actconf.mDNS != 1) {
+    stopMdnsService();
+    return;
+  }
+
+  if (WiFi.status() != WL_CONNECTED || WiFi.localIP().toString() == "0.0.0.0") {
+    stopMdnsService();
+    return;
+  }
+
+  if (mdnsInitialized) {
+    return;
+  }
+
+  MDNS.end();
+  if (!MDNS.begin(hname.c_str())) {
+    DebugPrintln(1, "Failed to start mDNS responder");
+    return;
+  }
+
+  MDNS.setInstanceName(hname);
+  MDNS.addService("http", "tcp", actconf.httpport);
+  MDNS.addServiceTxt("http", "tcp", "path", "/");
+  MDNS.addService("nmea-0183", "tcp", actconf.dataport);
+  MDNS.enableWorkstation(ESP_IF_WIFI_STA);
+  mdnsInitialized = true;
+
+  DebugPrintln(3, "mDNS service: active");
+  DebugPrintln(3, "mDNS name: " + hname + ".local");
+  DebugPrintln(3, "mDNS URL: http://" + hname + ".local/");
+}
+
 void initWiFiServicesOnce() {
   if (wifiServicesInitialized) {
     return;
@@ -171,6 +215,8 @@ void initWiFiServicesOnce() {
 }
 
 void maybeSendDataViaWifi() {
+  ensureMdnsService();
+
   if (String(actconf.SendDataViaWifi) != "Yes") {
     return;
   }
@@ -194,6 +240,7 @@ void maybeSendDataViaWifi() {
 void disableWiFiForSleep() {
   Timer3.detach();
   server.stop();
+  stopMdnsService();
   WiFi.disconnect(true, true);
   WiFi.mode(WIFI_OFF);
 }
@@ -316,16 +363,7 @@ void enableWiFi(){
         }
       }
 
-      if(actconf.mDNS == 1){
-        MDNS.end();
-        MDNS.begin(hname.c_str());                              // Start mDNS service
-        MDNS.addService("http", "tcp", actconf.httpport);       // HTTP service
-        MDNS.addService("nmea-0183", "tcp", actconf.dataport);  // NMEA0183 dada service for AVnav
-        DebugPrintln(3, "mDNS service: activ");
-        DebugPrintln(3, "mDNS name: " + String(hname) + ".local");
-        //DebugPrint(3, hname);
-        //DebugPrintln(3, ".local");
-      }
+      ensureMdnsService();
 
       DebugPrintln(3, "Contacting Time Server");
 	    configTime(3600*timezone, daysavetime*3600, "time.nist.gov", "0.pool.ntp.org", "1.pool.ntp.org");
@@ -828,7 +866,7 @@ void state1(){
   static unsigned long nextWebFilesDownloadAttempt = 0;
   if (runDownloadingFiles && WiFi.status() == WL_CONNECTED && millis() >= nextWebFilesDownloadAttempt) {
     runDownloadingFilesStatus = true;
-    const bool webFilesCurrent = DownloadFilesFromWeb(actconf.fversion);
+    const bool webFilesCurrent = DownloadFilesFromWeb();
     runDownloadingFiles = !webFilesCurrent;
     nextWebFilesDownloadAttempt = webFilesCurrent ? 0 : (millis() + 30000UL);
     runDownloadingFilesStatus = false;

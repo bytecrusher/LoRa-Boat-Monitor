@@ -94,7 +94,7 @@ inset 0px 0px 3px rgba(255, 255, 255, 1);
     %header%
     <div id="loader"></div>
     <div id="myDiv" class="animate-bottom initially-hidden">
-    <form id='form1' name='SetForm' method='get' action='savesettings'>
+    <form id='form1' name='SetForm' method='post' action='savesettings'>
 
         <input class="myToggleButton myAllToggleButton" type="button" value="+" id="btAllSettingsPage" onclick="ToggleAllSections()"> All
 
@@ -398,7 +398,7 @@ inset 0px 0px 3px rgba(255, 255, 255, 1);
                 <div class="row">
                     <div class="firstColumn"><span class="labelText">Web Update Hostname <span class="infoBadge" tabindex="0">i<span class="infoPopover">Nur der Hostname des Update-Servers, ohne <code>http://</code> oder <code>https://</code>. Darueber werden neue Webdateien und Update-Infos abgefragt.</span></span></span></div>
                     <div class="secondColumn">
-                        <input type='text' required name='firmwareUpdateUrl' size='20' value='%firmwareUpdateUrl%' maxlength='50' onchange=''>
+                        <input type='text' required name='firmwareUpdateUrl' size='40' value='%firmwareUpdateUrl%' maxlength='120' onchange=''>
                     </div>
                 </div>
 

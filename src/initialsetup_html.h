@@ -195,7 +195,8 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
         <p><progress id="file" value="%USEDSPIFFSvalue%" max="%TOTALSPIFFSvalue%" style="margin-right: 10px"> %USEDSPIFFSvalue%% </progress> Free: <span id="freespiffs">%FREESPIFFS%</span> | Used: <span id="usedspiffs">%USEDSPIFFS%</span> | Total: <span id="totalspiffs">%TOTALSPIFFS%</span></p>
         <div id='table'></div>
         <button type='button' style='margin: 20px' value='Format FS' onclick='FormatFS()'>Format Filesystem</button>
-        <button type='button' value='Update Files' onclick='UpdateFiles()'>Get Files from Server</button>
+        <button type='button' id='updatefilesbutton' value='Update Files' onclick='UpdateFiles()'>Get Files from Server</button>
+        <div id='updatefilesinfo' style='margin-top: 8px; margin-bottom: 8px;'></div>
         <button type='button' style='margin: 20px' value='Format FS' onclick='getTable()'>Show Files</button>
         <form method='POST' action='/upload' enctype='multipart/form-data' id='upload_form' style="display: -webkit-inline-flex; margin-right: 20px;">
             <label for='upload' class='custom-file-upload' style='display: block;'>Upload single File</label>
@@ -245,6 +246,58 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
     function showPage() {
         document.getElementById('loader').style.display = 'none';
         document.getElementById('myDiv').style.display = 'block';
+        refreshUpdateFilesInfo();
+    };
+
+    function renderUpdateFilesInfo(info) {
+        var button = document.getElementById('updatefilesbutton');
+        var status = document.getElementById('updatefilesinfo');
+        if (!button || !status || !info) {
+            return;
+        }
+
+        if (info.busy) {
+            button.innerHTML = 'Downloading Files from Server...';
+            button.disabled = true;
+            status.innerHTML = 'Web files are currently being downloaded for firmware ' + info.firmwareVersion + '.';
+            return;
+        }
+
+        button.disabled = false;
+        if (info.upToDate) {
+            button.innerHTML = 'Get Files from Server';
+            status.innerHTML = 'Web files are up to date for installed firmware ' + info.firmwareVersion + '.';
+            return;
+        }
+
+        button.innerHTML = 'Get Files from Server';
+        if (info.storedWebFilesVersion && info.storedWebFilesVersion.length > 0) {
+            status.innerHTML = 'Installed firmware: ' + info.firmwareVersion + ' | Stored web files: ' + info.storedWebFilesVersion + ' | Download recommended.';
+        } else {
+            status.innerHTML = 'No stored web file version found. Download recommended for firmware ' + info.firmwareVersion + '.';
+        }
+    };
+
+    function refreshUpdateFilesInfo() {
+        var http = null;
+        if (window.XMLHttpRequest) {
+            http = new XMLHttpRequest();
+        } else if (window.ActiveXObject) {
+            http = new ActiveXObject("Microsoft.XMLHTTP");
+        }
+        if (http != null) {
+            http.open("GET", "/updatefilesinfo", true);
+            http.onreadystatechange = function() {
+                if (http.readyState == XMLHttpRequest.DONE && http.status == 200) {
+                    try {
+                        renderUpdateFilesInfo(JSON.parse(http.responseText));
+                    } catch (error) {
+                        console.log('Unable to parse update file info.', error);
+                    }
+                }
+            };
+            http.send(null);
+        }
     };
 
     function startInterval() {
@@ -276,12 +329,14 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
                         clearInterval(meinIntervall);
                         document.getElementById('loader').style.display = 'none';
                         document.getElementById('myDiv').style.display = 'block';
+                        refreshUpdateFilesInfo();
                         //document.getElementById('status').innerHTML = ('Status: Updated Files successfull.');
                         alert('Files successfully downloaded.');
                         location.reload();
                     } else if (result == 1) {
                         document.getElementById('loader').style.display = 'block';
                         document.getElementById('myDiv').style.display = 'none';
+                        refreshUpdateFilesInfo();
                     }
                 }
                 else if (http.status == 400) {
@@ -289,6 +344,7 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
                     //document.getElementById('status').innerHTML = ('Status: Error while updatefilesstatus GET.');
                     document.getElementById('loader').style.display = 'none';
                     document.getElementById('myDiv').style.display = 'block';
+                    refreshUpdateFilesInfo();
                     alert('Files not successfully downloaded.');
                     }
                 else {
@@ -296,6 +352,7 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
                     //document.getElementById('status').innerHTML = ('Status: Error while updatefilesstatus GET.');
                     document.getElementById('loader').style.display = 'none';
                     document.getElementById('myDiv').style.display = 'block';
+                    refreshUpdateFilesInfo();
                 }
             }
         }
@@ -356,6 +413,7 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
         if (http != null) {
             document.getElementById('loader').style.display = 'block';
             document.getElementById('myDiv').style.display = 'none';
+            renderUpdateFilesInfo({ busy: true, firmwareVersion: '%fversion%', storedWebFilesVersion: '', upToDate: false });
             startInterval();
             http.open("POST", "/updatefiles", true);
             http.onreadystatechange = UpdateFilesAusgeben;
@@ -374,11 +432,13 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
                     //document.getElementById('status').innerHTML = ('Status: Error while Downlaoding Files from server.');
                     document.getElementById('loader').style.display = 'none';
                     document.getElementById('myDiv').style.display = 'block';
+                    refreshUpdateFilesInfo();
                     alert('Error while Downlaoding Files from server. (Error 400)');
                 }
                 else {
                     alert('something else other than 200 was returned');
                     //document.getElementById('status').innerHTML = ('Status: Error while Downlaoding Files from server.');
+                    refreshUpdateFilesInfo();
                     alert('Error while Downlaoding Files from server. (Error 200)');
                 }
             }

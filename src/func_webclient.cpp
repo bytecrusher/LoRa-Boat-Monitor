@@ -57,6 +57,24 @@ bool hasValidSystemTime()
   return now >= 1704067200; // 2024-01-01 00:00:00 UTC
 }
 
+bool parseHttpStatusCode(const String &statusLine, int &httpResponseCode)
+{
+  httpResponseCode = -1;
+  String trimmedStatusLine = statusLine;
+  trimmedStatusLine.trim();
+  const int firstSpace = trimmedStatusLine.indexOf(' ');
+  if (firstSpace < 0) {
+    return false;
+  }
+
+  const int secondSpace = trimmedStatusLine.indexOf(' ', firstSpace + 1);
+  const String codeToken = secondSpace >= 0
+    ? trimmedStatusLine.substring(firstSpace + 1, secondSpace)
+    : trimmedStatusLine.substring(firstSpace + 1);
+  httpResponseCode = codeToken.toInt();
+  return httpResponseCode > 0;
+}
+
 void buildMdsTimestamp(char (&mdsDate)[11], char (&mdsTime)[9])
 {
   struct tm tmstruct;
@@ -116,9 +134,38 @@ bool postMdsPayload(configData actconf, JsonDocument &docpayload, const char *co
 
   String requestBody;
   serializeJson(docpayload, requestBody);
+
+  auto handleMdsResponse = [&](int httpResponseCode, const String &responseBody) -> bool {
+    DebugPrint(3, "HTTP response: ");
+    DebugPrintln(3, httpResponseCode);
+    if (responseBody.length() > 0) {
+      DebugPrintln(3, responseBody);
+    }
+
+    bool success = false;
+    if (httpResponseCode > 0) {
+      JsonDocument responseJson;
+      if (deserializeJson(responseJson, responseBody) == DeserializationError::Ok) {
+        if (responseJson["insertedSensorRows"].is<int>() || responseJson["skippedSensorRows"].is<int>()) {
+          DebugPrintln(3, String("MDS inserted rows: ") + int(responseJson["insertedSensorRows"] | 0));
+          DebugPrintln(3, String("MDS skipped rows: ") + int(responseJson["skippedSensorRows"] | 0));
+          DebugPrintln(3, String("MDS auto resolved rows: ") + int(responseJson["autoResolvedSensorRows"] | 0));
+          DebugPrintln(3, String("MDS auto created sensor configs: ") + int(responseJson["autoCreatedSensorConfigs"] | 0));
+          success = (httpResponseCode == HTTP_CODE_OK) && ((int(responseJson["insertedSensorRows"] | 0)) > 0);
+        } else {
+          success = (httpResponseCode == HTTP_CODE_OK);
+        }
+      } else {
+        success = (httpResponseCode == HTTP_CODE_OK);
+      }
+    }
+    return success;
+  };
+
   WiFiClientSecure client;
   client.setCACert(reinterpret_cast<const char*>(cert_cacert_pem_start));
-  client.setTimeout(15000);
+  client.setHandshakeTimeout(15);
+  client.setTimeout(15);
 
   DebugPrintln(3, String("Starting MDS request (") + contextLabel + ")");
   DebugPrintln(3, "MDS URL: " + mdsUrl);
@@ -136,11 +183,19 @@ bool postMdsPayload(configData actconf, JsonDocument &docpayload, const char *co
   }
   DebugPrintln(3, "MDS host resolved to: " + resolvedIp.toString());
 
-  if (!client.connect(host.c_str(), 443)) {
-    DebugPrintln(1, "Failed to connect to MDS host: " + host);
+  DebugPrint(3, "HTTP POST payload: ");
+  DebugPrintln(3, requestBody);
+
+  if (!client.connect(resolvedIp, 443, host.c_str(), reinterpret_cast<const char*>(cert_cacert_pem_start), nullptr, nullptr)) {
+    char errorBuffer[128] = {0};
+    client.lastError(errorBuffer, sizeof(errorBuffer));
+    DebugPrintln(1, "Failed to connect to MDS host: " + host + " (" + resolvedIp.toString() + ")");
+    if (errorBuffer[0] != '\0') {
+      DebugPrintln(1, "TLS client error: " + String(errorBuffer));
+    }
     return false;
   }
-  
+
   client.print(String("POST ") + path + " HTTP/1.1\r\n");
   client.print(String("Host: ") + host + "\r\n");
   client.print("User-Agent: LoRaBoatMonitor/ESP32\r\n");
@@ -149,23 +204,12 @@ bool postMdsPayload(configData actconf, JsonDocument &docpayload, const char *co
   client.print(String("Content-Length: ") + requestBody.length() + "\r\n\r\n");
   client.print(requestBody);
 
-  DebugPrint(3, "HTTP POST payload: ");
-  DebugPrintln(3, requestBody);
-
   const String statusLine = client.readStringUntil('\n');
+  int httpResponseCode = -1;
   String trimmedStatusLine = statusLine;
   trimmedStatusLine.trim();
   DebugPrintln(3, "HTTP status line: " + trimmedStatusLine);
-
-  int httpResponseCode = -1;
-  const int firstSpace = trimmedStatusLine.indexOf(' ');
-  if (firstSpace >= 0) {
-    const int secondSpace = trimmedStatusLine.indexOf(' ', firstSpace + 1);
-    const String codeToken = secondSpace >= 0
-      ? trimmedStatusLine.substring(firstSpace + 1, secondSpace)
-      : trimmedStatusLine.substring(firstSpace + 1);
-    httpResponseCode = codeToken.toInt();
-  }
+  parseHttpStatusCode(trimmedStatusLine, httpResponseCode);
 
   while (client.connected()) {
     String headerLine = client.readStringUntil('\n');
@@ -175,38 +219,49 @@ bool postMdsPayload(configData actconf, JsonDocument &docpayload, const char *co
   }
 
   const String responseBody = client.readString();
-  DebugPrint(3, "HTTP response: ");
-  DebugPrintln(3, httpResponseCode);
-  if (responseBody.length() > 0) {
-    DebugPrintln(3, responseBody);
-  }
   client.stop();
-
-  bool success = false;
   if (httpResponseCode > 0) {
-    JsonDocument responseJson;
-    if (deserializeJson(responseJson, responseBody) == DeserializationError::Ok) {
-      if (responseJson["insertedSensorRows"].is<int>() || responseJson["skippedSensorRows"].is<int>()) {
-        DebugPrintln(3, String("MDS inserted rows: ") + int(responseJson["insertedSensorRows"] | 0));
-        DebugPrintln(3, String("MDS skipped rows: ") + int(responseJson["skippedSensorRows"] | 0));
-        DebugPrintln(3, String("MDS auto resolved rows: ") + int(responseJson["autoResolvedSensorRows"] | 0));
-        DebugPrintln(3, String("MDS auto created sensor configs: ") + int(responseJson["autoCreatedSensorConfigs"] | 0));
-        success = (httpResponseCode == HTTP_CODE_OK) && ((int(responseJson["insertedSensorRows"] | 0)) > 0);
-      } else {
-        success = (httpResponseCode == HTTP_CODE_OK);
-      }
-    } else {
-      success = (httpResponseCode == HTTP_CODE_OK);
-    }
-  } else {
-    DebugPrintln(1, "WiFi upload failed before a valid HTTP response was received");
+    return handleMdsResponse(httpResponseCode, responseBody);
   }
+
+  DebugPrintln(1, "Primary MDS upload path failed before a valid HTTP response was received");
+  DebugPrintln(2, "Trying HTTPClient fallback for MDS upload");
+
+  WiFiClientSecure fallbackClient;
+  HTTPClient http;
+  fallbackClient.setCACert(reinterpret_cast<const char*>(cert_cacert_pem_start));
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.setConnectTimeout(15000);
+  http.setTimeout(15000);
+  http.setReuse(false);
+
+  if (!http.begin(fallbackClient, mdsUrl)) {
+    DebugPrintln(1, "Failed to initialize HTTPClient fallback for MDS upload");
+    return false;
+  }
+
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Connection", "close");
+  http.addHeader("User-Agent", "LoRaBoatMonitor/ESP32");
+  const int fallbackResponseCode = http.POST(reinterpret_cast<uint8_t*>(const_cast<char*>(requestBody.c_str())), requestBody.length());
+  const String fallbackResponseBody = http.getString();
+  if (fallbackResponseCode <= 0) {
+    DebugPrintln(1, "WiFi upload failed: " + http.errorToString(fallbackResponseCode));
+    http.end();
+    return false;
+  }
+
+  const bool success = handleMdsResponse(fallbackResponseCode, fallbackResponseBody);
+  http.end();
   return success;
 }
 }
 
-bool DownloadFilesFromWeb(char *fversion)
+bool DownloadFilesFromWeb()
 {
+  const char *fversion = actconf.fversion;
+  DebugPrintln(3, "Downloading web files for installed firmware version: " + String(fversion));
+
   const char *webFiles[] = {
     "css_black.css",
     "css_red.css",
@@ -251,7 +306,7 @@ bool DownloadFilesFromWeb(char *fversion)
   return allFilesUpdated;
 }
 
-bool DownloadFile(const char *fileName, char *fversion)
+bool DownloadFile(const char *fileName, const char *fversion)
 {
   File targetFile;
   const String baseUrl = normalizeFirmwareUpdateBaseUrl(actconf.firmwareUpdateUrl);

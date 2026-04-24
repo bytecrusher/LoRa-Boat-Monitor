@@ -124,6 +124,7 @@ bool saveConfigBackupToLittleFS(const configData &cfg);
 bool restoreConfigBackupFromLittleFS(configData &cfg);
 bool hasConfigBackupInLittleFS();
 bool saveWebFilesVersion(const char *version);
+String getStoredWebFilesVersion();
 bool areWebFilesCurrent(const char *version);
 int boolToInt(bool value);
 int toInteger(String settingValue);
