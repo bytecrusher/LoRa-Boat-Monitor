@@ -8,3 +8,5 @@
 firmware 2.bin
 firmware 3.bin
 firmware 4.bin
+.env
+scripts/__pycache__/

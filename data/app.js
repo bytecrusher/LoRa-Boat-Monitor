@@ -1,16 +1,3 @@
-function setElementValue(id, value) {
-  var element = document.getElementById(id);
-  if (!element) {
-    return;
-  }
-
-  if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.tagName === 'SELECT') {
-    element.value = value;
-  } else {
-    element.innerHTML = value;
-  }
-}
-
 function setNetworkInfo(myObj) {
   setElementValue('heapsize', myObj.Device.ESP32.FreeHeapSize.Value);
   setElementValue('hunit', myObj.Device.ESP32.FreeHeapSize.Unit);
@@ -80,26 +67,19 @@ function setServerModeInfo(myObj) {
   }
 }
 
-var xmlhttp = new XMLHttpRequest();
-xmlhttp.onreadystatechange = function () {
-  if (this.readyState == 4 && this.status == 200) {
-    var myObj = JSON.parse(this.responseText);
-
+function read_json() {
+  fetchJson('/data.json', function (myObj) {
     setNetworkInfo(myObj);
     setLoRaInfo(myObj);
     setPositionInfo(myObj);
     setEnvironmentInfo(myObj);
     setSensorInfo(myObj);
     setServerModeInfo(myObj);
-  }
-};
+  });
+}
 
-
-var xmlhttpStaticData = new XMLHttpRequest();
-xmlhttpStaticData.onreadystatechange = function () {
-  if (this.readyState == 4 && this.status == 200) {
-    var myObj = JSON.parse(this.responseText);
-
+function read_static_json() {
+  fetchJson('/staticdata.json', function (myObj) {
     setElementValue('cssid1', myObj.Device.NetworkParameter.WLANClientSSID1);
     setElementValue('cssid2', myObj.Device.NetworkParameter.WLANClientSSID2);
     setElementValue('cssid3', myObj.Device.NetworkParameter.WLANClientSSID3);
@@ -110,17 +90,7 @@ xmlhttpStaticData.onreadystatechange = function () {
     if (infoElement && myObj.Device.NetworkParameter.ServerMode == 4) {
       infoElement.innerHTML = '(Demo Mode)';
     }
-  }
-};
-
-function read_json() {
-  xmlhttp.open('GET', '/data.json', true);
-  xmlhttp.send();
-}
-
-function read_static_json() {
-  xmlhttpStaticData.open('GET', '/staticdata.json', true);
-  xmlhttpStaticData.send();
+  });
 }
 
 document.addEventListener('DOMContentLoaded', function () {

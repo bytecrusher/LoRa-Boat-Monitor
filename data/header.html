@@ -1,11 +1,11 @@
-<div style="float: left; width: 100%">
-    <div class="box"><h2>%devname%</h2></div>
-    <div class="box" style="margin-top: 30px; margin-left: 20px; display:flex;">
+<div class="header-layout">
+    <div class="box header-title-group"><h2>%devname%</h2></div>
+    <div class="box header-status-group">
         <div id='myping' class="led"></div>
-        <div id='mypingtxt' style="margin-left: 10px; margin-top: -4px;"></div>
+        <div id='mypingtxt' class="header-status-text"></div>
     </div>
 </div>
-<div>%crights%, %fversion%, CQ: <data id='quality'>%quality%</data>%</div>
+<div class="header-meta">%crights%, %fversion%, CQ: <data id='quality'>%quality%</data> percent</div>
 <hr>
 
 <script>

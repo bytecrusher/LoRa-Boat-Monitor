@@ -4,129 +4,21 @@
 <head>
   <title>Sensor Values - %devname%</title>
   <link rel='stylesheet' type='text/css' href='/styles.css'>
+  <link rel='stylesheet' type='text/css' href='/common.css'>
   <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
   <meta name=viewport content='width=device-width, initial-scale=1'>
-  <style>
-  </style>
 </head>
 
 <body>
+  <script src='/common.js' type='text/javascript'></script>
   <script src='/gauge.min.js' type='text/javascript'></script>
-  <script>
-    var staticData;
-    var xmlhttp = new XMLHttpRequest();
-    xmlhttp.onreadystatechange = function () {
-      if (this.readyState == 4 && this.status == 200) {
-        var myObj = JSON.parse(this.responseText);
-
-        // Fill all values in Page
-        document.getElementById('quality').innerHTML = myObj.Device.NetworkParameter.ConnectionQuality.Value;
-        //if (String(actconf.envSensor) == "BME280") {
-        if (staticData && staticData.Device && staticData.Device.DeviceSettings.envSensor == "BME280") {
-          document.getElementById('airtemp').innerHTML = myObj.Device.MeasuringValues.AirTemperature.Value;
-          document.getElementById('atunit').innerHTML = myObj.Device.MeasuringValues.AirTemperature.Unit;
-          document.getElementById('pressure').innerHTML = myObj.Device.MeasuringValues.AirPressure.Value;
-          document.getElementById('humidity').innerHTML = myObj.Device.MeasuringValues.AirHumidity.Value;
-          document.getElementById('dewpoint').innerHTML = myObj.Device.MeasuringValues.Dewpoint.Value;
-          document.getElementById('dunit').innerHTML = myObj.Device.MeasuringValues.Dewpoint.Unit;
-          document.getElementById('info').innerHTML = '';
-        }
-        document.getElementById('lat').innerHTML = myObj.Device.MeasuringValues.Latitude.Value;
-        document.getElementById('latns').innerHTML = myObj.Device.MeasuringValues.Latitude.Unit;
-        document.getElementById('lon').innerHTML = myObj.Device.MeasuringValues.Longitude.Value;
-        document.getElementById('lonew').innerHTML = myObj.Device.MeasuringValues.Longitude.Unit;
-        document.getElementById('alt').innerHTML = myObj.Device.MeasuringValues.Altitude.Value;
-        document.getElementById('date').innerHTML = myObj.Device.MeasuringValues.Date.Value;
-        document.getElementById('time').innerHTML = myObj.Device.MeasuringValues.Time.Value;
-        document.getElementById('sunrise').innerHTML = myObj.Device.MeasuringValues.Sunrise.Value;
-        document.getElementById('sunset').innerHTML = myObj.Device.MeasuringValues.Sunset.Value;
-        document.getElementById('speed').innerHTML = myObj.Device.MeasuringValues.Speed.Value;
-        document.getElementById('course').innerHTML = myObj.Device.MeasuringValues.Course.Value;
-        document.getElementById('voltage').innerHTML = myObj.Device.MeasuringValues.BatteryVoltage.Value;
-        document.getElementById('capacity').innerHTML = myObj.Device.MeasuringValues.BatteryCapacity.Value;
-        document.getElementById('1wtemp').innerHTML = myObj.Device.MeasuringValues.Temp1Wire.Value;
-        document.getElementById('1wunit').innerHTML = myObj.Device.MeasuringValues.Temp1Wire.Unit;
-        //document.getElementById('tank1').innerHTML = myObj.Device.MeasuringValues.Tank1.Value;
-        //document.getElementById('tank1adc').innerHTML = myObj.Device.MeasuringValues.Tank1adc.Value;
-        //document.gauges.get('canvas-id').value = myObj.Device.MeasuringValues.Tank1.Value;
-        //document.gauges.get('canvas-id').value = ((myObj.Device.MeasuringValues.Tank1adc.Value / (4096 / 80)) - 40);   // 4096 adc max, 80 steps at all, -40 for adjusting the scale.
-        //gauge.value = ((myObj.Device.MeasuringValues.Tank1adc.Value / (4096 / 80)) - 40);   // 4096 adc max, 80 steps at all, -40 for adjusting the scale.
-        //gauge.update()
-
-        document.getElementById('tank2').innerHTML = myObj.Device.MeasuringValues.Tank2.Value;
-        document.getElementById('tank2adc').innerHTML = myObj.Device.MeasuringValues.Tank2adc.Value;
-        //document.getElementById('alarm').innerHTML = myObj.Device.MeasuringValues.Alarm.Value;
-
-        if (myObj.Device.MeasuringValues.Alarm.Value == '0') {
-          document.getElementById("alarm").classList.remove('led-red');
-        } else {
-          document.getElementById("alarm").classList.add('led-red');
-        }
-
-        if (myObj.Device.MeasuringValues.Relay.Value == '0') {
-          document.getElementById("relay").classList.remove('led-green');
-        } else {
-          document.getElementById("relay").classList.add('led-green');
-        }
-        //document.getElementById('relay').innerHTML = myObj.Device.MeasuringValues.Relay.Value;
-
-        var rtime = myObj.Device.MeasuringValues.RelayTimer.Value;
-        document.getElementById('rtimer').innerHTML = rtime;
-
-        // If Demo Mode active the give out a message
-        servermode = myObj.Device.NetworkParameter.ServerMode;
-        if (servermode == 4) {
-          document.getElementById('info').innerHTML = '(Demo Mode)';
-        }
-      }
-    };
-    function read_json() {
-      xmlhttp.open('GET', '/data.json', true);
-      xmlhttp.send();
-    }
-    read_json();
-    setInterval(function () { read_json(); }, 1000);
-
-    //____________________
-    var xmlhttp2 = new XMLHttpRequest();
-    xmlhttp2.onreadystatechange = function () {
-      if (this.readyState == 4 && this.status == 200) {
-        var myObj2 = JSON.parse(this.responseText);
-
-        document.getElementById('tank1').innerHTML = myObj2.Tank1;
-        document.getElementById('tank1adc').innerHTML = myObj2.Tank1adc;
-        //gauge.value = ((myObj2.Tank1adc / (4096 / 80)) - 40);   // 4096 adc max, 80 steps at all, -40 for adjusting the scale.
-        gauge.value = ((myObj2.Tank1 / (100 / 80)) - 40);   // 4096 adc max, 80 steps at all, -40 for adjusting the scale.
-        gauge.update()
-       
-      }
-    };
-    function run_getdata() {
-      xmlhttp2.open('GET', '/getdata?data=Tank1', true);
-      xmlhttp2.send();
-    }
-    run_getdata();
-    setInterval(function () { run_getdata(); }, 250);
-    //___________________
-
-    var xmlhttpStaticData = new XMLHttpRequest();
-    xmlhttpStaticData.onreadystatechange = function () {
-      if (this.readyState == 4 && this.status == 200) {
-        staticData = JSON.parse(this.responseText);
-      }
-    };
-
-    xmlhttpStaticData.open('GET', '/staticdata.json', true);
-    xmlhttpStaticData.send();
-
-  </script>
 
   %header%
-  <div>%envSensorString%</div>
+  <div class="section-intro">%envSensorString%</div>
 
-  <div><h3>Position Speed Course</h3></div>
-  <FONT SIZE='4'>
-    <table>
+  <div class="section-block"><h3>Position, Speed and Course</h3></div>
+  <div class="sensor-values-section">
+    <table class="data-table">
       <tr>
         <td>
 
@@ -145,7 +37,7 @@
           </div>
 
         </td>
-        <td>Lat:</td>
+        <td>Latitude:</td>
         <td><data id='lat'></data><data id='latns'></data></td>
         <td></td>
       </tr>
@@ -155,7 +47,7 @@
 
           </div>
         </td>
-        <td>Lon:</td>
+        <td>Longitude:</td>
         <td><data id='lon'></data><data id='lonew'></data></td>
         <td></td>
       </tr>
@@ -176,7 +68,7 @@
             </svg>
           </div>
         </td>
-        <td>Alt:</td>
+        <td>Altitude:</td>
         <td><data id='alt'></data> m</td>
         <td></td>
       </tr>
@@ -194,7 +86,7 @@
             </svg>
           </div>
         </td>
-        <td>Spd:</td>
+        <td>Speed:</td>
         <td><data id='speed'></data> kn</td>
         <td></td>
       </tr>
@@ -210,17 +102,17 @@
             </svg>
           </div>
         </td>
-        <td>Crs:</td>
+        <td>Course:</td>
         <td><data id='course'></data>°</td>
         <td></td>
       </tr>
     </table>
-  </FONT><br>
+  </div><br>
   <hr>
 
   <h3>Date Time Daylight</h3>
-  <FONT SIZE='4'>
-    <table>
+  <div class="sensor-values-section">
+    <table class="data-table">
       <tr>
         <td>
 
@@ -294,12 +186,12 @@
         <td></td>
       </tr>
     </table>
-  </FONT><br>
+  </div><br>
   <hr>
 
   <h3>Battery</h3>
-  <FONT SIZE='4'>
-    <table>
+  <div class="sensor-values-section">
+    <table class="data-table">
       <tr>
         <td>
 
@@ -318,16 +210,15 @@
           </div>
 
         </td>
-        <td>Volt:</td>
+        <td>Voltage:</td>
         <td><data id='voltage'></data>V</td>
         <td></td>
       </tr>
-      <td>
-
-      </td>
-      <td>Cap:</td>
-      <td><data id='capacity'></data>%</td>
-      <td></td>
+      <tr>
+        <td></td>
+        <td>Charge:</td>
+        <td><data id='capacity'></data>%</td>
+        <td></td>
       </tr>
       <tr>
         <td>
@@ -341,17 +232,17 @@
             </svg>
           </div>
         </td>
-        <td>Temp:</td>
+        <td>Temperature:</td>
         <td><data id='1wtemp'></data><data id='1wunit'></data></td>
         <td></td>
       </tr>
     </table>
-  </FONT><br>
+  </div><br>
   <hr>
 
-  <h3>Levels </h3>
-  <FONT SIZE='4'>
-    <table>
+  <h3>Tank Levels</h3>
+  <div class="sensor-values-section">
+    <table class="data-table">
       <tr>
         <td>
 
@@ -365,7 +256,7 @@
           </div>
 
         </td>
-        <td>Water:</td>
+        <td>Water Tank:</td>
         <td><data id='tank1'></data>%<br>
           <data id='tank1adc'></data></td>
         <td><canvas id="canvas-id"></canvas></td>
@@ -386,17 +277,17 @@
             </svg>
           </div>
         </td>
-        <td>Fuel:</td>
+        <td>Fuel Tank:</td>
         <td><data id='tank2'></data>%<br>
           <data id='tank2adc'></data></td>
         <td><canvas id="canvas-id2"></canvas></td>
       </tr>
     </table>
-  </FONT><br>
+  </div><br>
   <hr>
 
-  <h3>Control</h3>
-  <FONT SIZE='4'>
+  <h3>Status Outputs</h3>
+  <div class="sensor-values-section">
     <table>
       <tr>
         <td>
@@ -447,62 +338,17 @@
             </svg>
           </div>
         </td>
-        <td>OnTime:</td>
-        <td><data id='rtimer'></data>min</td>
+        <td>Relay On Time:</td>
+        <td><data id='rtimer'></data> min</td>
         <td></td>
       </tr>
     </table>
-  </FONT><br>
+  </div><br>
 
   <hr>
   <br>
-  <form action='/'><button type='submit'>Back</button></form>
-  <script>
-    var gauge;
-    document.addEventListener("DOMContentLoaded", () => {
-      gauge = new RadialGauge({
-        renderTo: 'canvas-id',
-        width: 300,
-        height: 300,
-        units: "",
-        title: "Rudder Angel",
-        minValue: -40,
-        startAngle: 300,
-        ticksAngle: 120,
-        valueBox: false,
-        maxValue: 40,
-        majorTicks: [
-            "-40",
-            "0",
-            "40"
-        ],
-        minorTicks: 2,
-        strokeTicks: true,
-        highlights: [
-            {
-                "from": 0,
-                "to": 40,
-                "color": "rgba(200, 50, 50, .75)"
-            },
-            {
-                "from": -40,
-                "to": 0,
-                "color": "rgba(0, 128, 0, .3)"
-            }
-        ],
-        colorPlate: "#fff",
-        borderShadowWidth: 0,
-        borders: false,
-        needleType: "arrow",
-        needleWidth: 4,
-        needleCircleSize: 7,
-        needleCircleOuter: true,
-        needleCircleInner: false,
-        animationDuration: 500,
-        animationRule: "linear"
-      }).draw();
-    });
-  </script>
+  <form action='/'><button type='submit'>Back to Overview</button></form>
+  <script src='/sensorv.js' type='text/javascript'></script>
 </body>
 
 </html>

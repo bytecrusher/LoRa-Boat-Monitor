@@ -2,61 +2,24 @@
 <html>
 
 <head>
-    <title>LoRa Info - %devname%</title>
+    <title>LoRa Status - %devname%</title>
     <link rel='stylesheet' type='text/css' href='/styles.css'>
+    <link rel='stylesheet' type='text/css' href='/common.css'>
     <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
     <meta name=viewport content='width=device-width, initial-scale=1'>
-    <style>
-    </style>
 </head>
 
 <body>
 
-    <script>
-        var xmlhttp = new XMLHttpRequest();
-        xmlhttp.onreadystatechange = function () {
-            if (this.readyState == 4 && this.status == 200) {
-                var myObj = JSON.parse(this.responseText);
-
-                // Fill all values in Page
-                document.getElementById('quality').innerHTML = myObj.Device.NetworkParameter.ConnectionQuality.Value;
-                document.getElementById('region').innerHTML = myObj.Device.LoRaSettings.Frequency;
-                document.getElementById('address').innerHTML = myObj.Device.LoRaSettings.DeviceAddress;
-                document.getElementById('actualch').innerHTML = myObj.Device.LoRaSettings.ActualChannel;
-                document.getElementById('actualsf').innerHTML = myObj.Device.LoRaSettings.ActualSF;
-                //document.getElementById('tinterval').innerHTML = myObj.Device.LoRaSettings.TXInterval * 60;
-                document.getElementById('tinterval').innerHTML = myObj.Device.LoRaSettings.TXInterval;
-                document.getElementById('slot').innerHTML = myObj.Device.LoRaSettings.TimeSlot;
-                document.getElementById('counter').innerHTML = myObj.Device.LoRaSettings.TXCounter;
-
-                // If Demo Mode active the give out a message
-                servermode = myObj.Device.NetworkParameter.ServerMode;
-                if (servermode == 4) {
-                    document.getElementById('info').innerHTML = '(Demo Mode)';
-                }
-                else {
-                    document.getElementById('info').innerHTML = '';
-                }
-
-            }
-        };
-        function read_json() {
-            xmlhttp.open('GET', '/data.json', true);
-            xmlhttp.send();
-        }
-        read_json();
-        setInterval(function () { read_json(); }, 1000);
-    </script>
-
     %header%
 
-    <h3>LoRa Info <data class="blink" id='info'></data>
+    <h3>LoRa Status <data class="blink" id='info'></data>
     </h3>
-    <FONT SIZE='4'>
-        <table>
+    <font size='4'>
+        <table class="data-table">
 
             <tr>
-                <td>
+                <td class="icon-cell">
                     <div class='svg'>
                         <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-access-point'
                             width='30' height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
@@ -71,12 +34,12 @@
                     </div>
                 </td>
 
-                <td>Freq Region:</td>
+                <td>Frequency Region:</td>
                 <td><data id='region'></data></td>
                 <td></td>
             </tr>
             <tr>
-                <td>
+                <td class="icon-cell">
                     <div class='svg'>
                         <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-medical-cross'
                             width='30' height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
@@ -88,13 +51,13 @@
                     </div>
                 </td>
 
-                <td>Device Addr:</td>
+                <td>Device Address:</td>
                 <td><data id='address'></data></td>
                 <td></td>
             </tr>
 
             <tr>
-                <td>
+                <td class="icon-cell">
                     <div class='svg'>
                         <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-square-x' width='30'
                             height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
@@ -106,12 +69,12 @@
                     </div>
                 </td>
 
-                <td>Actual Chan:</td>
+                <td>Current Channel:</td>
                 <td><data id='actualch'></data></td>
                 <td></td>
             </tr>
             <tr>
-                <td>
+                <td class="icon-cell">
                     <div class='svg'>
                         <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-separator-vertical'
                             width='30' height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
@@ -123,12 +86,12 @@
                         </svg>
                     </div>
                 </td>
-                <td>Actual SF:</td>
+                <td>Current Spreading Factor:</td>
                 <td><data id='actualsf'></data></td>
                 <td></td>
             </tr>
             <tr>
-                <td>
+                <td class="icon-cell">
                     <div class='svg'>
                         <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-alarm' width='30'
                             height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
@@ -142,12 +105,12 @@
                     </div>
                 </td>
 
-                <td>TX Interval:</td>
+                <td>Transmit Interval:</td>
                 <td><data id='tinterval'></data>m</td>
                 <td></td>
             </tr>
             <tr>
-                <td>
+                <td class="icon-cell">
                     <div class='svg'>
                         <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-square-dot'
                             width='30' height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
@@ -175,16 +138,18 @@
                     </div>
                 </td>
 
-                <td>TX Counter:</td>
+                <td>Transmit Counter:</td>
                 <td><data id='counter'></data></td>
                 <td></td>
             </tr>
         </table>
-    </FONT><br>
+    </font><br>
     <hr>
 
     <br>
-    <form action='/'><button type='submit'>Back</button></form>
+    <form action='/'><button type='submit'>Back to Overview</button></form>
+    <script src='/common.js' type='text/javascript'></script>
+    <script src='/lora.js' type='text/javascript'></script>
 </body>
 
 </html>

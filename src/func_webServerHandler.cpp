@@ -1,7 +1,122 @@
 #include "func_webServerHandler.h"
 #include <HTTPClient.h>
+#include "func_webclient.h"
+
+extern const uint8_t cert_cacert_pem_start[] asm("_binary_cert_cacert_pem_start");
 
 namespace {
+String normalizeFirmwareUpdateBaseUrl(const String &configuredValue) {
+  String normalized = configuredValue;
+  normalized.trim();
+
+  if (normalized.startsWith("https://")) {
+    normalized.remove(0, 8);
+  } else if (normalized.startsWith("http://")) {
+    normalized.remove(0, 7);
+  }
+
+  while (normalized.endsWith("/")) {
+    normalized.remove(normalized.length() - 1);
+  }
+
+  const String suffix = "/files_for_esp_webserver";
+  if (normalized.endsWith(suffix)) {
+    normalized.remove(normalized.length() - suffix.length());
+  }
+
+  return "https://" + normalized + suffix;
+}
+
+bool fetchHttpsText(const String &url, String &payload, uint16_t timeoutMs = 10000) {
+  WiFiClientSecure client;
+  HTTPClient http;
+
+  client.setCACert(reinterpret_cast<const char*>(cert_cacert_pem_start));
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.setTimeout(timeoutMs);
+
+  if (!http.begin(client, url)) {
+    return false;
+  }
+
+  const int httpCode = http.GET();
+  if (httpCode != HTTP_CODE_OK) {
+    http.end();
+    return false;
+  }
+
+  payload = http.getString();
+  payload.trim();
+  http.end();
+  return payload.length() > 0;
+}
+
+String extractVersionFromFirmwareUrl(const String &url) {
+  const int firmwareIndex = url.lastIndexOf("/firmware.bin");
+  if (firmwareIndex < 0) {
+    return String();
+  }
+
+  const int versionEnd = firmwareIndex;
+  const int versionStart = url.lastIndexOf('/', versionEnd - 1);
+  if (versionStart < 0 || versionStart + 1 >= versionEnd) {
+    return String();
+  }
+
+  return url.substring(versionStart + 1, versionEnd);
+}
+
+String getConfiguredFirmwareBaseUrl() {
+  return normalizeFirmwareUpdateBaseUrl(String(actconf.firmwareUpdateUrl));
+}
+
+bool resolveStableFirmware(String &firmwareUrl, String &version) {
+  const String baseUrl = getConfiguredFirmwareBaseUrl();
+  const char *candidateFiles[] = {
+    "latestVersion.txt",
+    "latestStableVersion.txt",
+    "latestFirmwareVersion.txt",
+    "ActualVersion.txt"
+  };
+
+  String payload;
+  for (size_t i = 0; i < (sizeof(candidateFiles) / sizeof(candidateFiles[0])); ++i) {
+    if (!fetchHttpsText(baseUrl + "/" + candidateFiles[i], payload)) {
+      continue;
+    }
+
+    if (payload.startsWith("https://")) {
+      firmwareUrl = payload;
+      version = extractVersionFromFirmwareUrl(payload);
+      return firmwareUrl.length() > 0;
+    }
+
+    version = payload;
+    firmwareUrl = baseUrl + "/" + version + "/firmware.bin";
+    return version.length() > 0;
+  }
+
+  return false;
+}
+
+bool resolveBetaFirmware(String &firmwareUrl, String &version) {
+  const String baseUrl = getConfiguredFirmwareBaseUrl();
+  String payload;
+  if (!fetchHttpsText(baseUrl + "/latestBetaVersion.txt", payload)) {
+    return false;
+  }
+
+  if (payload.startsWith("https://")) {
+    firmwareUrl = payload;
+    version = extractVersionFromFirmwareUrl(payload);
+    return firmwareUrl.length() > 0;
+  }
+
+  version = payload;
+  firmwareUrl = baseUrl + "/" + version + "/firmware.bin";
+  return version.length() > 0;
+}
+
 String settingsTemplateProcessor(const String &var) {
   if (var == "header") return getheader(actconf);
   if (var == "devname") return String(actconf.devname);
@@ -729,61 +844,20 @@ void WebServerHandler()
     transID();
     content = readFile2(LittleFS, "/firmware.html");
 
-    // get Beta version number
-    const char *host = actconf.firmwareUpdateUrl;
-    String getLatestBetaVersion = "latestBetaVersion.txt";
-    WiFiClientSecure client;
-    HTTPClient http;
+    String stableFirmwareUrl;
+    String stableVersion;
+    const bool stableAvailable = resolveStableFirmware(stableFirmwareUrl, stableVersion);
 
-    Serial.print("[HTTP] begin...\n");
-    String baseUrl = "https://" + (String)host + "/files_for_esp_webserver";
-    String myurl = baseUrl + "/" + (String)getLatestBetaVersion;
-    DebugPrintln(3, myurl);
-    client.setInsecure();
-    http.setTimeout(2000);
-    if (!http.begin(client, myurl)) {
-      content.replace("%serverAvailable%", "Server not available");
-      content.replace("%version2%", "-");
-      content.replace("%baseUrl%", String(baseUrl));
-      content.replace("%header%", getheader(actconf));
-      content.replace("%devname%", String(actconf.devname));
-      content.replace("%fversion%", String(actconf.fversion));
-      content.replace("%getSdkVersion%", String(ESP.getSdkVersion()));
-      content.replace("%chipId%", String(chipId));
-      content.replace("%getCpuFreqMHz%", String(String(ESP.getCpuFreqMHz())));
-      return request->send(200, "text/html", content);
-    }
+    String betaFirmwareUrl;
+    String betaVersion;
+    const bool betaAvailable = resolveBetaFirmware(betaFirmwareUrl, betaVersion);
 
-    Serial.print("[HTTP] GET...\n");
-    int httpCode = http.GET();
-
-    // httpCode will be negative on error
-    if(httpCode > 0) {
-      // HTTP header has been send and Server response header has been handled
-      Serial.printf("[HTTP] GET... code: %d\n", httpCode);
-
-      // file found at server
-      if(httpCode == HTTP_CODE_OK) {
-        String payload = http.getString();
-        Serial.println(payload);
-        content.replace("%serverAvailable%", "Server available");
-        content.replace("%version2%", String(payload));
-        content.replace("%baseUrl%", String(baseUrl));
-      } else if (httpCode == HTTP_CODE_NOT_FOUND) {
-        DebugPrintln(1, "- 404 page not found");
-        content.replace("%serverAvailable%", "Server not available");
-        content.replace("%version2%", "-");
-        content.replace("%baseUrl%", String(baseUrl));
-      }
-    } else {
-      Serial.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
-      content.replace("%serverAvailable%", "Server not available");
-      content.replace("%version2%", "-");
-      content.replace("%baseUrl%", String(baseUrl));
-    }
-
-    http.end();
-    // end Beta Version number
+    content.replace("%stableServerAvailable%", stableAvailable ? "Server available" : "Server not available");
+    content.replace("%stableVersion%", stableAvailable ? stableVersion : "-");
+    content.replace("%stableFirmwareUrl%", stableAvailable ? stableFirmwareUrl : "");
+    content.replace("%serverAvailable%", betaAvailable ? "Server available" : "Server not available");
+    content.replace("%version2%", betaAvailable ? betaVersion : "-");
+    content.replace("%betaFirmwareUrl%", betaAvailable ? betaFirmwareUrl : "");
 
     content.replace("%header%", getheader(actconf));
     content.replace("%devname%", String(actconf.devname));
@@ -793,6 +867,48 @@ void WebServerHandler()
     content.replace("%getCpuFreqMHz%", String(String(ESP.getCpuFreqMHz())));
 
     request->send(200, "text/html", content);
+  });
+
+  httpServer.on("/startRemoteUpdate", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
+
+    if (WiFi.status() != WL_CONNECTED) {
+      request->send(503, "application/json", buildOtaResponse("error", "No Wi-Fi connection available for remote update.", false, false, false));
+      return;
+    }
+
+    String source = request->hasParam("source", true) ? request->getParam("source", true)->value() : "";
+    source.toLowerCase();
+
+    String remoteUrl;
+    String version;
+    bool resolved = false;
+    if (source == "stable") {
+      resolved = resolveStableFirmware(remoteUrl, version);
+    } else if (source == "beta") {
+      resolved = resolveBetaFirmware(remoteUrl, version);
+    }
+
+    if (!resolved || remoteUrl.length() == 0) {
+      request->send(404, "application/json", buildOtaResponse("error", "Unable to resolve remote firmware URL.", false, false, false));
+      return;
+    }
+
+    String errorMessage;
+    if (!performRemoteOtaUpdate(remoteUrl, false, errorMessage)) {
+      request->send(500, "application/json", buildOtaResponse("error", errorMessage, false, false, false));
+      return;
+    }
+
+    const String message = "Firmware update downloaded by device" + (version.length() ? " (" + version + ")" : "") + ". Device reboots now.";
+    request->send(200, "application/json", buildOtaResponse("ok", message, true, false, true));
+    Serial.flush();
+    delay(250);
+    ESP.restart();
   });
 
   httpServer.on("/devinfo.html", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -863,6 +979,26 @@ void WebServerHandler()
   httpServer.serveStatic("/favicon.ico", LittleFS, "/favicon.ico").setCacheControl("max-age=600");
 
   httpServer.serveStatic("/settings.js", LittleFS, "/settings.js").setCacheControl("max-age=600");
+  
+  httpServer.serveStatic("/common.css", LittleFS, "/common.css").setCacheControl("max-age=600");
+  
+  httpServer.serveStatic("/common.js", LittleFS, "/common.js").setCacheControl("max-age=600");
+  
+  httpServer.serveStatic("/index.js", LittleFS, "/common.js").setCacheControl("max-age=600");
+
+  httpServer.serveStatic("/firmware_ota.html", LittleFS, "/firmware_ota.html").setCacheControl("max-age=600");
+
+  httpServer.serveStatic("/firmware_ota.css", LittleFS, "/firmware_ota.css").setCacheControl("max-age=600");
+
+  httpServer.serveStatic("/firmware_ota.js", LittleFS, "/firmware_ota.js").setCacheControl("max-age=600");
+  
+  httpServer.serveStatic("/sensorv.js", LittleFS, "/sensorv.js").setCacheControl("max-age=600");
+  
+  httpServer.serveStatic("/lora.js", LittleFS, "/lora.js").setCacheControl("max-age=600");
+  
+  httpServer.serveStatic("/settings.js", LittleFS, "/settings.js").setCacheControl("max-age=600");
+
+  httpServer.serveStatic("/settings-page.css", LittleFS, "/settings-page.css").setCacheControl("max-age=600");
 
   httpServer.on("/styles.css", HTTP_GET, [](AsyncWebServerRequest *request) {
     long int t1 = millis();
@@ -1305,6 +1441,26 @@ void WebServerHandler()
     request->send(200, "text/html", test);
   });
 
+  httpServer.on("/testMdsUpload", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
+
+    if (WiFi.status() != WL_CONNECTED) {
+      request->send(503, "application/json", "{\"status\":\"error\",\"message\":\"No Wi-Fi connection available for MDS test.\"}");
+      return;
+    }
+
+    const bool success = sendToMDS(actconf);
+    if (success) {
+      request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"MDS test upload sent successfully.\"}");
+    } else {
+      request->send(502, "application/json", "{\"status\":\"error\",\"message\":\"MDS test upload failed. See WebSerial or serial log for details.\"}");
+    }
+  });
+
   httpServer.onNotFound([](AsyncWebServerRequest *request){
     if (request->method() == HTTP_OPTIONS) 
     {
@@ -1357,6 +1513,69 @@ static bool isFilesystemUpdateRequest(AsyncWebServerRequest *request, const Stri
          loweredFilename.indexOf("filesystem") > -1;
 }
 
+bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &errorMessage) {
+  if (!url.startsWith("https://")) {
+    errorMessage = "Remote update URLs must use HTTPS.";
+    return false;
+  }
+
+  if (!filesystemUpdate && !saveConfigBackupToLittleFS(actconf)) {
+    errorMessage = "Config backup failed. Firmware update cancelled.";
+    return false;
+  }
+
+  WiFiClientSecure client;
+  HTTPClient http;
+  client.setCACert(reinterpret_cast<const char*>(cert_cacert_pem_start));
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.setTimeout(15000);
+
+  if (!http.begin(client, url)) {
+    errorMessage = "Unable to initialize remote HTTPS update request.";
+    return false;
+  }
+
+  const int httpCode = http.GET();
+  if (httpCode != HTTP_CODE_OK) {
+    errorMessage = "Remote update download failed: HTTP " + String(httpCode);
+    http.end();
+    return false;
+  }
+
+  const int cmd = filesystemUpdate ? U_PART : U_FLASH;
+  if (!Update.begin(UPDATE_SIZE_UNKNOWN, cmd)) {
+    Update.printError(Serial);
+    errorMessage = "Unable to start OTA update.";
+    http.end();
+    return false;
+  }
+
+  WiFiClient *stream = http.getStreamPtr();
+  const size_t written = Update.writeStream(*stream);
+  const int contentLength = http.getSize();
+  if (written == 0 || (contentLength > 0 && static_cast<int>(written) != contentLength)) {
+    Update.printError(Serial);
+    errorMessage = "Downloaded firmware could not be written completely.";
+    Update.abort();
+    http.end();
+    return false;
+  }
+
+  if (!Update.end(true)) {
+    Update.printError(Serial);
+    errorMessage = "Update finalize failed.";
+    http.end();
+    return false;
+  }
+
+  if (filesystemUpdate) {
+    saveWebFilesVersion(actconf.fversion);
+  }
+
+  http.end();
+  return true;
+}
+
 // TODO create new function for downloading beta file and run this funciton (from beta)
 void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
   const bool filesystemUpdate = isFilesystemUpdateRequest(request, filename);
@@ -1401,8 +1620,8 @@ void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size
       Serial.println("Update complete");
       const String message = filesystemUpdate
         ? "FileSystem update complete. Device reboots now."
-        : "Firmware update complete. Device reboots and checks web files.";
-      request->send(200, "application/json", buildOtaResponse("ok", message, true, !filesystemUpdate, !filesystemUpdate));
+        : "Firmware update complete. Device reboots now.";
+      request->send(200, "application/json", buildOtaResponse("ok", message, true, false, !filesystemUpdate));
       Serial.flush();
       delay(250);
       ESP.restart();

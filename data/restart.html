@@ -4,35 +4,39 @@
 <head>
   <title>Restart - %devname%</title>
   <link rel='stylesheet' type='text/css' href='/styles.css'>
+  <link rel='stylesheet' type='text/css' href='/common.css'>
   <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
   <meta name=viewport content='width=device-width, initial-scale=1'>
-  <style>
-  </style>
 </head>
 
-<body>
+<body class="restart-page">
   %header%
   
-  <div style="display:none;" id="loader"></div>
-  <div style="display:block;" id="myDiv" class="animate-bottom">
+  <div class="hidden" id="loader"></div>
+  <div id="myDiv" class="animate-bottom restart-panel">
     <h3>Restart</h3>
-    After Restart change the system automatically to the main page.
+    The device returns to the overview page automatically after the restart.
     <br><br>
-    <button onclick="httpGetAsync('?restart=1')">Restart</button>
+    <button onclick="httpGetAsync('?restart=1')">Restart Device</button>
     <br>
     <hr>
     <br>
-    <button onclick="window.open('/', '_self');">Back</button>
+    <button onclick="window.open('/', '_self');">Back to Overview</button>
     <br>
   </div>
 </body>
 
 <script>
   theUrl = window.location.origin;
-  const myInterval = null;
+  let myInterval = null;
+
+  function setRestartState(isRestarting) {
+    document.getElementById("loader").classList.toggle("hidden", !isRestarting);
+    document.getElementById("myDiv").classList.toggle("hidden", isRestarting);
+  }
 
   function httpGetAsync(param) {
-    const response = confirm("Are you sure you want to restart the Device?");
+    const response = confirm("Are you sure you want to restart the device?");
     if (response) {
       var request = new XMLHttpRequest();
       request.open("GET",theUrl + param);
@@ -46,14 +50,12 @@
         }
       });
       request.send();
-      document.getElementById("loader").style.display = "block";
-      document.getElementById("myDiv").style.display = "none";
+      setRestartState(true);
       myInterval = setInterval(function () { 
         if (document.getElementById("myping").classList.contains("led-green")) {
-          document.getElementById("loader").style.display = "none";
-          document.getElementById("myDiv").style.display = "block";
+          setRestartState(false);
           clearInterval(myInterval);
-          window.open("/", "_self");
+          window.location.replace("/");
         }
       }, 900);
     }

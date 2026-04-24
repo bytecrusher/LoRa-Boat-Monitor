@@ -119,6 +119,9 @@ bool wifiServicesInitialized = false;
 
 const unsigned long MDS_UPLOAD_INTERVAL_MS = 300000UL;
 unsigned long lastMdsUploadMillis = 0;
+bool pendingWakeMdsEvent = false;
+int pendingWakeReasonCode = 0;
+String pendingWakeReasonLabel = "unknown";
 
 long timezone = 1; 
 byte daysavetime = 1;
@@ -160,6 +163,10 @@ void maybeSendDataViaWifi() {
     return;
   }
 
+  if (pendingWakeMdsEvent && sendMdsDeviceEvent(actconf, pendingWakeReasonLabel.c_str(), pendingWakeReasonCode, bootCount, 0, 0)) {
+    pendingWakeMdsEvent = false;
+  }
+
   const unsigned long now = millis();
   if ((lastMdsUploadMillis == 0) || (now - lastMdsUploadMillis >= MDS_UPLOAD_INTERVAL_MS)) {
     sendToMDS(actconf);
@@ -176,6 +183,10 @@ void disableWiFiForSleep() {
 
 void prepareForStandbySleep() {
   DebugPrintln(3, "Prepare standby sleep");
+
+  if (String(actconf.SendDataViaWifi) == "Yes" && WiFi.status() == WL_CONNECTED) {
+    sendMdsDeviceEvent(actconf, "Standby enter", 1, TIME_TO_SLEEP, bootCount, 0);
+  }
 
   // Re-arm wake sources right before sleep so runtime config changes
   // like standbySleepDuration apply without needing a reboot.
@@ -814,9 +825,23 @@ void state1(){
 Method to print the reason by which ESP32
 has been awaken from sleep
 */
+const char* wakeupReasonToLabel(esp_sleep_wakeup_cause_t wakeup_reason) {
+  switch (wakeup_reason) {
+    case ESP_SLEEP_WAKEUP_EXT0: return "Wakeup ext0";
+    case ESP_SLEEP_WAKEUP_EXT1: return "Wakeup ext1";
+    case ESP_SLEEP_WAKEUP_TIMER: return "Wakeup timer";
+    case ESP_SLEEP_WAKEUP_TOUCHPAD: return "Wakeup touchpad";
+    case ESP_SLEEP_WAKEUP_ULP: return "Wakeup ulp";
+    default: return "Wakeup unknown";
+  }
+}
+
 void print_wakeup_reason(){
   esp_sleep_wakeup_cause_t wakeup_reason;
   wakeup_reason = esp_sleep_get_wakeup_cause();
+  pendingWakeReasonCode = static_cast<int>(wakeup_reason);
+  pendingWakeReasonLabel = wakeupReasonToLabel(wakeup_reason);
+  pendingWakeMdsEvent = true;
   switch(wakeup_reason)
   {
     case ESP_SLEEP_WAKEUP_EXT0 : DebugPrintln(3, "Wakeup caused by external signal using RTC_IO"); break;
@@ -1114,8 +1139,7 @@ void setup() {
   }
 
   if (!areWebFilesCurrent(actconf.fversion)) {
-    DebugPrintln(2, "Web files version mismatch detected, scheduling update");
-    runDownloadingFiles = true;
+    DebugPrintln(2, "Web files version mismatch detected. Use 'Get Files from Server' in the File Manager to update them.");
   }
 
   sendedLoraAfterSleepOneTime = false;

@@ -1,0 +1,179 @@
+select {
+    width: 150px;
+}
+
+input {
+    width: 145px;
+}
+
+.settings-page .column {
+    float: left;
+    width: 33.33%;
+    padding: 2px;
+}
+
+.settings-page .firstColumn {
+    width: 400px;
+}
+
+.settings-page .settingHint {
+    font-size: 0.85em;
+    opacity: 0.8;
+    margin-left: 6px;
+}
+
+.settings-page .labelText {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.settings-page .infoBadge {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    font-size: 12px;
+    line-height: 1;
+    cursor: help;
+    opacity: 0.85;
+}
+
+.settings-page .infoBadge:focus {
+    outline: 2px solid #7aa9ff;
+    outline-offset: 2px;
+}
+
+.settings-page .infoPopover {
+    position: absolute;
+    left: 24px;
+    top: -6px;
+    z-index: 20;
+    width: 260px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(20, 20, 20, 0.96);
+    color: #fff;
+    font-size: 0.85em;
+    line-height: 1.35;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    display: none;
+    text-align: left;
+}
+
+.settings-page .infoBadge:hover .infoPopover,
+.settings-page .infoBadge:focus .infoPopover,
+.settings-page .infoBadge:focus-within .infoPopover {
+    display: block;
+}
+
+.settings-page .secondColumn {
+    float: right;
+}
+
+.settings-page .row:after {
+    content: "";
+    clear: both;
+    padding: 1px;
+}
+
+.settings-page .row {
+    display: flex;
+    margin-top: 5px;
+}
+
+.settings-page h3 {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.settings-page .myToggleButton {
+    width: auto;
+    margin-right: 10px;
+}
+
+.settings-page .myAllToggleButton {
+    margin-left: 5px;
+}
+
+.settings-page .mydiv {
+    border: 2px solid #ccc;
+    border-radius: 10px;
+    padding: 5px;
+    margin: 5px;
+}
+
+.settings-page .settings-panel {
+    margin: 5px;
+}
+
+.settings-page .settings-card-title {
+    display: flex;
+    align-items: center;
+}
+
+.settings-page .section-heading {
+    margin: 0;
+}
+
+.settings-page .section-note {
+    margin: 4px 0 8px;
+    font-size: 0.9em;
+    opacity: 0.8;
+}
+
+.settings-page .section-subtitle {
+    margin: 14px 0 4px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.settings-page .section-subtitle:first-of-type {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+}
+
+.settings-page .initially-hidden {
+    display: none;
+}
+
+.settings-page .button-spacing {
+    margin-left: 20px;
+}
+
+.settings-page .page-toolbar {
+    padding-top: 10px;
+}
+
+.settings-page .settings-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.settings-page .settings-actions .button-spacing {
+    margin-left: 0;
+}
+
+.settings-page input[type="file"] {
+    display: none;
+}
+
+@media screen and (max-width: 900px) {
+    .settings-page .row {
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .settings-page .firstColumn,
+    .settings-page .secondColumn {
+        width: 100%;
+        float: none;
+    }
+}

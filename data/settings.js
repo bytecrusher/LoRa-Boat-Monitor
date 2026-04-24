@@ -1,5 +1,6 @@
 var myVar;
 document.addEventListener("DOMContentLoaded", function() {
+    applySettingsSelections();
     setTimeout(function() {
         //document.querySelector("body").classList.add("loaded");
         showPage();
@@ -11,6 +12,27 @@ document.addEventListener("DOMContentLoaded", function() {
     // Listen for submit events
     //myform.addEventListener('submit', handleSubmit);
 });
+
+function applySettingsSelections() {
+    var selections = window.settingsSelections || {};
+    var form = document.forms.SetForm;
+    if (!form) return;
+
+    Object.keys(selections).forEach(function (fieldName) {
+        var field = form[fieldName];
+        if (!field) return;
+
+        if (field.tagName === 'SELECT') {
+            field.selectedIndex = selections[fieldName];
+        } else {
+            field.value = selections[fieldName];
+        }
+    });
+
+    if (selections.crypt == 1) {
+        document.getElementById('logoutBtn').style.display = "block";
+    }
+}
 
 function showPage() {
     document.getElementById("loader").style.display = "none";

@@ -3,20 +3,16 @@
 <head>
   <title>Device Info - %devname%</title>
   <link rel='stylesheet' type='text/css' href='/styles.css'>
+  <link rel='stylesheet' type='text/css' href='/common.css'>
   <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
   <meta name=viewport content='width=device-width, initial-scale=1'>
-  <style>
-    td>input {
-      background-color: lightgray;
-      color: black;
-    }
-  </style>
 </head>
 
 <body>
+  <script src='/common.js' type='text/javascript'></script>
   <script src='/app.js' type='text/javascript'></script>
   %header%
-  <table>
+  <table class="data-table readonly-table">
     <tr>
       <td>
         <h3>Firmware Information</h3>
@@ -39,7 +35,7 @@
 
     <tr>
       <td>
-        <h3>ESP32 Informations</h3>
+        <h3>ESP32 Information</h3>
       </td>
       <td></td>
       <td></td>
@@ -71,7 +67,7 @@
 
     <tr>
       <td>
-        <h3>Network Parameter</h3>
+        <h3>Network Information</h3>
       </td>
       <td></td>
       <td></td>
@@ -84,55 +80,55 @@
     </tr>
 
     <tr>
-      <td>mDNS Name</td>
+      <td>mDNS Hostname</td>
       <td><input id='mdnsname' type='text' name='mdnsname' size='15' value='%mdnsname%' disabled></td>
       <td></td>
     </tr>
 
     <tr>
-      <td>WLAN Server SSID</td>
+      <td>Device Hotspot Name</td>
       <td><input id='sssid' type='text' name='sssid' size='15' value='%sssid%' disabled></td>
       <td></td>
     </tr>
 
     <tr>
-      <td>WLAN Server IP</td>
+      <td>Device Hotspot IP</td>
       <td><input type='text' name='serverip' size='15' value='%softAPIP%' disabled></td>
       <td></td>
     </tr>
 
     <tr>
-      <td>Activ AP Channel</td>
+      <td>Active Hotspot Channel</td>
       <td><input type='text' name='apchannel' size='15' value='%WiFichannel%' disabled></td>
       <td></td>
     </tr>
 
     <tr>
-      <td>WLAN #1 Client SSID</td>
+      <td>Preferred Wi-Fi SSID 1</td>
       <td><input id='cssid1' type='text' name='cssid1' size='15' value='%cssid1%' disabled></td>
       <td></td>
     </tr>
 
     <tr>
-      <td>WLAN #2 Client SSID</td>
+      <td>Preferred Wi-Fi SSID 2</td>
       <td><input id='cssid2' type='text' name='cssid2' size='15' value='%cssid2%' disabled></td>
       <td></td>
     </tr>
 
     <tr>
-      <td>WLAN #3 Client SSID</td>
+      <td>Preferred Wi-Fi SSID 3</td>
       <td><input id='cssid3' type='text' name='cssid3' size='15' value='%cssid3%' disabled></td>
       <td></td>
     </tr>
 
     <tr>
-      <td>WLAN Client IP</td>
+      <td>Wi-Fi Client IP</td>
       <td><input type='text' name='clientip' size='15' value='%localIP%' disabled></td>
       <td></td>
     </tr>
 
     <tr>
-      <td>Client Field Strength</td>
+      <td>Wi-Fi Signal Strength</td>
       <td><input id='strength' type='text' name='strength' size='15' value='0' disabled></td>
       <td>[<data id='sunit'></data>]</td>
     </tr>
@@ -145,26 +141,26 @@
 
     <tr>
       <td>
-        <h3>LoRa Parameter</h3>
+        <h3>LoRa Status</h3>
       </td>
       <td></td>
       <td></td>
     </tr>
 
     <tr>
-      <td>Device Address</td>
+      <td>LoRa Device Address</td>
       <td><input type='text' required name='devaddr' size='15' value='%devaddr%' maxlength='20' disabled></td>
       <td></td>
     </tr>
 
     <tr>
-      <td>Actual Channel</td>
+      <td>Current Channel</td>
       <td><input id='actualch' type='text' name='actualch' size='15' value='0' disabled></td>
       <td></td>
     </tr>
 
     <tr>
-      <td>Actual SF</td>
+      <td>Current Spreading Factor</td>
       <td><input id='actualsf' type='text' name='actualsf' size='15' value='0' disabled></td>
       <td></td>
     </tr>
@@ -189,7 +185,7 @@
 
     <tr>
       <td>
-        <h3>Device Informations<br>
+        <h3>Live Device Values<br>
           <data class="blink" id='info'></data>
         </h3>
       </td>
@@ -198,7 +194,7 @@
     </tr>
 
     <tr>
-      <td>Latiitude</td>
+      <td>Latitude</td>
       <td><input id='lat' type='text' name='lat' size='15' value='0' disabled></td>
       <td>[dez]</td>
     </tr>
@@ -210,7 +206,7 @@
     </tr>
 
     <tr>
-      <td>Altiitude</td>
+      <td>Altitude</td>
       <td><input id='alt' type='text' name='alt' size='15' value='0' disabled></td>
       <td>[m]</td>
     </tr>
@@ -224,13 +220,13 @@
     </tr>
 
     <tr>
-      <td>1Wire Temp</td>
+      <td>1-Wire Temperature</td>
       <td><input id='1wtemp' type='text' name='1wtemp' size='15' value='0' disabled></td>
       <td>[<data id='1wunit'></data>]</td>
     </tr>
 
     <tr>
-      <td>Tank 1</td>
+      <td>Tank 1 Level</td>
       <td><input id='tank1' type='text' name='tank1' size='15' value='0' disabled></td>
       <td>[V]</td>
     </tr>
@@ -242,7 +238,7 @@
     </tr>
 
     <tr>
-      <td>Tank 2</td>
+      <td>Tank 2 Level</td>
       <td><input id='tank2' type='text' name='tank2' size='15' value='0' disabled></td>
       <td>[V]</td>
     </tr>
@@ -272,7 +268,7 @@
     </tr>
 
     <tr>
-      <td>Env Sensor</td>
+      <td>Environment Sensor Source</td>
       <td><input id='envSensor' type='text' name='envSensor' size='15' value='0' disabled></td>
       <td></td>
     </tr>
@@ -284,13 +280,13 @@
     </tr>
 
     <tr>
-      <td>Lora Standby Mode</td>
+      <td>LoRa Send Mode</td>
       <td><input id='loraOperationMode' type='text' name='loraOperationMode' size='15' value='0' disabled></td>
       <td></td>
     </tr>
 
     <tr>
-      <td>Wifi Standby Mode</td>
+      <td>Wi-Fi in Standby</td>
       <td><input id='WifiStandbyMode' type='text' name='WifiStandbyMode' size='15' value='0' disabled></td>
       <td></td>
     </tr>
@@ -298,7 +294,7 @@
   <br>
   <hr>
   <br>
-  <form action='/'><button type='submit'>Back</button></form>
+  <form action='/'><button type='submit'>Back to Overview</button></form>
   <br>
   <br>
 </body>
