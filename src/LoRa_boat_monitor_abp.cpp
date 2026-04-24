@@ -118,10 +118,12 @@ boolean runDownloadingFilesStatus = false;
 bool wifiServicesInitialized = false;
 
 const unsigned long MDS_UPLOAD_INTERVAL_MS = 300000UL;
+const unsigned long WAKE_MDS_RETRY_INTERVAL_MS = 30000UL;
 unsigned long lastMdsUploadMillis = 0;
 bool pendingWakeMdsEvent = false;
 int pendingWakeReasonCode = 0;
 String pendingWakeReasonLabel = "unknown";
+unsigned long nextWakeMdsRetryMillis = 0;
 
 long timezone = 1; 
 byte daysavetime = 1;
@@ -136,6 +138,16 @@ void IRAM_ATTR onTimer(){
 void rebuildNetworkServersFromConfig() {
   new (&httpServer) AsyncWebServer(actconf.httpport);
   new (&server) WiFiServer(actconf.dataport);
+}
+
+bool waitForValidSystemTime(uint32_t timeoutMs) {
+  const uint32_t start = millis();
+  time_t now = time(nullptr);
+  while (now < 1704067200 && (millis() - start) < timeoutMs) {
+    delay(250);
+    now = time(nullptr);
+  }
+  return now >= 1704067200;
 }
 
 void initWiFiServicesOnce() {
@@ -163,11 +175,16 @@ void maybeSendDataViaWifi() {
     return;
   }
 
-  if (pendingWakeMdsEvent && sendMdsDeviceEvent(actconf, pendingWakeReasonLabel.c_str(), pendingWakeReasonCode, bootCount, 0, 0)) {
-    pendingWakeMdsEvent = false;
+  const unsigned long now = millis();
+
+  if (pendingWakeMdsEvent && now >= nextWakeMdsRetryMillis) {
+    if (sendMdsDeviceEvent(actconf, pendingWakeReasonLabel.c_str(), pendingWakeReasonCode, bootCount, 0, 0)) {
+      pendingWakeMdsEvent = false;
+    } else {
+      nextWakeMdsRetryMillis = now + WAKE_MDS_RETRY_INTERVAL_MS;
+    }
   }
 
-  const unsigned long now = millis();
   if ((lastMdsUploadMillis == 0) || (now - lastMdsUploadMillis >= MDS_UPLOAD_INTERVAL_MS)) {
     sendToMDS(actconf);
     lastMdsUploadMillis = now;
@@ -312,10 +329,12 @@ void enableWiFi(){
 
       DebugPrintln(3, "Contacting Time Server");
 	    configTime(3600*timezone, daysavetime*3600, "time.nist.gov", "0.pool.ntp.org", "1.pool.ntp.org");
-	    struct tm tmstruct ;
-      tmstruct.tm_year = 0;
-	      getLocalTime(&tmstruct, 5000);
-      DebugPrintln(3, "\nNow is : " + String((tmstruct.tm_year)+1900) + "-" + String(( tmstruct.tm_mon)+1) + "-" + String(tmstruct.tm_mday) + " " + String(tmstruct.tm_hour) + ":" + String(tmstruct.tm_min) + ":" + String(tmstruct.tm_sec));
+	    struct tm tmstruct;
+      if (waitForValidSystemTime(15000) && getLocalTime(&tmstruct, 1000)) {
+        DebugPrintln(3, "\nNow is : " + String((tmstruct.tm_year)+1900) + "-" + String((tmstruct.tm_mon)+1) + "-" + String(tmstruct.tm_mday) + " " + String(tmstruct.tm_hour) + ":" + String(tmstruct.tm_min) + ":" + String(tmstruct.tm_sec));
+      } else {
+        DebugPrintln(1, "Time sync failed. HTTPS requests may be postponed until NTP is available.");
+      }
 
       initWiFiServicesOnce();
 
@@ -842,6 +861,7 @@ void print_wakeup_reason(){
   pendingWakeReasonCode = static_cast<int>(wakeup_reason);
   pendingWakeReasonLabel = wakeupReasonToLabel(wakeup_reason);
   pendingWakeMdsEvent = true;
+  nextWakeMdsRetryMillis = 0;
   switch(wakeup_reason)
   {
     case ESP_SLEEP_WAKEUP_EXT0 : DebugPrintln(3, "Wakeup caused by external signal using RTC_IO"); break;

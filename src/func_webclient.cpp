@@ -9,7 +9,6 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <time.h>
-#include <mbedtls/error.h>
 #include <Configuration.h>
 #include "func_myFunctions.h"
 
@@ -50,6 +49,12 @@ String normalizeSecureUrl(const String &configuredValue)
   }
 
   return normalized;
+}
+
+bool hasValidSystemTime()
+{
+  const time_t now = time(nullptr);
+  return now >= 1704067200; // 2024-01-01 00:00:00 UTC
 }
 
 void buildMdsTimestamp(char (&mdsDate)[11], char (&mdsTime)[9])
@@ -104,6 +109,11 @@ bool postMdsPayload(configData actconf, JsonDocument &docpayload, const char *co
     return false;
   }
 
+  if (!hasValidSystemTime()) {
+    DebugPrintln(2, "Skipping MDS request because system time is not synchronized yet");
+    return false;
+  }
+
   String requestBody;
   serializeJson(docpayload, requestBody);
   WiFiClientSecure client;
@@ -118,6 +128,13 @@ bool postMdsPayload(configData actconf, JsonDocument &docpayload, const char *co
   const int pathStart = urlWithoutScheme.indexOf('/');
   const String host = pathStart >= 0 ? urlWithoutScheme.substring(0, pathStart) : urlWithoutScheme;
   const String path = pathStart >= 0 ? urlWithoutScheme.substring(pathStart) : "/";
+
+  IPAddress resolvedIp;
+  if (!WiFi.hostByName(host.c_str(), resolvedIp)) {
+    DebugPrintln(1, "DNS lookup failed for MDS host: " + host);
+    return false;
+  }
+  DebugPrintln(3, "MDS host resolved to: " + resolvedIp.toString());
 
   if (!client.connect(host.c_str(), 443)) {
     DebugPrintln(1, "Failed to connect to MDS host: " + host);
