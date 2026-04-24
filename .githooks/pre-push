@@ -5,7 +5,7 @@ HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${HOOK_DIR}/.." && pwd)"
 
 log() {
-  printf '[post-push] %s\n' "$1"
+  printf '[pre-push] %s\n' "$1"
 }
 
 if [[ ! -f "${PROJECT_DIR}/.env" ]]; then
@@ -15,13 +15,13 @@ fi
 
 log "Building firmware..."
 if ! env PLATFORMIO_CORE_DIR=/tmp/pio-core pio run -d "${PROJECT_DIR}"; then
-  log "Build failed. Auto-deploy skipped."
+  log "Build failed. Push aborted."
   exit 1
 fi
 
 log "Deploying firmware and web files to update server..."
 if ! "${PROJECT_DIR}/scripts/deploy_stable.sh"; then
-  log "Deploy failed."
+  log "Deploy failed. Push aborted."
   exit 1
 fi
 

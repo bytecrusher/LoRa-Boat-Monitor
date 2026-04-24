@@ -98,15 +98,17 @@ Optional mit anderem Dateinamen:
 source ./scripts/source_env.sh ./deploy.env
 ```
 
-## Automatisches Deploy nach Push
+## Automatisches Deploy vor Push
 
-Wenn du nach jedem `git push` automatisch bauen und deployen willst:
+Git bietet lokal keinen nativen `post-push`-Hook. Der naechstbeste und zuverlaessige Weg ist deshalb ein `pre-push`-Hook.
+
+Wenn du vor jedem `git push` automatisch bauen und deployen willst:
 
 ```bash
 ./scripts/install_git_hooks.sh
 ```
 
-Danach führt Git nach jedem Commit automatisch aus:
+Danach fuehrt Git vor jedem Push automatisch aus:
 
 - `env PLATFORMIO_CORE_DIR=/tmp/pio-core pio run`
 - `./scripts/deploy_stable.sh`
@@ -121,7 +123,7 @@ Voraussetzung:
 
 - eine gültige `.env` im Projektverzeichnis
 
-Wenn `.env` fehlt oder der Build fehlschlägt, wird der Push nicht rückgängig gemacht, aber das Auto-Deploy übersprungen bzw. mit Fehler beendet.
+Wenn `.env` fehlt, wird das Auto-Deploy uebersprungen. Wenn Build oder Deploy fehlschlagen, wird der Push abgebrochen.
 
 ## Nützliche Optionen
 
