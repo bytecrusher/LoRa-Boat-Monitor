@@ -5,6 +5,9 @@
 extern const uint8_t cert_cacert_pem_start[] asm("_binary_cert_cacert_pem_start");
 
 namespace {
+String buildOtaProgressJson();
+String buildUpdateFilesProgressJson();
+
 String normalizeFirmwareUpdateBaseUrl(const String &configuredValue) {
   String normalized = configuredValue;
   normalized.trim();
@@ -1491,6 +1494,16 @@ void WebServerHandler()
     request->send(200, "text/html", test);
   });
 
+  httpServer.on("/updatefilesprogress", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
+
+    request->send(200, "application/json", buildUpdateFilesProgressJson());
+  });
+
   httpServer.on("/updatefilesinfo", HTTP_GET, [](AsyncWebServerRequest *request) {
     if (actconf.crypt == 1) {
       if(!request->authenticate(actconf.username, actconf.password)) {
@@ -1514,6 +1527,16 @@ void WebServerHandler()
     response += "}";
 
     request->send(200, "application/json", response);
+  });
+
+  httpServer.on("/otaprogress", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
+
+    request->send(200, "application/json", buildOtaProgressJson());
   });
 
   httpServer.on("/testMdsUpload", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -1573,6 +1596,85 @@ void WebServerHandler()
 
 size_t content_len;
 
+namespace {
+bool otaProgressActive = false;
+bool otaProgressSuccess = false;
+size_t otaProgressCurrent = 0;
+size_t otaProgressTotal = 0;
+String otaProgressPhase = "idle";
+String otaProgressMessage = "";
+
+void resetOtaProgress() {
+  otaProgressActive = false;
+  otaProgressSuccess = false;
+  otaProgressCurrent = 0;
+  otaProgressTotal = 0;
+  otaProgressPhase = "idle";
+  otaProgressMessage = "";
+}
+
+void startOtaProgress(const String &phase, size_t totalBytes, const String &message) {
+  otaProgressActive = true;
+  otaProgressSuccess = false;
+  otaProgressCurrent = 0;
+  otaProgressTotal = totalBytes;
+  otaProgressPhase = phase;
+  otaProgressMessage = message;
+}
+
+void updateOtaProgress(const String &phase, size_t currentBytes, size_t totalBytes, const String &message) {
+  otaProgressActive = true;
+  otaProgressCurrent = currentBytes;
+  if (totalBytes > 0) {
+    otaProgressTotal = totalBytes;
+  }
+  otaProgressPhase = phase;
+  otaProgressMessage = message;
+}
+
+void finishOtaProgress(bool success, const String &message) {
+  otaProgressActive = false;
+  otaProgressSuccess = success;
+  if (otaProgressTotal > 0) {
+    otaProgressCurrent = otaProgressTotal;
+  }
+  otaProgressPhase = success ? "complete" : "error";
+  otaProgressMessage = message;
+}
+
+String buildOtaProgressJson() {
+  JsonDocument json;
+  json["active"] = otaProgressActive;
+  json["success"] = otaProgressSuccess;
+  json["phase"] = otaProgressPhase;
+  json["message"] = otaProgressMessage;
+  json["current"] = otaProgressCurrent;
+  json["total"] = otaProgressTotal;
+  json["percent"] = otaProgressTotal > 0 ? (otaProgressCurrent * 100) / otaProgressTotal : 0;
+
+  String response;
+  serializeJson(json, response);
+  return response;
+}
+
+String buildUpdateFilesProgressJson() {
+  JsonDocument json;
+  const bool busy = runDownloadingFilesStatus || runDownloadingFiles;
+  json["busy"] = busy;
+  json["firmwareVersion"] = String(actconf.fversion);
+  json["storedWebFilesVersion"] = getStoredWebFilesVersion();
+  json["upToDate"] = areWebFilesCurrent(actconf.fversion);
+  json["completed"] = webFilesDownloadCompleted;
+  json["total"] = webFilesDownloadTotal;
+  json["currentFile"] = webFilesDownloadCurrentName;
+  json["percent"] = webFilesDownloadTotal > 0 ? (webFilesDownloadCompleted * 100) / webFilesDownloadTotal : 0;
+
+  String response;
+  serializeJson(json, response);
+  return response;
+}
+}
+
 static bool isFilesystemUpdateRequest(AsyncWebServerRequest *request, const String& filename) {
   String loweredFilename = filename;
   loweredFilename.toLowerCase();
@@ -1591,11 +1693,13 @@ static bool isFilesystemUpdateRequest(AsyncWebServerRequest *request, const Stri
 bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &errorMessage) {
   if (!url.startsWith("https://")) {
     errorMessage = "Remote update URLs must use HTTPS.";
+    finishOtaProgress(false, errorMessage);
     return false;
   }
 
   if (!filesystemUpdate && !saveConfigBackupToLittleFS(actconf)) {
     errorMessage = "Config backup failed. Firmware update cancelled.";
+    finishOtaProgress(false, errorMessage);
     return false;
   }
 
@@ -1607,38 +1711,89 @@ bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &er
 
   if (!http.begin(client, url)) {
     errorMessage = "Unable to initialize remote HTTPS update request.";
+    finishOtaProgress(false, errorMessage);
     return false;
   }
 
+  startOtaProgress(filesystemUpdate ? "download-filesystem" : "download-firmware", 0,
+                   filesystemUpdate ? "Downloading file system update from server..." : "Downloading firmware from server...");
   const int httpCode = http.GET();
   if (httpCode != HTTP_CODE_OK) {
     errorMessage = "Remote update download failed: HTTP " + String(httpCode);
+    finishOtaProgress(false, errorMessage);
     http.end();
     return false;
   }
 
   const int cmd = filesystemUpdate ? U_PART : U_FLASH;
+  const int contentLength = http.getSize();
+  if (contentLength > 0) {
+    startOtaProgress(filesystemUpdate ? "download-filesystem" : "download-firmware",
+                     static_cast<size_t>(contentLength),
+                     filesystemUpdate ? "Downloading file system update from server..." : "Downloading firmware from server...");
+  }
   if (!Update.begin(UPDATE_SIZE_UNKNOWN, cmd)) {
     Update.printError(Serial);
     errorMessage = "Unable to start OTA update.";
+    finishOtaProgress(false, errorMessage);
     http.end();
     return false;
   }
 
   WiFiClient *stream = http.getStreamPtr();
-  const size_t written = Update.writeStream(*stream);
-  const int contentLength = http.getSize();
+  uint8_t buffer[1024];
+  size_t written = 0;
+  unsigned long lastReadMs = millis();
+  while (http.connected() && (contentLength <= 0 || static_cast<int>(written) < contentLength)) {
+    const size_t availableBytes = stream->available();
+    if (availableBytes == 0) {
+      if (!http.connected() && !stream->available()) {
+        break;
+      }
+      if (millis() - lastReadMs > 15000) {
+        break;
+      }
+      delay(1);
+      continue;
+    }
+
+    const size_t toRead = availableBytes > sizeof(buffer) ? sizeof(buffer) : availableBytes;
+    const size_t bytesRead = stream->readBytes(buffer, toRead);
+    if (bytesRead == 0) {
+      continue;
+    }
+
+    lastReadMs = millis();
+    if (Update.write(buffer, bytesRead) != bytesRead) {
+      Update.printError(Serial);
+      errorMessage = "Downloaded firmware could not be written completely.";
+      Update.abort();
+      finishOtaProgress(false, errorMessage);
+      http.end();
+      return false;
+    }
+
+    written += bytesRead;
+    updateOtaProgress(filesystemUpdate ? "download-filesystem" : "download-firmware",
+                      written,
+                      contentLength > 0 ? static_cast<size_t>(contentLength) : written,
+                      filesystemUpdate ? "Downloading and writing file system update..." : "Downloading and writing firmware...");
+  }
+
   if (written == 0 || (contentLength > 0 && static_cast<int>(written) != contentLength)) {
     Update.printError(Serial);
     errorMessage = "Downloaded firmware could not be written completely.";
     Update.abort();
+    finishOtaProgress(false, errorMessage);
     http.end();
     return false;
   }
 
+  updateOtaProgress("finalizing", written, written, "Finalizing update...");
   if (!Update.end(true)) {
     Update.printError(Serial);
     errorMessage = "Update finalize failed.";
+    finishOtaProgress(false, errorMessage);
     http.end();
     return false;
   }
@@ -1648,6 +1803,7 @@ bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &er
   }
 
   http.end();
+  finishOtaProgress(true, filesystemUpdate ? "File system update complete. Device reboots now." : "Firmware update complete. Device reboots now.");
   return true;
 }
 
@@ -1658,9 +1814,12 @@ void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size
   if (!index){
     Serial.println("Update");
     content_len = request->contentLength();
+    startOtaProgress(filesystemUpdate ? "upload-filesystem" : "upload-firmware", content_len,
+                     filesystemUpdate ? "Uploading file system update..." : "Uploading firmware...");
     // Detect filesystem uploads both from modern field names and legacy filenames.
     int cmd = filesystemUpdate ? U_PART : U_FLASH;
     if (!filesystemUpdate && !saveConfigBackupToLittleFS(actconf)) {
+      finishOtaProgress(false, "Config backup failed. Firmware update cancelled.");
       request->send(500, "application/json", buildOtaResponse("error", "Config backup failed. Firmware update cancelled.", false, false, false));
       return;
     }
@@ -1671,6 +1830,7 @@ void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size
     if (!Update.begin(UPDATE_SIZE_UNKNOWN, cmd)) {
 #endif
       Update.printError(Serial);
+      finishOtaProgress(false, "Unable to start OTA update.");
       request->send(500, "application/json", buildOtaResponse("error", "Unable to start OTA update.", false, false, !filesystemUpdate));
       return;
     }
@@ -1678,15 +1838,23 @@ void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size
 
   if (Update.write(data, len) != len) {
     Update.printError(Serial);
+    finishOtaProgress(false, "Update write failed.");
 #ifdef ESP8266
   } else {
     Serial.printf("Progress: %d%%\n", (Update.progress()*100)/Update.size());
 #endif
+  } else {
+    updateOtaProgress(filesystemUpdate ? "upload-filesystem" : "upload-firmware",
+                      index + len,
+                      content_len,
+                      filesystemUpdate ? "Uploading file system update..." : "Uploading firmware...");
   }
   //Serial.printf("Progress: %d%%\n", (Update.progress()*100)/Update.size());
   if (final) {
+    updateOtaProgress("finalizing", content_len, content_len, "Finalizing update...");
     if (!Update.end(true)){
       Update.printError(Serial);
+      finishOtaProgress(false, "Update failed. See serial log for details.");
       request->send(500, "application/json", buildOtaResponse("error", "Update failed. See serial log for details.", false, false, !filesystemUpdate));
     } else {
       if (filesystemUpdate) {
@@ -1696,6 +1864,7 @@ void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size
       const String message = filesystemUpdate
         ? "FileSystem update complete. Device reboots now."
         : "Firmware update complete. Device reboots now.";
+      finishOtaProgress(true, message);
       request->send(200, "application/json", buildOtaResponse("ok", message, true, false, !filesystemUpdate));
       Serial.flush();
       delay(250);

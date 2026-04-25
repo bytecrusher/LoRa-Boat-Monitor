@@ -13,6 +13,9 @@
 #include "func_myFunctions.h"
 
 extern const uint8_t cert_cacert_pem_start[] asm("_binary_cert_cacert_pem_start");
+extern size_t webFilesDownloadCompleted;
+extern size_t webFilesDownloadTotal;
+extern String webFilesDownloadCurrentName;
 
 namespace {
 String normalizeFirmwareUpdateBaseUrl(const char *configuredValue)
@@ -294,10 +297,18 @@ bool DownloadFilesFromWeb()
     "settings.js"
   };
 
+  webFilesDownloadCompleted = 0;
+  webFilesDownloadTotal = sizeof(webFiles) / sizeof(webFiles[0]);
+  webFilesDownloadCurrentName = "";
+
   bool allFilesUpdated = true;
-  for (size_t i = 0; i < (sizeof(webFiles) / sizeof(webFiles[0])); ++i) {
+  for (size_t i = 0; i < webFilesDownloadTotal; ++i) {
+    webFilesDownloadCurrentName = String(webFiles[i]);
     allFilesUpdated = DownloadFile(webFiles[i], fversion) && allFilesUpdated;
+    webFilesDownloadCompleted = i + 1;
   }
+
+  webFilesDownloadCurrentName = "";
 
   if (allFilesUpdated) {
     saveWebFilesVersion(fversion);
@@ -432,6 +443,6 @@ bool sendMdsDeviceEvent(configData actconf, const char *sensorName, float value1
   char mdsTime[9];
   buildMdsTimestamp(mdsDate, mdsTime);
 
-  addMdsSensorRecord(sensors, 1, "Digital", sensorName, mdsDate, mdsTime, "1", value1, value2, value3, value4);
+  addMdsSensorRecord(sensors, 1, "WakeupStan", sensorName, mdsDate, mdsTime, "1", value1, value2, value3, value4);
   return postMdsPayload(actconf, docpayload, sensorName == nullptr ? "device event" : sensorName);
 }

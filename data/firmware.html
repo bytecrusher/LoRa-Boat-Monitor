@@ -8,6 +8,8 @@
   <link rel='stylesheet' type='text/css' href='/styles.css'>
   <link rel='stylesheet' type='text/css' href='/common.css'>
   <script type='text/javascript'>
+    var otaProgressTimer = null;
+
     function setLoadingState(isLoading) {
       var loader = document.getElementById('loader');
       var content = document.getElementById('myDiv');
@@ -16,6 +18,59 @@
       content.classList.toggle('hidden', isLoading);
       loader.style.display = isLoading ? 'block' : 'none';
       content.style.display = isLoading ? 'none' : 'block';
+    }
+
+    function renderOtaProgress(progress) {
+      var wrapper = document.getElementById('otaProgressWrapper');
+      var bar = document.getElementById('otaProgressBar');
+      var text = document.getElementById('otaProgressText');
+      if (!wrapper || !bar || !text || !progress) {
+        return;
+      }
+
+      if (progress.active || progress.percent > 0 || progress.message) {
+        wrapper.style.display = 'block';
+      }
+
+      bar.style.width = (progress.percent || 0) + '%';
+      if (progress.message) {
+        text.innerHTML = progress.message + ' (' + (progress.percent || 0) + '%)';
+      } else {
+        text.innerHTML = (progress.percent || 0) + '%';
+      }
+    }
+
+    function stopOtaProgressPolling() {
+      if (otaProgressTimer) {
+        clearInterval(otaProgressTimer);
+        otaProgressTimer = null;
+      }
+    }
+
+    function pollOtaProgress() {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', '/otaprogress?ts=' + Date.now(), true);
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState !== 4 || xhr.status !== 200) {
+          return;
+        }
+
+        try {
+          var progress = JSON.parse(xhr.responseText || '{}');
+          renderOtaProgress(progress);
+          if (!progress.active && (progress.success || progress.phase === 'error')) {
+            stopOtaProgressPolling();
+          }
+        } catch (error) {
+        }
+      };
+      xhr.send();
+    }
+
+    function startOtaProgressPolling() {
+      stopOtaProgressPolling();
+      pollOtaProgress();
+      otaProgressTimer = setInterval(pollOtaProgress, 500);
     }
 
     function waitForReboot() {
@@ -60,6 +115,7 @@
       }
 
       if (xhr.status >= 400) {
+        stopOtaProgressPolling();
         setLoadingState(false);
         alert(response.message || 'Update failed.');
         return;
@@ -97,15 +153,27 @@
       var formData = new FormData();
       formData.append('firmware', file, file.name);
       xhr.open('POST', '/doUpdate', true);
+      xhr.upload.onprogress = function (event) {
+        if (!event.lengthComputable) {
+          return;
+        }
+        renderOtaProgress({
+          active: true,
+          percent: Math.round((event.loaded / event.total) * 100),
+          message: 'Uploading firmware...'
+        });
+      };
       xhr.onload = function () {
         handleOtaResponse(xhr);
       };
       xhr.onerror = function () {
+        stopOtaProgressPolling();
         setLoadingState(false);
         alert('Firmware upload failed.');
       };
 
       setLoadingState(true);
+      startOtaProgressPolling();
       xhr.send(formData);
     }
 
@@ -121,11 +189,13 @@
         handleOtaResponse(xhr);
       };
       xhr.onerror = function () {
+        stopOtaProgressPolling();
         setLoadingState(false);
         alert('Remote update request failed.');
       };
 
       setLoadingState(true);
+      startOtaProgressPolling();
       xhr.send('source=' + encodeURIComponent(source));
     }
 
@@ -163,6 +233,12 @@
   <div id="loader" class="hidden" style="display:none;"></div>
   <div id="myDiv" class="animate-bottom" style="display:block;">
     <h3>Firmware Update</h3>
+    <div id="otaProgressWrapper" style="display:none; margin-bottom: 16px;">
+      <div style="width:100%; height:8px; background:#e1e4e8; border-radius:4px; overflow:hidden;">
+        <div id="otaProgressBar" style="height:100%; width:0; background:#337ab7; transition: width 0.2s ease;"></div>
+      </div>
+      <div id="otaProgressText" style="margin-top:8px; font-size: 14px;"></div>
+    </div>
     <form name='upform' action='/doUpdate' method='post' enctype='multipart/form-data'>Install a local firmware file
       (.bin or .bmb):
       <p>

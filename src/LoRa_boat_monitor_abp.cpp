@@ -115,6 +115,9 @@ bool toggleDisplayStatus = false;
 long LoraSendDurationSeconds = 0;
 boolean runDownloadingFiles = false;
 boolean runDownloadingFilesStatus = false;
+size_t webFilesDownloadCompleted = 0;
+size_t webFilesDownloadTotal = 0;
+String webFilesDownloadCurrentName = "";
 bool wifiServicesInitialized = false;
 bool mdnsInitialized = false;
 

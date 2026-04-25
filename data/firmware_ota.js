@@ -17,6 +17,8 @@ function otaElement(id) {
     return document.getElementById(id);
 }
 
+var otaProgressPollTimer = null;
+
 function disableAll() {
     var overlay = document.getElementById('overlay');
     if (overlay) {
@@ -70,6 +72,54 @@ function progressHandler(event) {
     otaElement('status').innerHTML = percent + '% uploaded... please wait';
 }
 
+function applyOtaProgress(progress) {
+    if (!progress) {
+        return;
+    }
+
+    var percent = progress.percent || 0;
+    otaElement('progressBar').style.width = percent + '%';
+    if (progress.total > 0) {
+        otaElement('loaded_n_total').innerHTML = percent + '% (' + progress.current + ' / ' + progress.total + ' bytes)';
+    }
+    if (progress.message) {
+        otaElement('status').innerHTML = progress.message;
+    }
+}
+
+function stopOtaProgressPolling() {
+    if (otaProgressPollTimer) {
+        clearInterval(otaProgressPollTimer);
+        otaProgressPollTimer = null;
+    }
+}
+
+function pollOtaProgress() {
+    var ajax = new XMLHttpRequest();
+    ajax.open('GET', '/otaprogress?ts=' + Date.now(), true);
+    ajax.onreadystatechange = function () {
+        if (ajax.readyState !== 4 || ajax.status !== 200) {
+            return;
+        }
+
+        try {
+            var progress = JSON.parse(ajax.responseText);
+            applyOtaProgress(progress);
+            if (!progress.active && (progress.success || progress.phase === 'error')) {
+                stopOtaProgressPolling();
+            }
+        } catch (error) {
+        }
+    };
+    ajax.send();
+}
+
+function startOtaProgressPolling() {
+    stopOtaProgressPolling();
+    pollOtaProgress();
+    otaProgressPollTimer = setInterval(pollOtaProgress, 500);
+}
+
 function completeHandler(event) {
     var responseText = event.target.responseText || '';
     var response = null;
@@ -93,14 +143,17 @@ function completeHandler(event) {
 
 function startHandler() {
     disableAll();
+    startOtaProgressPolling();
 }
 
 function errorHandler() {
+    stopOtaProgressPolling();
     enableAll();
     otaElement('status').innerHTML = 'Upload failed';
 }
 
 function abortHandler() {
+    stopOtaProgressPolling();
     enableAll();
     otaElement('status').innerHTML = 'Upload aborted';
 }
