@@ -1551,6 +1551,7 @@ void WebServerHandler()
       return;
     }
 
+    DebugPrintln(3, "Manual Test MDS Upload triggered");
     const bool success = sendToMDS(actconf);
     if (success) {
       request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"MDS test upload sent successfully.\"}");

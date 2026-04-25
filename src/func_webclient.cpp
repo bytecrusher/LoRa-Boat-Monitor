@@ -16,6 +16,8 @@ extern const uint8_t cert_cacert_pem_start[] asm("_binary_cert_cacert_pem_start"
 extern size_t webFilesDownloadCompleted;
 extern size_t webFilesDownloadTotal;
 extern String webFilesDownloadCurrentName;
+extern time_t lastWakeEventEpoch;
+extern time_t lastSleepEventEpoch;
 
 namespace {
 String normalizeFirmwareUpdateBaseUrl(const char *configuredValue)
@@ -89,6 +91,22 @@ void buildMdsTimestamp(char (&mdsDate)[11], char (&mdsTime)[9])
 
   strcpy(mdsDate, "01.01.1970");
   strcpy(mdsTime, "00:00:00");
+}
+
+String formatMdsDateTime(time_t timestamp)
+{
+  if (timestamp <= 0) {
+    return "";
+  }
+
+  struct tm tmstruct;
+  if (!localtime_r(&timestamp, &tmstruct)) {
+    return "";
+  }
+
+  char buffer[20];
+  strftime(buffer, sizeof(buffer), "%d.%m.%Y %H:%M:%S", &tmstruct);
+  return String(buffer);
 }
 
 void addMdsSensorRecord(JsonArray &sensors, int enabledMarker, const char *sensorType, const char *sensorName,
@@ -419,7 +437,7 @@ bool sendToMDS(configData actconf)
   return postMdsPayload(actconf, docpayload, "sensor upload");
 }
 
-bool sendMdsDeviceEvent(configData actconf, const char *sensorName, float value1, float value2, float value3, float value4)
+bool sendMdsDeviceEvent(configData actconf, const char *sensorName)
 {
   if (WiFi.status() != WL_CONNECTED) {
     DebugPrintln(2, String("Skipping MDS device event because WiFi is not connected: ") + String(sensorName == nullptr ? "" : sensorName));
@@ -443,6 +461,20 @@ bool sendMdsDeviceEvent(configData actconf, const char *sensorName, float value1
   char mdsTime[9];
   buildMdsTimestamp(mdsDate, mdsTime);
 
-  addMdsSensorRecord(sensors, 1, "WakeupStan", sensorName, mdsDate, mdsTime, "1", value1, value2, value3, value4);
+  JsonObject sensor = sensors.add<JsonObject>();
+  sensor["sensorType"] = "WakeupStan";
+  sensor["type"] = "WakeupStan";
+  if (sensorName != nullptr && sensorName[0] != '\0') {
+    sensor["sensorName"] = sensorName;
+    sensor["name"] = sensorName;
+  }
+  sensor["value1"] = "Wakeup";
+  sensor["value2"] = formatMdsDateTime(lastWakeEventEpoch);
+  sensor["value3"] = "Sleep";
+  sensor["value4"] = formatMdsDateTime(lastSleepEventEpoch);
+  sensor["date"] = mdsDate;
+  sensor["time"] = mdsTime;
+  sensor["transmissionPath"] = "1";
+
   return postMdsPayload(actconf, docpayload, sensorName == nullptr ? "device event" : sensorName);
 }

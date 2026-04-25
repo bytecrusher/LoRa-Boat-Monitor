@@ -106,6 +106,8 @@ Ticker Timer4;                  // Declare Timer for Lora sending
 #define TIME_TO_SLEEP  actconf.standbySleepDuration       /* Time ESP32 will go to sleep */
 RTC_DATA_ATTR int bootCount = 0;
 RTC_DATA_ATTR uint loraCount = 0;
+RTC_DATA_ATTR time_t lastWakeEventEpoch = 0;
+RTC_DATA_ATTR time_t lastSleepEventEpoch = 0;
 
 const int STATE_DELAY = 1000;
 bool reboot = false;
@@ -227,7 +229,8 @@ void maybeSendDataViaWifi() {
   const unsigned long now = millis();
 
   if (pendingWakeMdsEvent && now >= nextWakeMdsRetryMillis) {
-    if (sendMdsDeviceEvent(actconf, pendingWakeReasonLabel.c_str(), pendingWakeReasonCode, bootCount, 0, 0)) {
+    lastWakeEventEpoch = time(nullptr);
+    if (sendMdsDeviceEvent(actconf, pendingWakeReasonLabel.c_str())) {
       pendingWakeMdsEvent = false;
     } else {
       nextWakeMdsRetryMillis = now + WAKE_MDS_RETRY_INTERVAL_MS;
@@ -252,7 +255,8 @@ void prepareForStandbySleep() {
   DebugPrintln(3, "Prepare standby sleep");
 
   if (String(actconf.SendDataViaWifi) == "Yes" && WiFi.status() == WL_CONNECTED) {
-    sendMdsDeviceEvent(actconf, "Standby enter", 1, TIME_TO_SLEEP, bootCount, 0);
+    lastSleepEventEpoch = time(nullptr);
+    sendMdsDeviceEvent(actconf, "Standby enter");
   }
 
   // Re-arm wake sources right before sleep so runtime config changes

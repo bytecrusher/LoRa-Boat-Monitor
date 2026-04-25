@@ -12,7 +12,7 @@ typedef struct {
   char password[31] = "12345678";           // Password for critical websites (settings, update and reboot)
   char devname[21] = "LoRa Boat Monitor";   // Device name for web configuration
   char crights[29] = "NoWa (C) (mod by Gunni) 2023";       // Copy rights
-  char fversion[7] = "V1.08x";               // Firmware version
+  char fversion[7] = "V1.08a";               // Firmware version
   char license[12] = "GPL3";                // License type
   int debug = 3;                            // Debug mode 0=off 1=Errors 2=Errors + Warnings 3=Errors + Warnings + Messages
   int corder1 = 1;                          // Set the Order or Priority for connecting to wifi
