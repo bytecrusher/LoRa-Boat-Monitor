@@ -13,11 +13,18 @@
     function setLoadingState(isLoading) {
       var loader = document.getElementById('loader');
       var content = document.getElementById('myDiv');
+      var buttons = content ? content.querySelectorAll('button, input, select') : [];
 
       loader.classList.toggle('hidden', !isLoading);
-      content.classList.toggle('hidden', isLoading);
       loader.style.display = isLoading ? 'block' : 'none';
-      content.style.display = isLoading ? 'none' : 'block';
+      if (content) {
+        content.style.display = 'block';
+        content.style.opacity = isLoading ? '0.55' : '1';
+        content.style.pointerEvents = isLoading ? 'none' : 'auto';
+      }
+      for (var i = 0; i < buttons.length; i += 1) {
+        buttons[i].disabled = isLoading;
+      }
     }
 
     function renderOtaProgress(progress) {
