@@ -18,8 +18,6 @@ extern size_t webFilesDownloadTotal;
 extern String webFilesDownloadCurrentName;
 extern time_t lastWakeupStanEventEpoch;
 extern time_t previousWakeupStanEventEpoch;
-extern char lastWakeupStanEventLabel[8];
-extern char previousWakeupStanEventLabel[8];
 
 namespace {
 String normalizeFirmwareUpdateBaseUrl(const char *configuredValue)
@@ -470,10 +468,10 @@ bool sendMdsDeviceEvent(configData actconf, const char *sensorName)
     sensor["sensorName"] = sensorName;
     sensor["name"] = sensorName;
   }
-  sensor["value1"] = String(lastWakeupStanEventLabel);
-  sensor["value2"] = formatMdsDateTime(lastWakeupStanEventEpoch);
-  sensor["value3"] = String(previousWakeupStanEventLabel);
-  sensor["value4"] = formatMdsDateTime(previousWakeupStanEventEpoch);
+  sensor["value1"] = "Sleeptime";
+  sensor["value2"] = formatMdsDateTime(previousWakeupStanEventEpoch);
+  sensor["value3"] = "Wakeuptime";
+  sensor["value4"] = formatMdsDateTime(lastWakeupStanEventEpoch);
   sensor["date"] = mdsDate;
   sensor["time"] = mdsTime;
   sensor["transmissionPath"] = "1";
