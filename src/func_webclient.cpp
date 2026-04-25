@@ -16,8 +16,10 @@ extern const uint8_t cert_cacert_pem_start[] asm("_binary_cert_cacert_pem_start"
 extern size_t webFilesDownloadCompleted;
 extern size_t webFilesDownloadTotal;
 extern String webFilesDownloadCurrentName;
-extern time_t lastWakeEventEpoch;
-extern time_t lastSleepEventEpoch;
+extern time_t lastWakeupStanEventEpoch;
+extern time_t previousWakeupStanEventEpoch;
+extern char lastWakeupStanEventLabel[8];
+extern char previousWakeupStanEventLabel[8];
 
 namespace {
 String normalizeFirmwareUpdateBaseUrl(const char *configuredValue)
@@ -468,10 +470,10 @@ bool sendMdsDeviceEvent(configData actconf, const char *sensorName)
     sensor["sensorName"] = sensorName;
     sensor["name"] = sensorName;
   }
-  sensor["value1"] = "Wakeup";
-  sensor["value2"] = formatMdsDateTime(lastWakeEventEpoch);
-  sensor["value3"] = "Sleep";
-  sensor["value4"] = formatMdsDateTime(lastSleepEventEpoch);
+  sensor["value1"] = String(lastWakeupStanEventLabel);
+  sensor["value2"] = formatMdsDateTime(lastWakeupStanEventEpoch);
+  sensor["value3"] = String(previousWakeupStanEventLabel);
+  sensor["value4"] = formatMdsDateTime(previousWakeupStanEventEpoch);
   sensor["date"] = mdsDate;
   sensor["time"] = mdsTime;
   sensor["transmissionPath"] = "1";
