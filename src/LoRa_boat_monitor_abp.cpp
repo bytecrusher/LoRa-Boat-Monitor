@@ -108,6 +108,8 @@ RTC_DATA_ATTR int bootCount = 0;
 RTC_DATA_ATTR uint loraCount = 0;
 RTC_DATA_ATTR time_t lastWakeupStanEventEpoch = 0;
 RTC_DATA_ATTR time_t previousWakeupStanEventEpoch = 0;
+RTC_DATA_ATTR char lastWakeupStanEventCause[24] = "";
+RTC_DATA_ATTR char previousWakeupStanEventCause[24] = "";
 
 const int STATE_DELAY = 1000;
 bool reboot = false;
@@ -141,9 +143,17 @@ void IRAM_ATTR onTimer(){
   sendLoraQueue = true;
 }
 
-void registerWakeupStanEvent() {
+void registerWakeupStanEvent(const char *eventCause) {
   previousWakeupStanEventEpoch = lastWakeupStanEventEpoch;
+  strncpy(previousWakeupStanEventCause, lastWakeupStanEventCause, sizeof(previousWakeupStanEventCause) - 1);
+  previousWakeupStanEventCause[sizeof(previousWakeupStanEventCause) - 1] = '\0';
   lastWakeupStanEventEpoch = time(nullptr);
+  if (eventCause != nullptr) {
+    strncpy(lastWakeupStanEventCause, eventCause, sizeof(lastWakeupStanEventCause) - 1);
+    lastWakeupStanEventCause[sizeof(lastWakeupStanEventCause) - 1] = '\0';
+  } else {
+    lastWakeupStanEventCause[0] = '\0';
+  }
 }
 
 void rebuildNetworkServersFromConfig() {
@@ -234,7 +244,7 @@ void maybeSendDataViaWifi() {
   const unsigned long now = millis();
 
   if (pendingWakeMdsEvent && now >= nextWakeMdsRetryMillis) {
-    registerWakeupStanEvent();
+    registerWakeupStanEvent(pendingWakeReasonLabel.c_str());
     if (sendMdsDeviceEvent(actconf, pendingWakeReasonLabel.c_str())) {
       pendingWakeMdsEvent = false;
     } else {
@@ -260,7 +270,7 @@ void prepareForStandbySleep() {
   DebugPrintln(3, "Prepare standby sleep");
 
   if (String(actconf.SendDataViaWifi) == "Yes" && WiFi.status() == WL_CONNECTED) {
-    registerWakeupStanEvent();
+    registerWakeupStanEvent("Sleep standby");
     sendMdsDeviceEvent(actconf, "Standby enter");
   }
 

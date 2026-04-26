@@ -18,6 +18,8 @@ extern size_t webFilesDownloadTotal;
 extern String webFilesDownloadCurrentName;
 extern time_t lastWakeupStanEventEpoch;
 extern time_t previousWakeupStanEventEpoch;
+extern char lastWakeupStanEventCause[24];
+extern char previousWakeupStanEventCause[24];
 
 namespace {
 String normalizeFirmwareUpdateBaseUrl(const char *configuredValue)
@@ -464,13 +466,11 @@ bool sendMdsDeviceEvent(configData actconf, const char *sensorName)
   JsonObject sensor = sensors.add<JsonObject>();
   sensor["sensorType"] = "WakeupStan";
   sensor["type"] = "WakeupStan";
-  if (sensorName != nullptr && sensorName[0] != '\0') {
-    sensor["sensorName"] = sensorName;
-    sensor["name"] = sensorName;
-  }
-  sensor["value1"] = "Sleeptime";
+  sensor["sensorName"] = "WakeupLog";
+  sensor["name"] = "WakeupLog";
+  sensor["value1"] = String(previousWakeupStanEventCause);
   sensor["value2"] = formatMdsDateTime(previousWakeupStanEventEpoch);
-  sensor["value3"] = "Wakeuptime";
+  sensor["value3"] = String(lastWakeupStanEventCause);
   sensor["value4"] = formatMdsDateTime(lastWakeupStanEventEpoch);
   sensor["date"] = mdsDate;
   sensor["time"] = mdsTime;
