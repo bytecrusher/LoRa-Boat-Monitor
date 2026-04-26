@@ -122,6 +122,10 @@ boolean runDownloadingFilesStatus = false;
 size_t webFilesDownloadCompleted = 0;
 size_t webFilesDownloadTotal = 0;
 String webFilesDownloadCurrentName = "";
+bool remoteOtaPending = false;
+bool remoteOtaInProgress = false;
+String remoteOtaUrl = "";
+String remoteOtaVersion = "";
 bool wifiServicesInitialized = false;
 bool mdnsInitialized = false;
 
@@ -892,6 +896,22 @@ void state1(){
     runDownloadingFiles = !webFilesCurrent;
     nextWebFilesDownloadAttempt = webFilesCurrent ? 0 : (millis() + 30000UL);
     runDownloadingFilesStatus = false;
+  }
+
+  if (remoteOtaPending && WiFi.status() == WL_CONNECTED) {
+    remoteOtaPending = false;
+    remoteOtaInProgress = true;
+
+    String remoteOtaError;
+    const bool remoteOtaSuccess = performRemoteOtaUpdate(remoteOtaUrl, false, remoteOtaError);
+    remoteOtaInProgress = false;
+
+    if (remoteOtaSuccess) {
+      DebugPrintln(3, "Remote OTA update completed, reboot scheduled");
+      reboot = true;
+    } else {
+      DebugPrintln(1, "Remote OTA update failed: " + remoteOtaError);
+    }
   }
 
   if(reboot){

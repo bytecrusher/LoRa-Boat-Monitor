@@ -1,3 +1,5 @@
+let otaProgressPollTimer = null;
+
 function otaToBoolean(value) {
     switch ((value || '').toLowerCase().trim()) {
         case 'true':
@@ -14,62 +16,41 @@ function otaToBoolean(value) {
 }
 
 function otaElement(id) {
-    return document.getElementById(id);
+    return byId(id);
 }
 
-var otaProgressPollTimer = null;
-
 function disableAll() {
-    var overlay = document.getElementById('overlay');
+    const overlay = otaElement('overlay');
     if (overlay) {
         overlay.style.display = 'block';
     }
 }
 
 function enableAll() {
-    var overlay = document.getElementById('overlay');
+    const overlay = otaElement('overlay');
     if (overlay) {
         overlay.style.display = 'none';
     }
 }
 
-function waitForReboot(targetUrl, retries) {
+async function waitForReboot(targetUrl, retries) {
     if (retries <= 0) {
         enableAll();
-        otaElement('status').innerHTML = 'Upload finished, but the device did not come back online yet. Please refresh manually.';
+        setText('status', 'Upload finished, but the device did not come back online yet. Please refresh manually.');
         return;
     }
 
-    var ajax = new XMLHttpRequest();
-    ajax.open('GET', '/staticdata.json?ts=' + Date.now(), true);
-    ajax.timeout = 2000;
-    ajax.onreadystatechange = function () {
-        if (ajax.readyState !== 4) {
-            return;
-        }
-
-        if (ajax.status === 200) {
+    try {
+        const result = await request('/staticdata.json?ts=' + Date.now());
+        if (result.ok) {
             window.location.replace(targetUrl);
             return;
         }
+    } catch (error) {
+    }
 
-        setTimeout(function () {
-            waitForReboot(targetUrl, retries - 1);
-        }, 2000);
-    };
-    ajax.onerror = ajax.ontimeout = function () {
-        setTimeout(function () {
-            waitForReboot(targetUrl, retries - 1);
-        }, 2000);
-    };
-    ajax.send();
-}
-
-function progressHandler(event) {
-    otaElement('loaded_n_total').innerHTML = 'Uploaded ' + event.loaded + ' bytes of ' + event.total;
-    var percent = Math.round((event.loaded / event.total) * 100);
-    otaElement('progressBar').style.width = percent + '%';
-    otaElement('status').innerHTML = percent + '% uploaded... please wait';
+    await delay(2000);
+    waitForReboot(targetUrl, retries - 1);
 }
 
 function applyOtaProgress(progress) {
@@ -77,41 +58,34 @@ function applyOtaProgress(progress) {
         return;
     }
 
-    var percent = progress.percent || 0;
+    const percent = progress.percent || 0;
     otaElement('progressBar').style.width = percent + '%';
     if (progress.total > 0) {
-        otaElement('loaded_n_total').innerHTML = percent + '% (' + progress.current + ' / ' + progress.total + ' bytes)';
+        setText('loaded_n_total', percent + '% (' + progress.current + ' / ' + progress.total + ' bytes)');
     }
     if (progress.message) {
-        otaElement('status').innerHTML = progress.message;
+        setText('status', progress.message);
     }
 }
 
 function stopOtaProgressPolling() {
-    if (otaProgressPollTimer) {
-        clearInterval(otaProgressPollTimer);
-        otaProgressPollTimer = null;
+    if (!otaProgressPollTimer) {
+        return;
     }
+
+    clearInterval(otaProgressPollTimer);
+    otaProgressPollTimer = null;
 }
 
-function pollOtaProgress() {
-    var ajax = new XMLHttpRequest();
-    ajax.open('GET', '/otaprogress?ts=' + Date.now(), true);
-    ajax.onreadystatechange = function () {
-        if (ajax.readyState !== 4 || ajax.status !== 200) {
-            return;
+async function pollOtaProgress() {
+    try {
+        const progress = await requestJson('/otaprogress?ts=' + Date.now());
+        applyOtaProgress(progress);
+        if (!progress.active && (progress.success || progress.phase === 'error')) {
+            stopOtaProgressPolling();
         }
-
-        try {
-            var progress = JSON.parse(ajax.responseText);
-            applyOtaProgress(progress);
-            if (!progress.active && (progress.success || progress.phase === 'error')) {
-                stopOtaProgressPolling();
-            }
-        } catch (error) {
-        }
-    };
-    ajax.send();
+    } catch (error) {
+    }
 }
 
 function startOtaProgressPolling() {
@@ -120,75 +94,84 @@ function startOtaProgressPolling() {
     otaProgressPollTimer = setInterval(pollOtaProgress, 500);
 }
 
-function completeHandler(event) {
-    var responseText = event.target.responseText || '';
-    var response = null;
+function handleUploadProgress(event) {
+    if (!event.lengthComputable) {
+        return;
+    }
+
+    const percent = Math.round((event.loaded / event.total) * 100);
+    setText('loaded_n_total', 'Uploaded ' + event.loaded + ' bytes of ' + event.total);
+    otaElement('progressBar').style.width = percent + '%';
+    setText('status', percent + '% uploaded... please wait');
+}
+
+function handleUploadComplete(event) {
+    let response = null;
     try {
-        response = JSON.parse(responseText);
+        response = JSON.parse(event.target.responseText || '{}');
     } catch (error) {
+        response = null;
     }
 
     if (event.target.status >= 400) {
         enableAll();
-        otaElement('status').innerHTML = response && response.message ? response.message : 'Upload failed';
+        setText('status', response && response.message ? response.message : 'Upload failed');
         return;
     }
 
-    otaElement('status').innerHTML = response && response.message ? response.message : 'Upload success. Waiting for device reboot...';
-    otaElement('progressBar').value = 0;
+    setText('status', response && response.message ? response.message : 'Upload success. Waiting for device reboot...');
+    otaElement('progressBar').style.width = '100%';
     setTimeout(function () {
         waitForReboot('/', 45);
     }, 3000);
 }
 
-function startHandler() {
-    disableAll();
-    startOtaProgressPolling();
-}
-
-function errorHandler() {
+function handleUploadError() {
     stopOtaProgressPolling();
     enableAll();
-    otaElement('status').innerHTML = 'Upload failed';
+    setText('status', 'Upload failed');
 }
 
-function abortHandler() {
+function handleUploadAbort() {
     stopOtaProgressPolling();
     enableAll();
-    otaElement('status').innerHTML = 'Upload aborted';
+    setText('status', 'Upload aborted');
 }
 
 function uploadFile() {
-    var file = otaElement('file1').files[0];
-    var formdata = new FormData();
-    formdata.append(otaElement('file1').name, file, file.name);
+    const file = otaElement('file1').files[0];
+    if (!file) {
+        return;
+    }
 
-    var ajax = new XMLHttpRequest();
-    ajax.upload.addEventListener('progress', progressHandler, false);
-    ajax.addEventListener('load', completeHandler, false);
-    ajax.addEventListener('loadstart', startHandler, false);
-    ajax.addEventListener('error', errorHandler, false);
-    ajax.addEventListener('abort', abortHandler, false);
-    ajax.open('POST', '/doUpdate');
-    ajax.setRequestHeader('Access-Control-Allow-Headers', '*');
-    ajax.setRequestHeader('Access-Control-Allow-Origin', '*');
-    ajax.send(formdata);
+    const formData = new FormData();
+    formData.append(otaElement('file1').name, file, file.name);
+
+    const xhr = new XMLHttpRequest();
+    xhr.upload.addEventListener('progress', handleUploadProgress, false);
+    xhr.addEventListener('load', handleUploadComplete, false);
+    xhr.addEventListener('loadstart', function () {
+        disableAll();
+        startOtaProgressPolling();
+    }, false);
+    xhr.addEventListener('error', handleUploadError, false);
+    xhr.addEventListener('abort', handleUploadAbort, false);
+    xhr.open('POST', '/doUpdate');
+    xhr.send(formData);
 }
 
 function setUploadMode(mode) {
-    var firmwareButton = otaElement('firmware-button');
-    var filesystemButton = otaElement('filesystem-button');
-    var isFilesystem = mode === 'filesystem';
+    const isFilesystem = mode === 'filesystem';
 
     otaElement('file1').name = isFilesystem ? 'filesystem' : 'firmware';
-    firmwareButton.classList.toggle('selected', !isFilesystem);
-    filesystemButton.classList.toggle('selected', isFilesystem);
-    otaElement('status').innerHTML = isFilesystem ? 'File system upload' : 'Firmware upload';
+    otaElement('firmware-button').classList.toggle('selected', !isFilesystem);
+    otaElement('filesystem-button').classList.toggle('selected', isFilesystem);
+    setText('status', isFilesystem ? 'File system upload' : 'Firmware upload');
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    var urlParams = new URLSearchParams(window.location.search);
-    var onlyFirmware = urlParams.get('onlyFirmware');
+    const urlParams = new URLSearchParams(window.location.search);
+    const onlyFirmware = urlParams.get('onlyFirmware');
 
     if (onlyFirmware && otaToBoolean(onlyFirmware) === true) {
         otaElement('switch-container').style.display = 'none';
@@ -208,10 +191,10 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     otaElement('file1').addEventListener('change', function () {
-        var file = otaElement('file1').files[0];
-    otaElement('button-send').disabled = !(file && file.name);
-    otaElement('status').innerHTML = file && file.name ? 'Ready to upload ' + file.name : 'Firmware upload';
-    otaElement('loaded_n_total').innerHTML = '';
+        const file = otaElement('file1').files[0];
+        otaElement('button-send').disabled = !(file && file.name);
+        setText('status', file && file.name ? 'Ready to upload ' + file.name : 'Firmware upload');
+        setText('loaded_n_total', '');
     });
 
     setUploadMode('firmware');

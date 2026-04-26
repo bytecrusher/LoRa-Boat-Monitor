@@ -8,47 +8,6 @@
     <link rel='stylesheet' type='text/css' href='/settings-page.css'>
     <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
     <meta name=viewport content='width=device-width, initial-scale=1'>
-    <style>
-        /* echtes File-Input verstecken */
-input[type="file"] {
-    display: none;
-}
-
-/* Label wie Button stylen */
-.btn {
-        font-family: Arial, Helvetica, sans-serif;
-    font-size: 14px;
-    color: #000000;
-    padding: 10px 20px;
-    background: -moz-linear-gradient(top,
-#ffffff 0%,
-#ffffff 50%,
-#bdbbbd);
-    background: -webkit-gradient(linear, left top, left bottom,
-from(#ffffff),
-color-stop(0.50, #ffffff),
-to(#bdbbbd));
-    -moz-border-radius: 10px;
-    -webkit-border-radius: 10px;
-    border-radius: 10px;
-    border: 3px solid #dedcd5;
-    -moz-box-shadow: 0px 1px 3px rgba(000, 000, 000, 0.5),
-inset 0px 0px 3px rgba(255, 255, 255, 1);
-    -webkit-box-shadow: 0px 1px 3px rgba(000, 000, 000, 0.5),
-inset 0px 0px 3px rgba(255, 255, 255, 1);
-    box-shadow: 0px 1px 3px rgba(000, 000, 000, 0.5),
-inset 0px 0px 3px rgba(255, 255, 255, 1);
-    text-shadow: 0px -1px 0px rgba(000, 000, 000, 0.1),
-0px 1px 0px rgba(255, 255, 255, 1);
-    margin: 5px;
-
-}
-
-/* Hover Effekt */
-.btn:hover {
-    background: #0056b3;
-}
-    </style>
     <script>
         window.settingsSelections = {
             crypt: %crypt%,
@@ -96,11 +55,11 @@ inset 0px 0px 3px rgba(255, 255, 255, 1);
     <div id="myDiv" class="animate-bottom initially-hidden">
     <form id='form1' name='SetForm' method='post' action='savesettings'>
 
-        <input class="myToggleButton myAllToggleButton" type="button" value="+" id="btAllSettingsPage" onclick="ToggleAllSections()"> All
+        <input class="myToggleButton myAllToggleButton" type="button" value="+" id="btAllSettingsPage"> All
 
         <div class="settings-panel"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton" type="button" value="+" id="btPasswordSettingsPage" onclick="ToggleSection(this, 'PasswordSettingsPage')">Password Settings
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btPasswordSettingsPage" data-target="PasswordSettingsPage">Password Settings
             </h3>
             <div class="collapsible initially-hidden" id="PasswordSettingsPage">
                 <div class="section-note">Controls login protection for settings, update and reboot pages.</div>
@@ -126,7 +85,7 @@ inset 0px 0px 3px rgba(255, 255, 255, 1);
 
         <div class="settings-panel"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton" type="button" value="+" id="btWebInterfaceSettingsPage" onclick="ToggleSection(this, 'WebInterfaceSettingsPage')">Web Interface Settings
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btWebInterfaceSettingsPage" data-target="WebInterfaceSettingsPage">Web Interface Settings
             </h3>
             <div class="collapsible initially-hidden" id="WebInterfaceSettingsPage" >
                 <div class="row">
@@ -144,7 +103,7 @@ inset 0px 0px 3px rgba(255, 255, 255, 1);
 
         <div class="settings-panel"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton" type="button" value="+" id="btOledDisplaySettingsPage" onclick="ToggleSection(this, 'OledDisplaySettingsPage')">OLED Display Settings
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btOledDisplaySettingsPage" data-target="OledDisplaySettingsPage">OLED Display Settings
             </h3>
             <div class="collapsible initially-hidden" id="OledDisplaySettingsPage" >
                 <div class="row">
@@ -161,7 +120,7 @@ inset 0px 0px 3px rgba(255, 255, 255, 1);
 
         <div class="settings-panel"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton" type="button" value="+" id="btNetworkSettingsPage" onclick="ToggleSection(this, 'NetworkSettingsPage')">Network Settings
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btNetworkSettingsPage" data-target="NetworkSettingsPage">Network Settings
             </h3>
             <div class="collapsible initially-hidden" id="NetworkSettingsPage" >
                 <div class="row">
@@ -407,7 +366,7 @@ inset 0px 0px 3px rgba(255, 255, 255, 1);
 
         <div class="settings-panel"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton" type="button" value="+" id="btLoRaSettingsPage" onclick="ToggleSection(this, 'LoRaSettingsPage')">LoRa Settings (ABP)
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btLoRaSettingsPage" data-target="LoRaSettingsPage">LoRa Settings (ABP)
             </h3>
             <div class="collapsible initially-hidden" id="LoRaSettingsPage" >
                 <div class="section-note">ABP credentials and radio behavior for LoRaWAN transmission.</div>
@@ -517,7 +476,7 @@ inset 0px 0px 3px rgba(255, 255, 255, 1);
 
         <div class="settings-panel"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton" type="button" value="+" id="btDeviceSettingsPage" onclick="ToggleSection(this, 'DeviceSettingsPage')">Device Settings
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btDeviceSettingsPage" data-target="DeviceSettingsPage">Device Settings
             </h3>
             <div class="collapsible initially-hidden" id="DeviceSettingsPage" >
                 <div class="section-note">Local serial output, sensor input options and averaging behavior.</div>
@@ -685,7 +644,7 @@ inset 0px 0px 3px rgba(255, 255, 255, 1);
 
         <div class="settings-panel"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton" type="button" value="+" id="btStandbyModeSettingsPage" onclick="ToggleSection(this, 'StandbyModeSettingsPage')">Standby Mode Settings
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btStandbyModeSettingsPage" data-target="StandbyModeSettingsPage">Standby Mode Settings
             </h3>
             <div class="collapsible initially-hidden" id="StandbyModeSettingsPage" >
                 <div class="section-note">Power-saving behavior while the device is waiting in standby.</div>
@@ -720,7 +679,7 @@ inset 0px 0px 3px rgba(255, 255, 255, 1);
 
         <div class="settings-panel"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton" type="button" value="+" id="btCalibrationSettingsPage" onclick="ToggleSection(this, 'CalibrationSettingsPage')">Calibration Settings
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btCalibrationSettingsPage" data-target="CalibrationSettingsPage">Calibration Settings
             </h3>
             <div class="collapsible initially-hidden" id="CalibrationSettingsPage" >
                 <div class="section-note">Curve coefficients and offsets used to convert ADC values into voltage and tank readings.</div>
@@ -791,8 +750,8 @@ inset 0px 0px 3px rgba(255, 255, 255, 1);
 
         <div class="row page-toolbar">
             <button id='sub' type='submit'>Save Settings</button>
-            <button type='button' onclick="window.open('/index.html', '_self');">Back to Overview</button>
-            <button type='button' id="logoutBtn" onclick="logoutButton()" class="initially-hidden">Logout</button>
+            <button type='button' id="backToOverviewButton">Back to Overview</button>
+            <button type='button' id="logoutBtn" class="initially-hidden">Logout</button>
         </div>
         <input type='hidden' required name='password' size='20' value='%userpassword%' maxlength='20'>
     </form>
@@ -801,16 +760,17 @@ inset 0px 0px 3px rgba(255, 255, 255, 1);
     <div class="settings-panel"><div class="mydiv">
         <form id='form4' action='/reseteeprom'>
             <div class="settings-actions">
-            <button type="button" onclick="downloadConfigAsJson()">Download Config</button>
-            <button type="button" class="button-spacing" onclick="restoreConfigBackup()">Restore OTA Backup</button>
+            <button type="button" id="downloadConfigButton">Download Config</button>
+            <button type="button" id="restoreConfigBackupButton" class="button-spacing">Restore OTA Backup</button>
             <button type='submit' class="button-spacing">Reset to Factory Settings</button>
             <label for="file" class="btn custom-file-upload button-spacing">Upload Config</label>
-            <input type="file" id="file" accept=".json" onchange="uploadConfig();">
+            <input type="file" id="file" accept=".json">
             </div>
         </form>
         <div class="settingHint">The device stores an automatic config backup in LittleFS before each firmware OTA update. "Restore OTA Backup" loads that backup and reboots the device.</div>
 
     </div></div>
+    <script src='/common.js' type='text/javascript'></script>
     <script src='/settings.js' type='text/javascript'></script>
 </div>
 </body>

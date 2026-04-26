@@ -1,17 +1,52 @@
-var myVar;
-document.addEventListener("DOMContentLoaded", function() {
-    applySettingsSelections();
-    setTimeout(function() {
-        //document.querySelector("body").classList.add("loaded");
-        showPage();
-    }, 10)
-    // Get the form and file field
-    //let myform = document.querySelector('#upload');
-    let file = document.querySelector('#file');
+let fileInput = null;
 
-    // Listen for submit events
-    //myform.addEventListener('submit', handleSubmit);
+document.addEventListener("DOMContentLoaded", function () {
+    fileInput = byId("file");
+    applySettingsSelections();
+    bindSettingsPageEvents();
+    setTimeout(showPage, 10);
 });
+
+function bindSettingsPageEvents() {
+    var toggleButtons = document.querySelectorAll(".section-toggle");
+    for (var i = 0; i < toggleButtons.length; i += 1) {
+        toggleButtons[i].addEventListener("click", function (event) {
+            var button = event.currentTarget;
+            ToggleSection(button, button.dataset.target);
+        });
+    }
+
+    var toggleAllButton = byId("btAllSettingsPage");
+    if (toggleAllButton) {
+        toggleAllButton.addEventListener("click", ToggleAllSections);
+    }
+
+    var backButton = byId("backToOverviewButton");
+    if (backButton) {
+        backButton.addEventListener("click", function () {
+            window.location.assign("/index.html");
+        });
+    }
+
+    var logoutButtonElement = byId("logoutBtn");
+    if (logoutButtonElement) {
+        logoutButtonElement.addEventListener("click", logoutButton);
+    }
+
+    var downloadButton = byId("downloadConfigButton");
+    if (downloadButton) {
+        downloadButton.addEventListener("click", downloadConfigAsJson);
+    }
+
+    var restoreButton = byId("restoreConfigBackupButton");
+    if (restoreButton) {
+        restoreButton.addEventListener("click", restoreConfigBackup);
+    }
+
+    if (fileInput) {
+        fileInput.addEventListener("change", uploadConfig);
+    }
+}
 
 function applySettingsSelections() {
     var selections = window.settingsSelections || {};
@@ -30,40 +65,43 @@ function applySettingsSelections() {
     });
 
     if (selections.crypt == 1) {
-        document.getElementById('logoutBtn').style.display = "block";
+        byId("logoutBtn").style.display = "block";
     }
 }
 
 function showPage() {
-    document.getElementById("loader").style.display = "none";
-    document.getElementById("myDiv").style.display = "block";
+    byId("loader").style.display = "none";
+    byId("myDiv").style.display = "block";
 }
 
 function ToggleSection(ele, target) {
-    if (document.getElementById(target).style.display == "none") {
-        document.getElementById(target).style.display = "block";
-        document.getElementById(ele.id).value = '-';
+    var targetElement = byId(target);
+    var isHidden = targetElement.style.display === "none" || targetElement.style.display === "";
+    if (isHidden) {
+        targetElement.style.display = "block";
+        ele.value = '-';
     } else {
-        document.getElementById(target).style.display = "none";
-        document.getElementById(ele.id).value = '+';
+        targetElement.style.display = "none";
+        ele.value = '+';
     }
 }
 
 function ToggleAllSections() {
     const nodes = document.getElementsByClassName("collapsible");
-    if (nodes[0].style.display == "none") {
+    const shouldOpen = !nodes.length || nodes[0].style.display == "none" || nodes[0].style.display === "";
+    if (shouldOpen) {
         for (let i = 0; i < nodes.length; i++) {
             nodes[i].style.display = "block";
-            document.getElementById("btAllSettingsPage").value = '-';
+            byId("btAllSettingsPage").value = '-';
         }
     } else {
         for (let i = 0; i < nodes.length; i++) {
             nodes[i].style.display = "none";
-            document.getElementById("btAllSettingsPage").value = '+';
+            byId("btAllSettingsPage").value = '+';
             }
     }
     const nodes2 = document.getElementsByClassName("myToggleButton");
-    if (nodes[0].style.display == "none") {
+    if (!shouldOpen) {
         for (let i = 0; i < nodes2.length; i++) {
             nodes2[i].value = '+';
         }
@@ -167,18 +205,17 @@ function check_alarmState(event) {
     var selectElement = event.target;
     var value = selectElement.value;
     if (value == "On") {
-        var xhr = new XMLHttpRequest();
-        xhr.onreadystatechange = function () {
-            if (this.readyState == 4 && this.status == 200) {
-                var response = JSON.parse(xhr.responseText);
+        requestJson("/getdata?data=alarm1")
+            .then(function (response) {
                 if (response.alarm1 == "0" || response.alarm1 === 0) {
                     alert("Please check wiring and make sure, Batterie switch is on.");
                     selectElement.value = "Off";
                 }
-            }
-        };
-        xhr.open("GET", "/getdata?data=alarm1", true);
-        xhr.send();
+            })
+            .catch(function () {
+                alert("Could not verify the alarm input state.");
+                selectElement.value = "Off";
+            });
     }
 }
 
@@ -191,13 +228,13 @@ function downloadConfigAsJson() {
 
 function uploadConfig() {
     // If there's no file, do nothing
-    if (!file.value.length) return;
+    if (!fileInput || !fileInput.value.length) return;
     // Create a new FileReader() object
     let reader = new FileReader();
     // Setup the callback event to run when the file is read
     reader.onload = logFile;
     // Read the file
-    reader.readAsText(file.files[0]);
+    reader.readAsText(fileInput.files[0]);
     //window.open('/savesettings', '_self');
 }
 
@@ -209,13 +246,13 @@ function handleSubmit (event) {
     // Stop the form from reloading the page
     event.preventDefault();
     // If there's no file, do nothing
-    if (!file.value.length) return;
+    if (!fileInput || !fileInput.value.length) return;
     // Create a new FileReader() object
     let reader = new FileReader();
     // Setup the callback event to run when the file is read
     reader.onload = logFile;
     // Read the file
-    reader.readAsText(file.files[0]);
+    reader.readAsText(fileInput.files[0]);
 }
 
 /**
@@ -238,17 +275,18 @@ function logFile (event) {
 
 function download(content, fileName, contentType) {
     var a = document.createElement("a");
-    var file = new Blob([content], {type: contentType});
-    a.href = URL.createObjectURL(file);
+    var blob = new Blob([content], {type: contentType});
+    a.href = URL.createObjectURL(blob);
     a.download = fileName;
     a.click();
 }
 
 function logoutButton() {
-    var xhr = new XMLHttpRequest();
-    xhr.open("GET", "logout", true);
-    xhr.send();
-    setTimeout(function(){ window.open("/logged-out","_self"); }, 1000);
+    request("/logout").finally(function () {
+        setTimeout(function () {
+            window.location.assign("/logged-out");
+        }, 1000);
+    });
 }
 
 function setBusyState(message) {
@@ -260,77 +298,50 @@ function setBusyState(message) {
 }
 
 function clearBusyState() {
-    document.getElementById("loader").style.display = "none";
-    document.getElementById("myDiv").style.display = "block";
+    byId("loader").style.display = "none";
+    byId("myDiv").style.display = "block";
 }
 
-function waitForDeviceAndRedirect(targetUrl, retries) {
+async function waitForDeviceAndRedirect(targetUrl, retries) {
     if (retries <= 0) {
         clearBusyState();
         alert("Device did not come back online in time. Please reload the page manually.");
         return;
     }
 
-    var xhr = new XMLHttpRequest();
-    xhr.open("GET", "/staticdata.json?ts=" + Date.now(), true);
-    xhr.timeout = 2000;
-    xhr.onreadystatechange = function () {
-        if (xhr.readyState !== 4) {
-            return;
-        }
+    try {
+        await requestJson("/staticdata.json?ts=" + Date.now());
+        window.location.replace(targetUrl);
+        return;
+    } catch (error) {
+    }
 
-        if (xhr.status === 200) {
-            window.location.replace(targetUrl);
-            return;
-        }
-
-        setTimeout(function () {
-            waitForDeviceAndRedirect(targetUrl, retries - 1);
-        }, 2000);
-    };
-    xhr.onerror = xhr.ontimeout = function () {
-        setTimeout(function () {
-            waitForDeviceAndRedirect(targetUrl, retries - 1);
-        }, 2000);
-    };
-    xhr.send();
+    await delay(2000);
+    waitForDeviceAndRedirect(targetUrl, retries - 1);
 }
 
-function restoreConfigBackup() {
+async function restoreConfigBackup() {
     if (!confirm("Restore the last automatic OTA config backup from LittleFS and reboot the device?")) {
         return;
     }
 
     setBusyState("Restoring config backup...");
 
-    var xhr = new XMLHttpRequest();
-    xhr.open("POST", "/restoreconfigbackup", true);
-    xhr.onreadystatechange = function () {
-        if (xhr.readyState !== 4) {
-            return;
-        }
-
-        if (xhr.status === 200) {
-            setTimeout(function () {
-                waitForDeviceAndRedirect("/settings.html", 45);
-            }, 3000);
-            return;
-        }
-
+    try {
+        await request("/restoreconfigbackup", { method: "POST" });
+        setTimeout(function () {
+            waitForDeviceAndRedirect("/settings.html", 45);
+        }, 3000);
+    } catch (error) {
         clearBusyState();
         var message = "Restore failed.";
         try {
-            var response = JSON.parse(xhr.responseText);
+            var response = JSON.parse(error.text);
             if (response.message) {
                 message = response.message;
             }
         } catch (e) {
         }
         alert(message);
-    };
-    xhr.onerror = function () {
-        clearBusyState();
-        alert("Restore request failed.");
-    };
-    xhr.send();
+    }
 }

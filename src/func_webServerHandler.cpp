@@ -7,6 +7,7 @@ extern const uint8_t cert_cacert_pem_start[] asm("_binary_cert_cacert_pem_start"
 namespace {
 String buildOtaProgressJson();
 String buildUpdateFilesProgressJson();
+void startOtaProgress(const String &phase, size_t totalBytes, const String &message);
 
 String normalizeFirmwareUpdateBaseUrl(const String &configuredValue) {
   String normalized = configuredValue;
@@ -929,6 +930,11 @@ void WebServerHandler()
       return;
     }
 
+    if (remoteOtaPending || remoteOtaInProgress) {
+      request->send(409, "application/json", buildOtaResponse("error", "A remote OTA update is already running.", false, false, false));
+      return;
+    }
+
     String source = request->hasParam("source", true) ? request->getParam("source", true)->value() : "";
     source.toLowerCase();
 
@@ -951,17 +957,13 @@ void WebServerHandler()
       return;
     }
 
-    String errorMessage;
-    if (!performRemoteOtaUpdate(remoteUrl, false, errorMessage)) {
-      request->send(500, "application/json", buildOtaResponse("error", errorMessage, false, false, false));
-      return;
-    }
+    remoteOtaUrl = remoteUrl;
+    remoteOtaVersion = version;
+    remoteOtaPending = true;
+    startOtaProgress("queued", 0, "Remote firmware update queued on device...");
 
-    const String message = "Firmware update downloaded by device" + (version.length() ? " (" + version + ")" : "") + ". Device reboots now.";
-    request->send(200, "application/json", buildOtaResponse("ok", message, true, false, true));
-    Serial.flush();
-    delay(250);
-    ESP.restart();
+    const String message = "Remote firmware update queued" + (version.length() ? " (" + version + ")" : "") + ".";
+    request->send(202, "application/json", buildOtaResponse("queued", message, false, false, true));
   });
 
   httpServer.on("/devinfo.html", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -1036,6 +1038,10 @@ void WebServerHandler()
   httpServer.serveStatic("/common.css", LittleFS, "/common.css").setCacheControl("max-age=600");
   
   httpServer.serveStatic("/common.js", LittleFS, "/common.js").setCacheControl("max-age=600");
+
+  httpServer.serveStatic("/header.js", LittleFS, "/header.js").setCacheControl("max-age=600");
+
+  httpServer.serveStatic("/restart.js", LittleFS, "/restart.js").setCacheControl("max-age=600");
   
   httpServer.serveStatic("/index.js", LittleFS, "/common.js").setCacheControl("max-age=600");
 
@@ -1044,6 +1050,8 @@ void WebServerHandler()
   httpServer.serveStatic("/firmware_ota.css", LittleFS, "/firmware_ota.css").setCacheControl("max-age=600");
 
   httpServer.serveStatic("/firmware_ota.js", LittleFS, "/firmware_ota.js").setCacheControl("max-age=600");
+
+  httpServer.serveStatic("/firmware-page.js", LittleFS, "/firmware-page.js").setCacheControl("max-age=600");
   
   httpServer.serveStatic("/sensorv.js", LittleFS, "/sensorv.js").setCacheControl("max-age=600");
   
