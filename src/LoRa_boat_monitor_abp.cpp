@@ -155,6 +155,11 @@ void registerStandbyEvent(const char *eventCause) {
   } else {
     lastStandbyEventCause[0] = '\0';
   }
+
+  // A new standby event starts a new cycle. The matching wakeup slot
+  // must stay empty until the device actually wakes up again.
+  lastWakeupEventEpoch = 0;
+  lastWakeupEventCause[0] = '\0';
 }
 
 void registerWakeupEvent(const char *eventCause) {
