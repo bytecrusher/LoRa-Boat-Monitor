@@ -106,10 +106,10 @@ Ticker Timer4;                  // Declare Timer for Lora sending
 #define TIME_TO_SLEEP  actconf.standbySleepDuration       /* Time ESP32 will go to sleep */
 RTC_DATA_ATTR int bootCount = 0;
 RTC_DATA_ATTR uint loraCount = 0;
-RTC_DATA_ATTR time_t lastWakeupStanEventEpoch = 0;
-RTC_DATA_ATTR time_t previousWakeupStanEventEpoch = 0;
-RTC_DATA_ATTR char lastWakeupStanEventCause[24] = "";
-RTC_DATA_ATTR char previousWakeupStanEventCause[24] = "";
+RTC_DATA_ATTR time_t lastStandbyEventEpoch = 0;
+RTC_DATA_ATTR time_t lastWakeupEventEpoch = 0;
+RTC_DATA_ATTR char lastStandbyEventCause[24] = "";
+RTC_DATA_ATTR char lastWakeupEventCause[24] = "";
 
 const int STATE_DELAY = 1000;
 bool reboot = false;
@@ -147,16 +147,23 @@ void IRAM_ATTR onTimer(){
   sendLoraQueue = true;
 }
 
-void registerWakeupStanEvent(const char *eventCause) {
-  previousWakeupStanEventEpoch = lastWakeupStanEventEpoch;
-  strncpy(previousWakeupStanEventCause, lastWakeupStanEventCause, sizeof(previousWakeupStanEventCause) - 1);
-  previousWakeupStanEventCause[sizeof(previousWakeupStanEventCause) - 1] = '\0';
-  lastWakeupStanEventEpoch = time(nullptr);
+void registerStandbyEvent(const char *eventCause) {
+  lastStandbyEventEpoch = time(nullptr);
   if (eventCause != nullptr) {
-    strncpy(lastWakeupStanEventCause, eventCause, sizeof(lastWakeupStanEventCause) - 1);
-    lastWakeupStanEventCause[sizeof(lastWakeupStanEventCause) - 1] = '\0';
+    strncpy(lastStandbyEventCause, eventCause, sizeof(lastStandbyEventCause) - 1);
+    lastStandbyEventCause[sizeof(lastStandbyEventCause) - 1] = '\0';
   } else {
-    lastWakeupStanEventCause[0] = '\0';
+    lastStandbyEventCause[0] = '\0';
+  }
+}
+
+void registerWakeupEvent(const char *eventCause) {
+  lastWakeupEventEpoch = time(nullptr);
+  if (eventCause != nullptr) {
+    strncpy(lastWakeupEventCause, eventCause, sizeof(lastWakeupEventCause) - 1);
+    lastWakeupEventCause[sizeof(lastWakeupEventCause) - 1] = '\0';
+  } else {
+    lastWakeupEventCause[0] = '\0';
   }
 }
 
@@ -248,7 +255,7 @@ void maybeSendDataViaWifi() {
   const unsigned long now = millis();
 
   if (pendingWakeMdsEvent && now >= nextWakeMdsRetryMillis) {
-    registerWakeupStanEvent(pendingWakeReasonLabel.c_str());
+    registerWakeupEvent(pendingWakeReasonLabel.c_str());
     if (sendMdsDeviceEvent(actconf, pendingWakeReasonLabel.c_str())) {
       pendingWakeMdsEvent = false;
     } else {
@@ -274,7 +281,7 @@ void prepareForStandbySleep() {
   DebugPrintln(3, "Prepare standby sleep");
 
   if (String(actconf.SendDataViaWifi) == "Yes" && WiFi.status() == WL_CONNECTED) {
-    registerWakeupStanEvent("Sleep standby");
+    registerStandbyEvent("Sleep standby");
     sendMdsDeviceEvent(actconf, "Standby enter");
   }
 
