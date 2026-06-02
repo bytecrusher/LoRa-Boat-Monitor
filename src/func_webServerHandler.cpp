@@ -875,6 +875,30 @@ void WebServerHandler()
     request->send(200, "text/html", content);
   });
 
+  httpServer.on("/restart", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
+
+    DebugPrintln(3, "Restart requested via web interface");
+    request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Device restart requested.\"}");
+    reboot = true;
+  });
+
+  httpServer.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
+
+    DebugPrintln(3, "Restart requested via web interface");
+    request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Device restart requested.\"}");
+    reboot = true;
+  });
+
   httpServer.on("/firmware.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     // Check page password
     if (actconf.crypt == 1) {

@@ -20,6 +20,11 @@ extern time_t lastStandbyEventEpoch;
 extern time_t lastWakeupEventEpoch;
 extern char lastStandbyEventCause[24];
 extern char lastWakeupEventCause[24];
+extern bool pendingMdsDeviceEventStored;
+extern time_t pendingMdsStandbyEventEpoch;
+extern time_t pendingMdsWakeupEventEpoch;
+extern char pendingMdsStandbyEventCause[24];
+extern char pendingMdsWakeupEventCause[24];
 
 namespace {
 String normalizeFirmwareUpdateBaseUrl(const char *configuredValue)
@@ -471,10 +476,10 @@ bool sendMdsDeviceEvent(configData actconf, const char *sensorName)
   sensor["type"] = "WakeupStan";
   sensor["sensorName"] = "WakeupLog";
   sensor["name"] = "WakeupLog";
-  sensor["value1"] = String(lastStandbyEventCause);
-  sensor["value2"] = formatMdsDateTime(lastStandbyEventEpoch);
-  sensor["value3"] = String(lastWakeupEventCause);
-  sensor["value4"] = formatMdsDateTime(lastWakeupEventEpoch);
+  sensor["value1"] = String(pendingMdsDeviceEventStored ? pendingMdsStandbyEventCause : lastStandbyEventCause);
+  sensor["value2"] = formatMdsDateTime(pendingMdsDeviceEventStored ? pendingMdsStandbyEventEpoch : lastStandbyEventEpoch);
+  sensor["value3"] = String(pendingMdsDeviceEventStored ? pendingMdsWakeupEventCause : lastWakeupEventCause);
+  sensor["value4"] = formatMdsDateTime(pendingMdsDeviceEventStored ? pendingMdsWakeupEventEpoch : lastWakeupEventEpoch);
   sensor["date"] = mdsDate;
   sensor["time"] = mdsTime;
   sensor["transmissionPath"] = "1";

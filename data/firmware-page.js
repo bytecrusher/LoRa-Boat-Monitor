@@ -17,16 +17,17 @@ function otaElements() {
     };
 }
 
-function setLoadingState(isLoading) {
+function setLoadingState(isLoading, options) {
     const elements = otaElements();
     if (!elements.loader || !elements.content) {
         return;
     }
 
+    const showLoader = !options || options.showLoader !== false;
     elements.loader.classList.toggle('hidden', !isLoading);
-    elements.loader.style.display = isLoading ? 'block' : 'none';
+    elements.loader.style.display = isLoading && showLoader ? 'block' : 'none';
     elements.content.style.display = 'block';
-    elements.content.style.opacity = isLoading ? '0.55' : '1';
+    elements.content.style.opacity = isLoading && showLoader ? '0.55' : '1';
     elements.content.style.pointerEvents = isLoading ? 'none' : 'auto';
     setElementsDisabled('button, input, select', isLoading, elements.content);
 }
@@ -211,7 +212,7 @@ function uploadLocalFirmware() {
         alert('Firmware upload failed.');
     };
 
-    setLoadingState(true);
+    setLoadingState(true, { showLoader: false });
     startOtaProgressPolling();
     xhr.send(formData);
 }
@@ -221,7 +222,7 @@ async function startRemoteUpdate(source, promptText) {
         return;
     }
 
-    setLoadingState(true);
+    setLoadingState(true, { showLoader: false });
     startOtaProgressPolling();
 
     try {

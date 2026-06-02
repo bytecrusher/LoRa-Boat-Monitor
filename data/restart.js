@@ -1,4 +1,3 @@
-const restartUrl = window.location.origin;
 let restartPollInterval = null;
 
 function setRestartState(isRestarting) {
@@ -11,12 +10,10 @@ async function restartDevice() {
         return;
     }
 
-    try {
-        await request(restartUrl + "?restart=1");
-    } catch (error) {
-    }
-
     setRestartState(true);
+    request("/restart", { method: "POST" }).catch(function () {
+        // The device may reboot before the browser receives the response.
+    });
 
     restartPollInterval = window.setInterval(function () {
         var statusLed = byId("myping");

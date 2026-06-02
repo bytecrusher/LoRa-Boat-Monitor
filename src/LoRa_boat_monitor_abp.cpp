@@ -110,6 +110,11 @@ RTC_DATA_ATTR time_t lastStandbyEventEpoch = 0;
 RTC_DATA_ATTR time_t lastWakeupEventEpoch = 0;
 RTC_DATA_ATTR char lastStandbyEventCause[24] = "";
 RTC_DATA_ATTR char lastWakeupEventCause[24] = "";
+RTC_DATA_ATTR bool pendingMdsDeviceEventStored = false;
+RTC_DATA_ATTR time_t pendingMdsStandbyEventEpoch = 0;
+RTC_DATA_ATTR time_t pendingMdsWakeupEventEpoch = 0;
+RTC_DATA_ATTR char pendingMdsStandbyEventCause[24] = "";
+RTC_DATA_ATTR char pendingMdsWakeupEventCause[24] = "";
 
 const int STATE_DELAY = 1000;
 bool reboot = false;
@@ -142,6 +147,19 @@ byte daysavetime = 1;
 
 File root;
 
+void copyEventCause(char *target, size_t targetSize, const char *eventCause) {
+  if (target == nullptr || targetSize == 0) {
+    return;
+  }
+
+  if (eventCause != nullptr) {
+    strncpy(target, eventCause, targetSize - 1);
+    target[targetSize - 1] = '\0';
+  } else {
+    target[0] = '\0';
+  }
+}
+
 void IRAM_ATTR onTimer(){
   DebugPrintln(3, "onTimer reached");
   sendLoraQueue = true;
@@ -149,12 +167,7 @@ void IRAM_ATTR onTimer(){
 
 void registerStandbyEvent(const char *eventCause) {
   lastStandbyEventEpoch = time(nullptr);
-  if (eventCause != nullptr) {
-    strncpy(lastStandbyEventCause, eventCause, sizeof(lastStandbyEventCause) - 1);
-    lastStandbyEventCause[sizeof(lastStandbyEventCause) - 1] = '\0';
-  } else {
-    lastStandbyEventCause[0] = '\0';
-  }
+  copyEventCause(lastStandbyEventCause, sizeof(lastStandbyEventCause), eventCause);
 
   // A new standby event starts a new cycle. The matching wakeup slot
   // must stay empty until the device actually wakes up again.
@@ -164,12 +177,21 @@ void registerStandbyEvent(const char *eventCause) {
 
 void registerWakeupEvent(const char *eventCause) {
   lastWakeupEventEpoch = time(nullptr);
-  if (eventCause != nullptr) {
-    strncpy(lastWakeupEventCause, eventCause, sizeof(lastWakeupEventCause) - 1);
-    lastWakeupEventCause[sizeof(lastWakeupEventCause) - 1] = '\0';
-  } else {
-    lastWakeupEventCause[0] = '\0';
+  copyEventCause(lastWakeupEventCause, sizeof(lastWakeupEventCause), eventCause);
+}
+
+void capturePendingMdsDeviceEvent(const char *eventCause) {
+  if (pendingMdsDeviceEventStored) {
+    return;
   }
+
+  registerWakeupEvent(eventCause);
+
+  pendingMdsStandbyEventEpoch = lastStandbyEventEpoch;
+  pendingMdsWakeupEventEpoch = lastWakeupEventEpoch;
+  copyEventCause(pendingMdsStandbyEventCause, sizeof(pendingMdsStandbyEventCause), lastStandbyEventCause);
+  copyEventCause(pendingMdsWakeupEventCause, sizeof(pendingMdsWakeupEventCause), lastWakeupEventCause);
+  pendingMdsDeviceEventStored = true;
 }
 
 void rebuildNetworkServersFromConfig() {
@@ -260,9 +282,10 @@ void maybeSendDataViaWifi() {
   const unsigned long now = millis();
 
   if (pendingWakeMdsEvent && now >= nextWakeMdsRetryMillis) {
-    registerWakeupEvent(pendingWakeReasonLabel.c_str());
+    capturePendingMdsDeviceEvent(pendingWakeReasonLabel.c_str());
     if (sendMdsDeviceEvent(actconf, pendingWakeReasonLabel.c_str())) {
       pendingWakeMdsEvent = false;
+      pendingMdsDeviceEventStored = false;
     } else {
       nextWakeMdsRetryMillis = now + WAKE_MDS_RETRY_INTERVAL_MS;
     }
@@ -287,7 +310,6 @@ void prepareForStandbySleep() {
 
   if (String(actconf.SendDataViaWifi) == "Yes" && WiFi.status() == WL_CONNECTED) {
     registerStandbyEvent("Sleep standby");
-    sendMdsDeviceEvent(actconf, "Standby enter");
   }
 
   // Re-arm wake sources right before sleep so runtime config changes
@@ -313,25 +335,36 @@ void prepareForStandbySleep() {
 void enableWiFi(){
   //adc_power_on();
   hname = String(actconf.hostname) + "-" + String(actconf.deviceID);
-  WiFi.disconnect(false);  // Reconnect the network
+  WiFi.persistent(false);
+  WiFi.setAutoReconnect(true);
+  WiFi.setSleep(false);
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect(false, false);  // Reconnect the network without turning WiFi off.
   WiFi.hostname(hname);   // Provide the hostname
   //WiFi.setHostname (hname.c_str()); /*ESP32 hostname set*/
 
   //*****************************************************************************************
-      // Starting access point for update server
-      DebugPrint(3, "Access point started with SSID: ");
-      DebugPrintln(3, actconf.sssid);
-      DebugPrint(3, "Access point channel: ");
-      DebugPrintln(3, WiFi.channel());
-    //  DebugPrintln(3, actconf.apchannel);
-      DebugPrint(3, "Max AP connections: ");
-      DebugPrintln(3, actconf.maxconnections);
-      //WiFi.mode(WIFI_AP_STA);
-      WiFi.mode(WIFI_MODE_APSTA);
-      WiFi.softAP(actconf.sssid, actconf.spassword, actconf.apchannel, false, actconf.maxconnections);
-      
       DebugPrint(3, "Host name: ");
       DebugPrintln(3, hname);
+
+      DebugPrintln(3, "Scanning WiFi networks...");
+      int networkCount = WiFi.scanNetworks(false, true);
+      if (networkCount <= 0) {
+        DebugPrintln(2, "No WiFi networks found during scan");
+      } else {
+        DebugPrint(3, "WiFi networks found: ");
+        DebugPrintln(3, networkCount);
+        for (int networkIndex = 0; networkIndex < networkCount; networkIndex++) {
+          DebugPrint(3, "  SSID: ");
+          DebugPrint(3, WiFi.SSID(networkIndex));
+          DebugPrint(3, ", RSSI: ");
+          DebugPrint(3, WiFi.RSSI(networkIndex));
+          DebugPrint(3, ", channel: ");
+          DebugPrint(3, WiFi.channel(networkIndex));
+          DebugPrint(3, ", auth: ");
+          DebugPrintln(3, WiFi.encryptionType(networkIndex));
+        }
+      }
 
       char cssid[31];
       char cpassword[31];
@@ -350,6 +383,16 @@ void enableWiFi(){
         cssid[sizeof(cssid) - 1] = '\0';
         cpassword[sizeof(cpassword) - 1] = '\0';
 
+        bool configuredSsidVisible = false;
+        for (int networkIndex = 0; networkIndex < networkCount; networkIndex++) {
+          if (WiFi.SSID(networkIndex) == String(cssid)) {
+            configuredSsidVisible = true;
+            break;
+          }
+        }
+        DebugPrint(3, "Configured SSID visible in scan: ");
+        DebugPrintln(3, configuredSsidVisible ? "yes" : "no");
+
         // Connect to WiFi network
         DebugPrint(3, "Connecting WiFi #");
         DebugPrint(3, i);
@@ -364,6 +407,9 @@ void enableWiFi(){
         maxccounter = ((actconf.timeout * 1000) / 200);
 
         // Wait until is connected otherwise abort connection after x connection trys
+        WiFi.mode(WIFI_STA);
+        WiFi.disconnect(false, false);
+        delay(100);
         WiFi.begin(cssid, cpassword);
         ccounter = 0;
         boolean toggleWifiConnectionStatus = false;
@@ -393,13 +439,28 @@ void enableWiFi(){
           break;
         }
         else{
-          WiFi.disconnect(true);                // Abort connection
+          DebugPrint(3, "WiFi status after abort: ");
+          DebugPrintln(3, WiFi.status());
+          WiFi.disconnect(false, false);        // Abort this STA attempt, keep AP+WiFi alive for the next SSID.
           DebugPrintln(3, "Connection aborted");
           DebugPrintln(3, "");
           //u8x8.drawString(0,3,"Conection aborted");
           //u8x8.refreshDisplay();    // Only required for SSD1606/7
         }
       }
+
+      const bool wifiClientConnected = WiFi.status() == WL_CONNECTED;
+      const uint8_t apChannel = wifiClientConnected ? WiFi.channel() : actconf.apchannel;
+      WiFi.mode(WIFI_MODE_APSTA);
+      WiFi.softAP(actconf.sssid, actconf.spassword, apChannel, false, actconf.maxconnections);
+
+      // Starting access point for update server
+      DebugPrint(3, "Access point started with SSID: ");
+      DebugPrintln(3, actconf.sssid);
+      DebugPrint(3, "Access point channel: ");
+      DebugPrintln(3, apChannel);
+      DebugPrint(3, "Max AP connections: ");
+      DebugPrintln(3, actconf.maxconnections);
 
       ensureMdnsService();
 

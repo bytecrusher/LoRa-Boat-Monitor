@@ -148,10 +148,10 @@ function check_ssid(iname) {
     if (iname == "cssid2") { valuestring = document.SetForm.cssid2.value; }
     if (iname == "cssid3") { valuestring = document.SetForm.cssid3.value; }
     if (iname == "sssid") { valuestring = document.SetForm.sssid.value; }
-    var reguexp = /[^A-z0-9_-]/;
-    if (reguexp.exec(valuestring) || valuestring.length < 1 || valuestring.length > 20) {
+    var reguexp = /[^\x20-\x7E]/;
+    if (reguexp.exec(valuestring) || valuestring.length < 1 || valuestring.length > 30) {
         document.getElementById('sub').disabled = true;
-        alert('Error!\nUse only a-z, A-Z, 0-9, _-\nSSID Length 1-20');
+        alert('Error!\nUse only printable characters.\nSSID Length 1-30');
     }
     else {
         document.getElementById('sub').disabled = false;
@@ -191,10 +191,10 @@ function check_passwd(iname) {
     if (iname == "cpasswd2") { valuestring = document.SetForm.cpasswd2.value; }
     if (iname == "cpasswd3") { valuestring = document.SetForm.cpasswd3.value; }
     if (iname == "spasswd") { valuestring = document.SetForm.spasswd.value; }
-    var reguexp = /[^A-z0-9\-]/;
-    if (reguexp.exec(valuestring) || valuestring.length < 8 || valuestring.length > 20) {
+    var reguexp = /[^\x20-\x7E]/;
+    if (reguexp.exec(valuestring) || valuestring.length < 8 || valuestring.length > 30) {
         document.getElementById('sub').disabled = true;
-        alert('Error!\nUse only a-z, A-Z, 0-9, -\nPassword Length 8-20');
+        alert('Error!\nUse only printable characters.\nPassword Length 8-30');
     }
     else {
         document.getElementById('sub').disabled = false;
