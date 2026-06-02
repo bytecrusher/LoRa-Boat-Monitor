@@ -1,19 +1,82 @@
 let otaProgressTimer = null;
 let otaRebootWaitStarted = false;
 
+function firmwareById(id) {
+    return typeof byId === 'function' ? byId(id) : document.getElementById(id);
+}
+
+function firmwareSetElementsDisabled(selector, disabled, root) {
+    if (typeof setElementsDisabled === 'function') {
+        setElementsDisabled(selector, disabled, root);
+        return;
+    }
+
+    const scope = root || document;
+    const nodes = scope.querySelectorAll(selector);
+    for (let i = 0; i < nodes.length; i += 1) {
+        nodes[i].disabled = disabled;
+    }
+}
+
+function firmwareDelay(milliseconds) {
+    if (typeof delay === 'function') {
+        return delay(milliseconds);
+    }
+
+    return new Promise(function (resolve) {
+        setTimeout(resolve, milliseconds);
+    });
+}
+
+async function firmwareRequest(url, options) {
+    if (typeof request === 'function') {
+        return request(url, options);
+    }
+
+    const response = await fetch(url, options || {});
+    const text = await response.text();
+    let json = null;
+    if (text) {
+        try {
+            json = JSON.parse(text);
+        } catch (error) {
+            json = null;
+        }
+    }
+
+    return {
+        ok: response.ok,
+        status: response.status,
+        text: text,
+        json: json
+    };
+}
+
+async function firmwareRequestJson(url, options) {
+    if (typeof requestJson === 'function') {
+        return requestJson(url, options);
+    }
+
+    const result = await firmwareRequest(url, options);
+    if (!result.ok) {
+        throw result;
+    }
+    return result.json || {};
+}
+
 function otaElements() {
     return {
-        loader: byId('loader'),
-        content: byId('myDiv'),
-        progressWrapper: byId('otaProgressWrapper'),
-        progressBar: byId('otaProgressBar'),
-        progressText: byId('otaProgressText'),
-        localFileInput: byId('localFirmwareFile'),
-        localInstallButton: byId('localFirmwareButton'),
-        stableInstallButton: byId('stableFirmwareButton'),
-        betaInstallButton: byId('betaFirmwareButton'),
-        mdsTestButton: byId('mdsTestButton'),
-        backButton: byId('backToOverviewButton')
+        loader: firmwareById('loader'),
+        content: firmwareById('myDiv'),
+        progressWrapper: firmwareById('otaProgressWrapper'),
+        progressBar: firmwareById('otaProgressBar'),
+        progressText: firmwareById('otaProgressText'),
+        localFileInput: firmwareById('localFirmwareFile'),
+        localInstallButton: firmwareById('localFirmwareButton'),
+        stableInstallButton: firmwareById('stableFirmwareButton'),
+        betaInstallButton: firmwareById('betaFirmwareButton'),
+        mdsTestButton: firmwareById('mdsTestButton'),
+        backButton: firmwareById('backToOverviewButton')
     };
 }
 
@@ -29,7 +92,7 @@ function setLoadingState(isLoading, options) {
     elements.content.style.display = 'block';
     elements.content.style.opacity = isLoading && showLoader ? '0.55' : '1';
     elements.content.style.pointerEvents = isLoading ? 'none' : 'auto';
-    setElementsDisabled('button, input, select', isLoading, elements.content);
+    firmwareSetElementsDisabled('button, input, select', isLoading, elements.content);
 }
 
 function renderOtaProgress(progress) {
@@ -59,7 +122,7 @@ function stopOtaProgressPolling() {
 
 async function pollOtaProgress() {
     try {
-        const progress = await requestJson('/otaprogress?ts=' + Date.now());
+        const progress = await firmwareRequestJson('/otaprogress?ts=' + Date.now());
         renderOtaProgress(progress);
 
         if (!progress.active && progress.success && progress.phase === 'complete') {
@@ -90,10 +153,10 @@ function startOtaProgressPolling() {
 
 async function waitForReboot() {
     for (let retries = 45; retries > 0; retries -= 1) {
-        await delay(3000);
+        await firmwareDelay(3000);
 
         try {
-            const result = await request('/staticdata.json?ts=' + Date.now());
+            const result = await firmwareRequest('/staticdata.json?ts=' + Date.now());
             if (result.ok) {
                 window.location.replace('/');
                 return;
@@ -117,7 +180,7 @@ function beginWaitForRebootWithMessage(message) {
         message: message || 'Firmware download complete. Device restarts now...'
     });
 
-    delay(2000).then(waitForReboot);
+    firmwareDelay(2000).then(waitForReboot);
 }
 
 async function handleOtaResponseResult(result) {
@@ -226,7 +289,7 @@ async function startRemoteUpdate(source, promptText) {
     startOtaProgressPolling();
 
     try {
-        const result = await request('/startRemoteUpdate', {
+        const result = await firmwareRequest('/startRemoteUpdate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({ source: source }).toString()
@@ -243,7 +306,7 @@ async function startRemoteUpdate(source, promptText) {
 async function testMdsUpload() {
     setLoadingState(true);
     try {
-        const result = await request('/testMdsUpload', { method: 'POST' });
+        const result = await firmwareRequest('/testMdsUpload', { method: 'POST' });
         const response = result.json || {};
         if (!result.ok) {
             throw response.message || 'MDS test request failed.';
