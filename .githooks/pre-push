@@ -20,7 +20,7 @@ if ! env PLATFORMIO_CORE_DIR=/tmp/pio-core pio run -d "${PROJECT_DIR}"; then
 fi
 
 log "Deploying firmware and web files to update server..."
-if ! "${PROJECT_DIR}/scripts/deploy_stable.sh"; then
+if ! "${PROJECT_DIR}/scripts/deploy_stable.sh" --allow-insecure-ftp; then
   log "Deploy failed. Push aborted."
   exit 1
 fi
