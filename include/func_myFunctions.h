@@ -5,7 +5,6 @@
 #include <ESPAsyncWebServer.h>  // asynchron webserver lib
 #include <WebSerial.h>
 #include <EEPROM.h>             // EEPROM lib
-#include "MD5Builder.h"
 #include <Adafruit_BME280.h>    // BME280
 #include <OneWire.h>            // 1Wire lib
 #include <DallasTemperature.h>  // DS18B20 lib
@@ -21,10 +20,7 @@ extern configData actconf;
 extern configData defconf;
 extern int sizeEEPROM;
 extern int cfgStart;
-extern String transactionID;
-extern String md5crypt;
 extern int ledPin;
-extern String raw;
 extern int sf;
 extern float fieldstrength;
 extern float quality;
@@ -139,9 +135,6 @@ int wlanquality();
 float truncate1(float value);
 float truncate2(float value);
 String firstzero(int value);
-String transID();
-String cryptPassword(String password);
-int encryptPassword(String password, String md5hash);
 void Serial1Clear();
 void Serial2Clear();
 uint16_t float2int(float value);

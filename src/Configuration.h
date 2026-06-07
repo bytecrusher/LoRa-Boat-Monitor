@@ -6,27 +6,27 @@
 // Default configuration
 // Types 'byte' und 'word' doesn't work!
 typedef struct {
-  int valid = 11;                            // Number of configuration (Please change when the structure or values are changed)
-  int crypt = 0;                            // Activate for critical webside a password query [0 = off|1 = on]
+  int valid = 14;                            // Number of configuration (Please change when the structure or values are changed)
+  int crypt = 1;                            // Activate for critical webside a password query [0 = off|1 = on]
   char username[31] = "admin";
-  char password[31] = "12345678";           // Password for critical websites (settings, update and reboot)
+  char password[31] = "boatmonitor";        // Password for critical websites (settings, update and reboot)
   char devname[21] = "LoRa Boat Monitor";   // Device name for web configuration
   char crights[29] = "NoWa (C) (mod by Gunni) 2023";       // Copy rights
-  char fversion[7] = "V1.09b";               // Firmware version
+  char fversion[7] = "V1.10c";               // Firmware version
   char license[12] = "GPL3";                // License type
   int debug = 3;                            // Debug mode 0=off 1=Errors 2=Errors + Warnings 3=Errors + Warnings + Messages
   int corder1 = 1;                          // Set the Order or Priority for connecting to wifi
-  char cssid1[31] = "MyBoat1";                // SSID of WiFi Client
-  char cpassword1[31] = "password1";        // Password of WiFi Client
+  char cssid1[31] = "";                     // SSID of WiFi Client
+  char cpassword1[31] = "";                 // Password of WiFi Client
   int corder2 = 2;                          // Set the Order or Priority for connecting to wifi
-  char cssid2[31] = "MyBoat2";                // SSID of WiFi Client
-  char cpassword2[31] = "password2";        // Password of WiFi Client
+  char cssid2[31] = "";                     // SSID of WiFi Client
+  char cpassword2[31] = "";                 // Password of WiFi Client
   int corder3 = 3;                          // Set the Order or Priority for connecting to wifi
-  char cssid3[31] = "MyBoat3";                // SSID of WiFi Client
-  char cpassword3[31] = "password3";        // Password of WiFi Client
+  char cssid3[31] = "";                     // SSID of WiFi Client
+  char cpassword3[31] = "";                 // Password of WiFi Client
   int timeout = 10;                         // Connection timeout for client in [s] [3|5|10|30|90|120|150|180|210|240]
   char sssid[31] = "LoRaBoatMonitor";       // SSID of WiFi Server
-  char spassword[31] = "12345678";          // Password of WiFi Server
+  char spassword[31] = "LoRaBoatMonitor";   // Password of WiFi Server
   int apchannel = 1;                        // Assess Point channel [1...13]
   int maxconnections = 2;                   // Max number of connection for WiFi clients [1...4]
   int mDNS = 1;                             // Using mDNS service [0|1] 0=off, 1=on
@@ -37,12 +37,13 @@ typedef struct {
   int serspeed = 115200;                    // Serial speed in [Bd] 8N1 [300|1200|2400|4800|9600|19200|38400|57600|74880|115200]
   int WebSerialDebug = 0;                   // Control Web Serial Debug
   char firmwareUpdateUrl[50] = "loraboatmonitorwebserverdata.derguntmar.de";  // Url for getting firmware updates from
+  char autoFirmwareUpdate[8] = "No";         // Automatically install newer stable firmware from update server [Yes|No]
   int skin = 0;                             // Skin for websides [0|1|2]
 
   // LoRaWAN device, network and session key
-  uint32_t devaddr = 0x12345678;                // LoRa device address
-  uint8_t nskey[16] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00 };  // LoRa Network session key
-  uint8_t appkey[16] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00 }; // LoRa Application Key
+  uint32_t devaddr = 0x00000000;                // LoRa device address
+  uint8_t nskey[16] = { 0 };                    // LoRa Network session key
+  uint8_t appkey[16] = { 0 };                   // LoRa Application Key
   
   char lorafrequency[6] = "EU868";          // LoRa frequency region [EU868|US915]
   int lchannel = 1;                         // Used LoRa channel [0...7|8|9] 0...7 single channel mode, 8 dynamic channel mode with channel 0...7, 9 dynamic channel mode with channel 0...2
@@ -84,7 +85,7 @@ typedef struct {
   char SendDataViaWifi[8] = "No";           // Select if Wifi sends in Standby mode data to MDS [Yes|No]
 
   char MdsUrl[100] = "https://yourservername/ingest/receivejson.php";
-  char MdsApiKey[30] = "123456789";
+  char MdsApiKey[30] = "";
 
   // MDS sensor switches (set >0 to enable sending for this sensor group)
   int MdsSensorIdBattery = 0;                // sensorType=ADC, value1=voltage, value2=capacity
@@ -98,6 +99,8 @@ typedef struct {
   // Web configs
   int cssStyle = 0;                         // css Style: 0 = black, 1 = red, 2 = white
   int OledDisplayRotation = 0;              // OLED Display Rotation: 0 = 0°, 1 = 180°
+  char mdsOtaUrl[100] = "https://mds-git.derguntmar.de/ota/getupdate.php"; // MDS OTA endpoint
+  char mdsOtaSecret[65] = "";                // Shared secret for the MDS OTA endpoint
 } configData;
 
 #endif

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name='csrf-token' content='%csrfToken%'>
     <title>OTA Update</title>
     <link rel='stylesheet' type='text/css' href='/firmware_ota.css'>
 </head>
@@ -12,6 +13,7 @@
 
 <div class="container">
     <form enctype="multipart/form-data" class="form-container" id="upload_form" method="post">
+        <input type='hidden' name='csrf' value='%csrfToken%'>
         <div id="switch-container">
             <button class="button-o left selected" id="firmware-button" type="button">Firmware</button>
             <button class="button-o right" id="filesystem-button" type="button">File System</button>

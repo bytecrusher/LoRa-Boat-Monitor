@@ -23,20 +23,23 @@ function scheduleHeaderOfflineState() {
     }, 1100);
 }
 
-async function pingHeaderStatus() {
+function pingHeaderStatus() {
     scheduleHeaderOfflineState();
 
-    try {
-        var response = await fetch("/getdata", { cache: "no-store" });
-        if (!response.ok) {
-            throw new Error("Request failed");
+    var request = new XMLHttpRequest();
+    request.onreadystatechange = function () {
+        if (request.readyState !== XMLHttpRequest.DONE) {
+            return;
+        }
+
+        if (request.status < 200 || request.status >= 300) {
+            return;
         }
 
         if (headerOfflineTimer !== 0) {
-            clearTimeout(headerOfflineTimer);
-            headerOfflineTimer = 0;
+          clearTimeout(headerOfflineTimer);
+          headerOfflineTimer = 0;
         }
-
         setHeaderStatus(true);
         window.setTimeout(function () {
             var led = document.getElementById("myping");
@@ -44,8 +47,10 @@ async function pingHeaderStatus() {
                 led.classList.remove("led-green");
             }
         }, 400);
-    } catch (error) {
-    }
+    };
+
+    request.open("GET", "/getdata?ts=" + Date.now(), true);
+    request.send();
 }
 
 window.setInterval(pingHeaderStatus, 1000);

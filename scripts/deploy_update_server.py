@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
+import json
 import os
 import posixpath
 import re
@@ -25,6 +27,7 @@ EXCLUDED_DATA_FILES = {
 
 STABLE_MARKERS = ("latestVersion.txt", "latestStableVersion.txt", "ActualVersion.txt")
 BETA_MARKERS = ("latestBetaVersion.txt",)
+MANIFEST_FILE = "firmware-manifest.json"
 
 
 def load_project_env() -> None:
@@ -74,8 +77,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--tls",
         action="store_true",
-        default=os.environ.get("UPDATE_SERVER_FTP_TLS", "").lower() in {"1", "true", "yes"},
+        default=os.environ.get("UPDATE_SERVER_FTP_TLS", "true").lower() not in {"0", "false", "no"},
         help="Use explicit FTPS (FTP over TLS).",
+    )
+    parser.add_argument(
+        "--allow-insecure-ftp",
+        action="store_true",
+        default=os.environ.get("UPDATE_SERVER_ALLOW_INSECURE_FTP", "").lower() in {"1", "true", "yes"},
+        help="Allow plain FTP. Not recommended.",
     )
     parser.add_argument(
         "--dry-run",
@@ -110,6 +119,8 @@ def ensure_ftp_config(args: argparse.Namespace) -> None:
         raise ValueError("Missing --password or UPDATE_SERVER_FTP_PASSWORD")
     if not args.remote_dir:
         raise ValueError("Missing --remote-dir or UPDATE_SERVER_FTP_DIR")
+    if not args.tls and not args.allow_insecure_ftp:
+        raise ValueError("Plain FTP is disabled. Use FTPS or pass --allow-insecure-ftp explicitly.")
 
 
 def connect_ftp(args: argparse.Namespace) -> FTP:
@@ -180,6 +191,59 @@ def upload_text(ftp: FTP, text: str, remote_path: str, dry_run: bool) -> None:
     ftp.storbinary(f"STOR {posixpath.basename(remote_path)}", payload)
 
 
+def download_text(ftp: FTP, remote_path: str) -> str:
+    remote_dir = posixpath.dirname(remote_path)
+    remote_name = posixpath.basename(remote_path)
+    ensure_remote_dir(ftp, remote_dir)
+    ftp_cwd(ftp, remote_dir)
+
+    payload = io.BytesIO()
+    ftp.retrbinary(f"RETR {remote_name}", payload.write)
+    return payload.getvalue().decode("utf-8")
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def build_web_file_hashes(release_files: list[tuple[Path, str]], version: str) -> dict[str, str]:
+    hashes: dict[str, str] = {}
+    version_prefix = f"{version}/"
+    for local_path, remote_path in release_files:
+        if remote_path == posixpath.join(version, "firmware.bin"):
+            continue
+        if remote_path.startswith(version_prefix):
+            hashes[remote_path[len(version_prefix):]] = file_sha256(local_path)
+    return hashes
+
+
+def build_manifest(
+    existing_manifest: str,
+    channel: str,
+    version: str,
+    firmware_sha256: str,
+    web_file_hashes: dict[str, str],
+) -> str:
+    try:
+        manifest = json.loads(existing_manifest) if existing_manifest.strip() else {}
+    except json.JSONDecodeError:
+        manifest = {}
+
+    manifest[channel] = {
+        "version": version,
+        "firmware": f"{version}/firmware.bin",
+        "sha256": firmware_sha256,
+        "webFileHashes": web_file_hashes,
+        "webFiles": f"{version}/",
+    }
+
+    return json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+
+
 def collect_release_files(version: str) -> list[tuple[Path, str]]:
     if not FIRMWARE_BIN.exists():
         raise FileNotFoundError(f"Missing firmware image: {FIRMWARE_BIN}")
@@ -198,9 +262,11 @@ def main() -> int:
     args = parse_args()
     ensure_ftp_config(args)
     version = args.version or read_version()
+    firmware_sha256 = file_sha256(FIRMWARE_BIN)
     marker_files = STABLE_MARKERS if args.channel == "stable" else BETA_MARKERS
     remote_root = args.remote_dir.strip("/")
     release_files = collect_release_files(version)
+    web_file_hashes = build_web_file_hashes(release_files, version)
 
     print(f"Preparing release {version} for channel '{args.channel}'")
     print(f"FTP target: {args.host}:{args.port}/{remote_root}")
@@ -226,6 +292,21 @@ def main() -> int:
                 posixpath.join(remote_root, marker),
                 args.dry_run,
             )
+
+        manifest_remote_path = posixpath.join(remote_root, MANIFEST_FILE)
+        existing_manifest = ""
+        if not args.dry_run and ftp is not None:
+            try:
+                existing_manifest = download_text(ftp, manifest_remote_path)
+            except error_perm:
+                existing_manifest = ""
+
+        upload_text(
+            ftp,  # type: ignore[arg-type]
+            build_manifest(existing_manifest, args.channel, version, firmware_sha256, web_file_hashes),
+            manifest_remote_path,
+            args.dry_run,
+        )
     finally:
         if ftp is not None:
             ftp.quit()

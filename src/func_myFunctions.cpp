@@ -313,11 +313,22 @@ bool hasEEPROMConfigHeader() {
 }
 
 bool saveConfigBackupToLittleFS(const configData &cfg) {
+  configData backupCfg = cfg;
+  backupCfg.password[0] = '\0';
+  backupCfg.cpassword1[0] = '\0';
+  backupCfg.cpassword2[0] = '\0';
+  backupCfg.cpassword3[0] = '\0';
+  backupCfg.spassword[0] = '\0';
+  backupCfg.MdsApiKey[0] = '\0';
+  backupCfg.mdsOtaSecret[0] = '\0';
+  memset(backupCfg.nskey, 0, sizeof(backupCfg.nskey));
+  memset(backupCfg.appkey, 0, sizeof(backupCfg.appkey));
+
   const ConfigBackupHeader header = {
     CONFIG_BACKUP_MAGIC,
     CONFIG_BACKUP_VERSION,
     uint16_t(sizeof(configData)),
-    calculateConfigChecksum(reinterpret_cast<const uint8_t*>(&cfg), sizeof(configData))
+    calculateConfigChecksum(reinterpret_cast<const uint8_t*>(&backupCfg), sizeof(configData))
   };
 
   if (LittleFS.exists(CONFIG_BACKUP_PATH)) {
@@ -331,7 +342,7 @@ bool saveConfigBackupToLittleFS(const configData &cfg) {
   }
 
   const bool headerWritten = backupFile.write(reinterpret_cast<const uint8_t*>(&header), sizeof(header)) == sizeof(header);
-  const bool configWritten = backupFile.write(reinterpret_cast<const uint8_t*>(&cfg), sizeof(cfg)) == sizeof(cfg);
+  const bool configWritten = backupFile.write(reinterpret_cast<const uint8_t*>(&backupCfg), sizeof(backupCfg)) == sizeof(backupCfg);
   backupFile.close();
 
   if (!headerWritten || !configWritten) {
@@ -340,7 +351,7 @@ bool saveConfigBackupToLittleFS(const configData &cfg) {
     return false;
   }
 
-  DebugPrintln(3, "Config backup saved to LittleFS");
+  DebugPrintln(3, "Config backup saved to LittleFS without secrets");
   return true;
 }
 
@@ -570,59 +581,14 @@ String firstzero(int value){
   return output;
 }
 
-String transID(){
-  transactionID = String(random(0, 99999999));    // Generate a random transaction ID, global defined
-
-  return transactionID;
-}
-
-String cryptPassword(String password){
-  MD5Builder md5;
-  md5.begin();
-  raw = password + transactionID;
-  md5.add(raw);
-  md5.calculate();
-  md5crypt = md5.toString();
-  /*DebugPrintln(3, "Crypt password");
-  DebugPrint(3, "Password: ");
-  DebugPrintln(3, password);
-  DebugPrint(3, "Transaction ID: ");
-  DebugPrintln(3, transactionID);
-  DebugPrint(3, "Raw Data: ");
-  DebugPrintln(3, raw);
-  DebugPrint(3, "MD5 Hash: ");
-  DebugPrintln(3, md5crypt);*/
-  // Give back the crypted password
-  return md5crypt;
-}
-
-int encryptPassword(String password, String md5hash){
-  MD5Builder md5;
-  md5.begin();
-  raw = password + transactionID;
-  md5.add(raw);
-  md5.calculate();
-  md5crypt = md5.toString();
-  /*DebugPrintln(3, "Encrypt password");
-  DebugPrint(3, "Password: ");
-  DebugPrintln(3, password);
-  DebugPrint(3, "Transaction ID: ");
-  DebugPrintln(3, transactionID);
-  DebugPrint(3, "Raw Data: ");
-  DebugPrintln(3, raw);
-  DebugPrint(3, "MD5 Hash: ");
-  DebugPrintln(3, md5crypt);
-  DebugPrint(3, "MD5 Hash2: ");
-  DebugPrintln(3, md5crypt);*/
-  // Compare the received hash
-  if(md5crypt == md5hash){
-    return 1;
+static void cooperativeDelay(uint32_t ms) {
+  const unsigned long start = millis();
+  while (millis() - start < ms) {
+    delay(1);
+    yield();
   }
-  else{
-    return 0;
-  }
-  return 0;
 }
+
 //**************************************************************************************
 // Clear serial 1 RX buffer
 void Serial1Clear(){
@@ -1192,15 +1158,15 @@ void readGPSValues(configData myactconf) {
 
     if (millis() - lastRestartAttempt >= 400) {
       Serial2.end();
-      delay(50);
+      cooperativeDelay(50);
       Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
       lastRestartAttempt = millis();
     }
-    delay(10);
+    cooperativeDelay(10);
   }
   // Read serial 2 if data coming and RMC not finished and no LoRa telegram sending
   while(Serial2.read() >= 0);  // Clear read buffer
-  delay(1500);                 // Wait 1.5s for new telegrams form GPS
+  cooperativeDelay(1500);      // Wait 1.5s for new telegrams form GPS
   c_counter = 0;               // Clear commata counter
   while(Serial2.available() && !rmc_finish && !lora_activ && !loraEvent_activ) { // If data on serial 2 available
     inByte = Serial2.read(); // Read data
@@ -1323,7 +1289,7 @@ void readGPSValues(configData myactconf) {
       }
       else{
         DebugPrintln(3, "No RMC message found! ");
-        delay(250);
+        cooperativeDelay(250);
         flushSerial2UntilSentenceStart(); // Clear read buffer until sentence start
         nmea = "";
         nmea_all = "";
@@ -1356,8 +1322,13 @@ void sendNMEA() {
 }
 
 // handles uploads
+const size_t MAX_FILE_MANAGER_UPLOAD_SIZE = 262144;
+
 static bool isSafeUploadFilename(const String &filename) {
   if (filename.length() == 0) {
+    return false;
+  }
+  if (filename.startsWith("/") || filename.startsWith(".")) {
     return false;
   }
   if (filename.indexOf("..") >= 0) {
@@ -1366,7 +1337,42 @@ static bool isSafeUploadFilename(const String &filename) {
   if (filename.indexOf('\\') >= 0) {
     return false;
   }
-  return true;
+  if (filename.endsWith("/")) {
+    return false;
+  }
+
+  const char *allowedExtensions[] = {
+    ".css",
+    ".gz",
+    ".htm",
+    ".html",
+    ".ico",
+    ".js",
+    ".json",
+    ".txt"
+  };
+  for (const char *extension : allowedExtensions) {
+    if (filename.endsWith(extension)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static String uploadTargetPath(const String &filename) {
+  return "/" + filename;
+}
+
+static String uploadTempPath(const String &filename) {
+  return uploadTargetPath(filename) + ".upload";
+}
+
+static void cleanupUpload(AsyncWebServerRequest *request, const String &filename) {
+  if (request->_tempFile) {
+    request->_tempFile.close();
+  }
+  LittleFS.remove(uploadTempPath(filename));
 }
 
 void handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
@@ -1378,17 +1384,29 @@ void handleUpload(AsyncWebServerRequest *request, String filename, size_t index,
     return;
   }
 
+  if (index + len > MAX_FILE_MANAGER_UPLOAD_SIZE) {
+    Serial.println("Upload rejected: file too large");
+    cleanupUpload(request, filename);
+    return;
+  }
+
   if (!index) {
     logmessage = "Upload Start: " + String(filename);
-    // open the file on first call and store the file handle in the request object
-    //request->_tempFile = SPIFFS.open("/" + filename, "w");
-    request->_tempFile = LittleFS.open("/" + filename, "w");
+    const String tempPath = uploadTempPath(filename);
+    if (LittleFS.exists(tempPath)) {
+      LittleFS.remove(tempPath);
+    }
+    request->_tempFile = LittleFS.open(tempPath, "w");
     Serial.println(logmessage);
   }
 
   if (len) {
     // stream the incoming chunk to the opened file
-    request->_tempFile.write(data, len);
+    if (!request->_tempFile || request->_tempFile.write(data, len) != len) {
+      Serial.println("Upload rejected: write failed");
+      cleanupUpload(request, filename);
+      return;
+    }
     logmessage = "Writing file: " + String(filename) + " index=" + String(index) + " len=" + String(len);
     Serial.println(logmessage);
   }
@@ -1397,6 +1415,16 @@ void handleUpload(AsyncWebServerRequest *request, String filename, size_t index,
     logmessage = "Upload Complete: " + String(filename) + ",size: " + String(index + len);
     // close the file handle as the upload is now done
     request->_tempFile.close();
+    const String tempPath = uploadTempPath(filename);
+    const String targetPath = uploadTargetPath(filename);
+    if (LittleFS.exists(targetPath)) {
+      LittleFS.remove(targetPath);
+    }
+    if (!LittleFS.rename(tempPath, targetPath)) {
+      LittleFS.remove(tempPath);
+      Serial.println("Upload rejected: install failed");
+      return;
+    }
     Serial.println(logmessage);
     request->redirect("/");
   }

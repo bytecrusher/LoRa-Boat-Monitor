@@ -46,6 +46,13 @@ function bindSettingsPageEvents() {
     if (fileInput) {
         fileInput.addEventListener("change", uploadConfig);
     }
+
+    var settingsForm = byId("form1");
+    if (settingsForm) {
+        settingsForm.addEventListener("submit", function () {
+            setBusyState("Saving settings...");
+        });
+    }
 }
 
 function applySettingsSelections() {
@@ -131,11 +138,10 @@ function check_key(iname) {
     var valuestring = "";
     if (iname == "nskey") { valuestring = document.SetForm.nskey.value; }
     if (iname == "appkey") { valuestring = document.SetForm.appkey.value; }
-    var reguexp = /[^A-Z0-9]/;
-    console.log(valuestring.length);
-    if (reguexp.exec(valuestring) || valuestring.length !== 32) {
+    var reguexp = /[^a-fA-F0-9]/;
+    if (valuestring.length > 0 && (reguexp.exec(valuestring) || valuestring.length !== 32)) {
         document.getElementById('sub').disabled = true;
-        alert('Error!\\nUse only A-Z, 0-9, \\nKey Length not 32');
+        alert('Error!\\nUse only hex characters 0-9, A-F.\\nLeave empty to keep the existing key.');
     }
     else {
         document.getElementById('sub').disabled = false;
@@ -192,9 +198,24 @@ function check_passwd(iname) {
     if (iname == "cpasswd3") { valuestring = document.SetForm.cpasswd3.value; }
     if (iname == "spasswd") { valuestring = document.SetForm.spasswd.value; }
     var reguexp = /[^\x20-\x7E]/;
-    if (reguexp.exec(valuestring) || valuestring.length < 8 || valuestring.length > 30) {
+    if (valuestring.length === 0) {
+        document.getElementById('sub').disabled = false;
+    }
+    else if (reguexp.exec(valuestring) || valuestring.length < 8 || valuestring.length > 30) {
         document.getElementById('sub').disabled = true;
         alert('Error!\nUse only printable characters.\nPassword Length 8-30');
+    }
+    else {
+        document.getElementById('sub').disabled = false;
+    }
+}
+
+function check_mds_ota_url(iname) {
+    var field = document.SetForm[iname];
+    var value = field ? field.value.trim() : "";
+    if (value.length > 0 && !value.startsWith("https://")) {
+        document.getElementById('sub').disabled = true;
+        alert('Error!\nThe MDS OTA endpoint must start with https://');
     }
     else {
         document.getElementById('sub').disabled = false;
@@ -208,13 +229,11 @@ function check_alarmState(event) {
         requestJson("/getdata?data=alarm1")
             .then(function (response) {
                 if (response.alarm1 == "0" || response.alarm1 === 0) {
-                    alert("Please check wiring and make sure, Batterie switch is on.");
-                    selectElement.value = "Off";
+                    alert("Standby mode will be saved. Note: the alarm input is currently inactive, so the device may enter deep sleep shortly after saving.");
                 }
             })
             .catch(function () {
                 alert("Could not verify the alarm input state.");
-                selectElement.value = "Off";
             });
     }
 }

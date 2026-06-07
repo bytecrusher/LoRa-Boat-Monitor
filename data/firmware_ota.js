@@ -146,6 +146,9 @@ function uploadFile() {
 
     const formData = new FormData();
     formData.append(otaElement('file1').name, file, file.name);
+    if (typeof csrfToken === 'function') {
+        formData.append('csrf', csrfToken());
+    }
 
     const xhr = new XMLHttpRequest();
     xhr.upload.addEventListener('progress', handleUploadProgress, false);
@@ -157,6 +160,9 @@ function uploadFile() {
     xhr.addEventListener('error', handleUploadError, false);
     xhr.addEventListener('abort', handleUploadAbort, false);
     xhr.open('POST', '/doUpdate');
+    if (typeof csrfToken === 'function' && csrfToken()) {
+        xhr.setRequestHeader('X-CSRF-Token', csrfToken());
+    }
     xhr.send(formData);
 }
 

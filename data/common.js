@@ -45,14 +45,44 @@ function setElementsDisabled(selector, disabled, root) {
     }
 }
 
+function navigateTo(url, target) {
+    if (target) {
+        window.open(url, target);
+        return;
+    }
+    window.location.assign(url);
+}
+
 function delay(milliseconds) {
     return new Promise(function (resolve) {
         setTimeout(resolve, milliseconds);
     });
 }
 
+function csrfToken() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+}
+
+function withCsrf(options) {
+    var requestOptions = options || {};
+    var method = (requestOptions.method || 'GET').toUpperCase();
+    if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+        return requestOptions;
+    }
+
+    var token = csrfToken();
+    if (!token) {
+        return requestOptions;
+    }
+
+    requestOptions.headers = requestOptions.headers || {};
+    requestOptions.headers['X-CSRF-Token'] = token;
+    return requestOptions;
+}
+
 async function request(url, options) {
-    var response = await fetch(url, options || {});
+    var response = await fetch(url, withCsrf(options));
     var text = await response.text();
     var json = null;
 

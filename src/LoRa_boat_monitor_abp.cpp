@@ -104,6 +104,14 @@ Ticker Timer4;                  // Declare Timer for Lora sending
 
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP  actconf.standbySleepDuration       /* Time ESP32 will go to sleep */
+struct MdsDeviceEventSnapshot {
+  time_t standbyEpoch;
+  time_t wakeupEpoch;
+  char standbyCause[24];
+  char wakeupCause[24];
+};
+
+const uint8_t MDS_DEVICE_EVENT_QUEUE_SIZE = 4;
 RTC_DATA_ATTR int bootCount = 0;
 RTC_DATA_ATTR uint loraCount = 0;
 RTC_DATA_ATTR time_t lastStandbyEventEpoch = 0;
@@ -115,9 +123,16 @@ RTC_DATA_ATTR time_t pendingMdsStandbyEventEpoch = 0;
 RTC_DATA_ATTR time_t pendingMdsWakeupEventEpoch = 0;
 RTC_DATA_ATTR char pendingMdsStandbyEventCause[24] = "";
 RTC_DATA_ATTR char pendingMdsWakeupEventCause[24] = "";
+RTC_DATA_ATTR time_t lastSentMdsStandbyEventEpoch = 0;
+RTC_DATA_ATTR time_t lastSentMdsWakeupEventEpoch = 0;
+RTC_DATA_ATTR MdsDeviceEventSnapshot pendingMdsDeviceEventQueue[MDS_DEVICE_EVENT_QUEUE_SIZE];
+RTC_DATA_ATTR uint8_t pendingMdsDeviceEventQueueHead = 0;
+RTC_DATA_ATTR uint8_t pendingMdsDeviceEventQueueTail = 0;
+RTC_DATA_ATTR uint8_t pendingMdsDeviceEventQueueCount = 0;
 
 const int STATE_DELAY = 1000;
 bool reboot = false;
+unsigned long standbySleepBlockedUntilMillis = 0;
 bool sendedLoraAfterSleepOneTime = false;
 
 bool toggleDisplayStatus = false;
@@ -131,16 +146,23 @@ bool remoteOtaPending = false;
 bool remoteOtaInProgress = false;
 String remoteOtaUrl = "";
 String remoteOtaVersion = "";
+String remoteOtaSha256 = "";
+bool remoteOtaUseMdsEndpoint = false;
+bool remoteOtaRebootRequired = false;
 bool wifiServicesInitialized = false;
 bool mdnsInitialized = false;
 
 const unsigned long MDS_UPLOAD_INTERVAL_MS = 300000UL;
 const unsigned long WAKE_MDS_RETRY_INTERVAL_MS = 30000UL;
+const unsigned long AUTO_FIRMWARE_UPDATE_RETRY_MS = 1800000UL;
+const unsigned long AUTO_FIRMWARE_UPDATE_INTERVAL_MS = 21600000UL;
 unsigned long lastMdsUploadMillis = 0;
+unsigned long nextAutoFirmwareUpdateCheckMillis = 0;
 bool pendingWakeMdsEvent = false;
 int pendingWakeReasonCode = 0;
 String pendingWakeReasonLabel = "unknown";
 unsigned long nextWakeMdsRetryMillis = 0;
+bool currentWakeMdsEventCaptured = false;
 
 long timezone = 1; 
 byte daysavetime = 1;
@@ -158,6 +180,65 @@ void copyEventCause(char *target, size_t targetSize, const char *eventCause) {
   } else {
     target[0] = '\0';
   }
+}
+
+void copyMdsDeviceEventToActive(const MdsDeviceEventSnapshot &event) {
+  pendingMdsStandbyEventEpoch = event.standbyEpoch;
+  pendingMdsWakeupEventEpoch = event.wakeupEpoch;
+  copyEventCause(pendingMdsStandbyEventCause, sizeof(pendingMdsStandbyEventCause), event.standbyCause);
+  copyEventCause(pendingMdsWakeupEventCause, sizeof(pendingMdsWakeupEventCause), event.wakeupCause);
+  pendingMdsDeviceEventStored = true;
+}
+
+bool mdsDeviceEventMatches(const MdsDeviceEventSnapshot &event, time_t standbyEpoch, time_t wakeupEpoch) {
+  return event.standbyEpoch == standbyEpoch && event.wakeupEpoch == wakeupEpoch;
+}
+
+bool isMdsDeviceEventAlreadyQueued(time_t standbyEpoch, time_t wakeupEpoch) {
+  if (pendingMdsDeviceEventStored && pendingMdsStandbyEventEpoch == standbyEpoch && pendingMdsWakeupEventEpoch == wakeupEpoch) {
+    return true;
+  }
+
+  for (uint8_t i = 0; i < pendingMdsDeviceEventQueueCount; i++) {
+    const uint8_t index = (pendingMdsDeviceEventQueueHead + i) % MDS_DEVICE_EVENT_QUEUE_SIZE;
+    if (mdsDeviceEventMatches(pendingMdsDeviceEventQueue[index], standbyEpoch, wakeupEpoch)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void enqueueMdsDeviceEvent(time_t standbyEpoch, time_t wakeupEpoch, const char *standbyCause, const char *wakeupCause) {
+  if (pendingMdsDeviceEventQueueCount >= MDS_DEVICE_EVENT_QUEUE_SIZE) {
+    DebugPrintln(2, "MDS device event queue full, dropping oldest wakeup event");
+    pendingMdsDeviceEventQueueHead = (pendingMdsDeviceEventQueueHead + 1) % MDS_DEVICE_EVENT_QUEUE_SIZE;
+    pendingMdsDeviceEventQueueCount--;
+  }
+
+  MdsDeviceEventSnapshot &event = pendingMdsDeviceEventQueue[pendingMdsDeviceEventQueueTail];
+  event.standbyEpoch = standbyEpoch;
+  event.wakeupEpoch = wakeupEpoch;
+  copyEventCause(event.standbyCause, sizeof(event.standbyCause), standbyCause);
+  copyEventCause(event.wakeupCause, sizeof(event.wakeupCause), wakeupCause);
+
+  pendingMdsDeviceEventQueueTail = (pendingMdsDeviceEventQueueTail + 1) % MDS_DEVICE_EVENT_QUEUE_SIZE;
+  pendingMdsDeviceEventQueueCount++;
+}
+
+bool loadNextQueuedMdsDeviceEvent() {
+  if (pendingMdsDeviceEventStored) {
+    return true;
+  }
+
+  if (pendingMdsDeviceEventQueueCount == 0) {
+    return false;
+  }
+
+  copyMdsDeviceEventToActive(pendingMdsDeviceEventQueue[pendingMdsDeviceEventQueueHead]);
+  pendingMdsDeviceEventQueueHead = (pendingMdsDeviceEventQueueHead + 1) % MDS_DEVICE_EVENT_QUEUE_SIZE;
+  pendingMdsDeviceEventQueueCount--;
+  return true;
 }
 
 void IRAM_ATTR onTimer(){
@@ -180,18 +261,40 @@ void registerWakeupEvent(const char *eventCause) {
   copyEventCause(lastWakeupEventCause, sizeof(lastWakeupEventCause), eventCause);
 }
 
-void capturePendingMdsDeviceEvent(const char *eventCause) {
-  if (pendingMdsDeviceEventStored) {
-    return;
+bool isDeepSleepWakeup(esp_sleep_wakeup_cause_t wakeupReason) {
+  switch (wakeupReason) {
+    case ESP_SLEEP_WAKEUP_EXT0:
+    case ESP_SLEEP_WAKEUP_EXT1:
+    case ESP_SLEEP_WAKEUP_TIMER:
+    case ESP_SLEEP_WAKEUP_TOUCHPAD:
+    case ESP_SLEEP_WAKEUP_ULP:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool capturePendingMdsDeviceEvent(const char *eventCause) {
+  if (lastStandbyEventEpoch <= 0) {
+    DebugPrintln(2, "Skipping MDS wakeup event because no standby timestamp is available");
+    return false;
   }
 
   registerWakeupEvent(eventCause);
 
-  pendingMdsStandbyEventEpoch = lastStandbyEventEpoch;
-  pendingMdsWakeupEventEpoch = lastWakeupEventEpoch;
-  copyEventCause(pendingMdsStandbyEventCause, sizeof(pendingMdsStandbyEventCause), lastStandbyEventCause);
-  copyEventCause(pendingMdsWakeupEventCause, sizeof(pendingMdsWakeupEventCause), lastWakeupEventCause);
-  pendingMdsDeviceEventStored = true;
+  if (lastStandbyEventEpoch == lastSentMdsStandbyEventEpoch && lastWakeupEventEpoch == lastSentMdsWakeupEventEpoch) {
+    DebugPrintln(2, "Skipping duplicate MDS wakeup event");
+    return false;
+  }
+
+  if (isMdsDeviceEventAlreadyQueued(lastStandbyEventEpoch, lastWakeupEventEpoch)) {
+    DebugPrintln(2, "Skipping already queued MDS wakeup event");
+    return false;
+  }
+
+  enqueueMdsDeviceEvent(lastStandbyEventEpoch, lastWakeupEventEpoch, lastStandbyEventCause, lastWakeupEventCause);
+  currentWakeMdsEventCaptured = true;
+  return true;
 }
 
 void rebuildNetworkServersFromConfig() {
@@ -207,6 +310,10 @@ bool waitForValidSystemTime(uint32_t timeoutMs) {
     now = time(nullptr);
   }
   return now >= 1704067200;
+}
+
+bool hasValidWakeSleepTime() {
+  return time(nullptr) >= 1704067200; // 2024-01-01 00:00:00 UTC
 }
 
 void stopMdnsService() {
@@ -261,10 +368,6 @@ void initWiFiServicesOnce() {
   // Register WebSerial on the same server instance that is started below.
   WebSerial.begin(&httpServer);
 
-  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
-  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, PUT");
-  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "content-type");
-
   httpServer.begin();
   server.begin();
   Timer3.attach_ms(SendPeriod, sendNMEA);
@@ -281,11 +384,18 @@ void maybeSendDataViaWifi() {
 
   const unsigned long now = millis();
 
-  if (pendingWakeMdsEvent && now >= nextWakeMdsRetryMillis) {
+  if (pendingWakeMdsEvent && !currentWakeMdsEventCaptured && hasValidWakeSleepTime()) {
     capturePendingMdsDeviceEvent(pendingWakeReasonLabel.c_str());
+    pendingWakeMdsEvent = false;
+  }
+
+  if (now >= nextWakeMdsRetryMillis && loadNextQueuedMdsDeviceEvent()) {
     if (sendMdsDeviceEvent(actconf, pendingWakeReasonLabel.c_str())) {
-      pendingWakeMdsEvent = false;
+      lastSentMdsStandbyEventEpoch = pendingMdsStandbyEventEpoch;
+      lastSentMdsWakeupEventEpoch = pendingMdsWakeupEventEpoch;
       pendingMdsDeviceEventStored = false;
+      currentWakeMdsEventCaptured = false;
+      nextWakeMdsRetryMillis = 0;
     } else {
       nextWakeMdsRetryMillis = now + WAKE_MDS_RETRY_INTERVAL_MS;
     }
@@ -308,8 +418,15 @@ void disableWiFiForSleep() {
 void prepareForStandbySleep() {
   DebugPrintln(3, "Prepare standby sleep");
 
-  if (String(actconf.SendDataViaWifi) == "Yes" && WiFi.status() == WL_CONNECTED) {
+  if (pendingWakeMdsEvent && !currentWakeMdsEventCaptured && hasValidWakeSleepTime()) {
+    capturePendingMdsDeviceEvent(pendingWakeReasonLabel.c_str());
+    pendingWakeMdsEvent = false;
+  }
+
+  if (String(actconf.SendDataViaWifi) == "Yes" && hasValidWakeSleepTime()) {
     registerStandbyEvent("Sleep standby");
+  } else if (String(actconf.SendDataViaWifi) == "Yes") {
+    DebugPrintln(2, "Skipping standby timestamp because system time is not synchronized");
   }
 
   // Re-arm wake sources right before sleep so runtime config changes
@@ -971,17 +1088,33 @@ void state1(){
     runDownloadingFilesStatus = false;
   }
 
+  if (String(actconf.autoFirmwareUpdate) == "Yes" &&
+      WiFi.status() == WL_CONNECTED &&
+      !remoteOtaPending &&
+      !remoteOtaInProgress &&
+      millis() >= nextAutoFirmwareUpdateCheckMillis) {
+    String autoUpdateMessage;
+    const bool updateQueued = queueStableFirmwareUpdateIfNewer(autoUpdateMessage);
+    DebugPrintln(updateQueued ? 3 : 2, autoUpdateMessage);
+    nextAutoFirmwareUpdateCheckMillis = millis() + (updateQueued ? AUTO_FIRMWARE_UPDATE_INTERVAL_MS : AUTO_FIRMWARE_UPDATE_RETRY_MS);
+  }
+
   if (remoteOtaPending && WiFi.status() == WL_CONNECTED) {
     remoteOtaPending = false;
     remoteOtaInProgress = true;
+    remoteOtaRebootRequired = false;
 
     String remoteOtaError;
-    const bool remoteOtaSuccess = performRemoteOtaUpdate(remoteOtaUrl, false, remoteOtaError);
+    const bool remoteOtaSuccess = performRemoteOtaUpdate(remoteOtaUrl, false, remoteOtaError, remoteOtaSha256, remoteOtaUseMdsEndpoint);
     remoteOtaInProgress = false;
+    remoteOtaSha256 = "";
+    remoteOtaUseMdsEndpoint = false;
 
-    if (remoteOtaSuccess) {
+    if (remoteOtaSuccess && remoteOtaRebootRequired) {
       DebugPrintln(3, "Remote OTA update completed, reboot scheduled");
       reboot = true;
+    } else if (remoteOtaSuccess) {
+      DebugPrintln(3, "Remote OTA update completed without reboot requirement");
     } else {
       DebugPrintln(1, "Remote OTA update failed: " + remoteOtaError);
     }
@@ -1013,7 +1146,8 @@ void print_wakeup_reason(){
   wakeup_reason = esp_sleep_get_wakeup_cause();
   pendingWakeReasonCode = static_cast<int>(wakeup_reason);
   pendingWakeReasonLabel = wakeupReasonToLabel(wakeup_reason);
-  pendingWakeMdsEvent = true;
+  pendingWakeMdsEvent = isDeepSleepWakeup(wakeup_reason);
+  currentWakeMdsEventCaptured = false;
   nextWakeMdsRetryMillis = 0;
   switch(wakeup_reason)
   {
@@ -1026,13 +1160,74 @@ void print_wakeup_reason(){
   }
 }
 
+bool isPrintableConfigString(const char *value, size_t maxLength) {
+  if (value == nullptr) {
+    return false;
+  }
+
+  for (size_t i = 0; i < maxLength; i++) {
+    const unsigned char c = static_cast<unsigned char>(value[i]);
+    if (c == '\0') {
+      return true;
+    }
+    if (c < 32 || c > 126) {
+      return false;
+    }
+  }
+
+  return false;
+}
+
+bool isValidHttpsUrlString(const char *value, size_t maxLength) {
+  if (!isPrintableConfigString(value, maxLength)) {
+    return false;
+  }
+
+  String url = String(value);
+  url.trim();
+  return url.startsWith("https://") && url.length() > 8 && url.length() < maxLength;
+}
+
+void sanitizeNewConfigFields() {
+  bool changed = false;
+
+  if (!isValidHttpsUrlString(actconf.mdsOtaUrl, sizeof(actconf.mdsOtaUrl))) {
+    strncpy(actconf.mdsOtaUrl, defconf.mdsOtaUrl, sizeof(actconf.mdsOtaUrl) - 1);
+    actconf.mdsOtaUrl[sizeof(actconf.mdsOtaUrl) - 1] = '\0';
+    changed = true;
+    DebugPrintln(2, "Invalid MDS OTA endpoint reset to default");
+  }
+
+  if (!isPrintableConfigString(actconf.mdsOtaSecret, sizeof(actconf.mdsOtaSecret))) {
+    actconf.mdsOtaSecret[0] = '\0';
+    changed = true;
+    DebugPrintln(2, "Invalid MDS OTA secret cleared");
+  }
+
+  if (changed) {
+    saveEEPROMConfig(actconf);
+  }
+}
+
 void setup() {
   // Loading EEPROM configuration
   actconf = loadEEPROMConfig(); // Overload with old EEPROM configuration by start. It is necessarry for serspeed
 
-  if (actconf.valid == defconf.valid) {
+  if (actconf.valid == defconf.valid || actconf.valid == 13 || actconf.valid == 12 || actconf.valid == 11) {
     empty = 0;                  // Marker for configuration is present
-    if (!hasEEPROMConfigHeader()) {
+    if (actconf.valid != defconf.valid) {
+      actconf.valid = defconf.valid;
+      String autoUpdateDefault = String(defconf.autoFirmwareUpdate);
+      autoUpdateDefault.toCharArray(actconf.autoFirmwareUpdate, sizeof(actconf.autoFirmwareUpdate));
+      if (!isValidHttpsUrlString(actconf.mdsOtaUrl, sizeof(actconf.mdsOtaUrl))) {
+        String mdsOtaUrlDefault = String(defconf.mdsOtaUrl);
+        mdsOtaUrlDefault.toCharArray(actconf.mdsOtaUrl, sizeof(actconf.mdsOtaUrl));
+      }
+      if (!isPrintableConfigString(actconf.mdsOtaSecret, sizeof(actconf.mdsOtaSecret))) {
+        actconf.mdsOtaSecret[0] = '\0';
+      }
+      saveEEPROMConfig(actconf); // Migrate config layout while preserving existing settings.
+    } else if (!hasEEPROMConfigHeader()) {
       saveEEPROMConfig(actconf); // Migrate legacy raw layout to headered layout
     }
   }
@@ -1041,6 +1236,8 @@ void setup() {
     actconf = defconf;
     empty = 1;                  // Marker for configuration is missing
   }
+
+  sanitizeNewConfigFields();
 
   // Rebuild network servers with the persisted ports before first use.
   rebuildNetworkServersFromConfig();
@@ -1090,6 +1287,29 @@ void setup() {
   macAddress = ESP.getEfuseMac();
   macAddressTrunc = macAddress << 40;
   chipId = macAddressTrunc >> 40;
+
+  const bool hasGeneratedWebPassword = strncmp(actconf.password, "BM-", 3) == 0;
+  const bool hasLegacyDefaultWebPassword = strcmp(actconf.password, "12345678") == 0 || strcmp(actconf.password, "auto-generated") == 0;
+  if (hasLegacyDefaultWebPassword || hasGeneratedWebPassword || actconf.password[0] == '\0') {
+    strncpy(actconf.password, defconf.password, sizeof(actconf.password) - 1);
+    actconf.password[sizeof(actconf.password) - 1] = '\0';
+    actconf.crypt = 1;
+    saveEEPROMConfig(actconf);
+    DebugPrintln(2, "Default web password set. Username: admin, password: " + String(defconf.password));
+  } else if (actconf.crypt != 1) {
+    actconf.crypt = 1;
+    saveEEPROMConfig(actconf);
+    DebugPrintln(2, "Web authentication enabled for existing configuration");
+  }
+
+  const bool hasGeneratedApPassword = strncmp(actconf.spassword, "AP-", 3) == 0;
+  const bool hasLegacyDefaultApPassword = strcmp(actconf.spassword, "12345678") == 0 || strcmp(actconf.spassword, "auto-generated") == 0;
+  if (hasLegacyDefaultApPassword || hasGeneratedApPassword || actconf.spassword[0] == '\0') {
+    strncpy(actconf.spassword, defconf.spassword, sizeof(actconf.spassword) - 1);
+    actconf.spassword[sizeof(actconf.spassword) - 1] = '\0';
+    saveEEPROMConfig(actconf);
+    DebugPrintln(2, "Default access point password set: " + String(defconf.spassword));
+  }
 
   //##### Start OLED #####
   u8x8.clearDisplay();
@@ -1312,7 +1532,12 @@ void setup() {
   }
 
   if (!areWebFilesCurrent(actconf.fversion)) {
-    DebugPrintln(2, "Web files version mismatch detected. Use 'Get Files from Server' in the File Manager to update them.");
+    if (String(actconf.autoFirmwareUpdate) == "Yes") {
+      runDownloadingFiles = true;
+      DebugPrintln(2, "Web files version mismatch detected. Auto web file download scheduled.");
+    } else {
+      DebugPrintln(2, "Web files version mismatch detected. Use 'Get Files from Server' in the File Manager to update them.");
+    }
   }
 
   sendedLoraAfterSleepOneTime = false;
@@ -1324,7 +1549,11 @@ void loop() {
   }
 
   if ((alarm1 == false) && (String(actconf.standbyMode) == "On")) {
-    state0();
+    if (millis() < standbySleepBlockedUntilMillis) {
+      state1();
+    } else {
+      state0();
+    }
   }
   delay(20);
 }

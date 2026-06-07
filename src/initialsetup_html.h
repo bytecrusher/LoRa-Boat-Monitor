@@ -4,6 +4,7 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
     <link rel='stylesheet' type='text/css' href='/styles.css'>
     <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name='csrf-token' content='%csrfToken%'>
     <style type='text/css'>
         /* General text definitions */
         body {
@@ -201,6 +202,7 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
         <span id="updatefilesprogresstext"></span>
         <button type='button' style='margin: 20px' value='Format FS' onclick='getTable()'>Show Files</button>
         <form method='POST' action='/upload' enctype='multipart/form-data' id='upload_form' style="display: -webkit-inline-flex; margin-right: 20px;">
+            <input type='hidden' name='csrf' value='%csrfToken%'>
             <label for='upload' class='custom-file-upload' style='display: block;'>Upload single File</label>
             <input type='file' id='upload' name='upload' onchange='uploadConfig();'>
         </form>
@@ -295,6 +297,18 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
         }
     };
 
+    function csrfToken() {
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? meta.getAttribute('content') : '';
+    }
+
+    function addCsrfHeader(http) {
+        var token = csrfToken();
+        if (token) {
+            http.setRequestHeader('X-CSRF-Token', token);
+        }
+    }
+
     function refreshUpdateFilesInfo() {
         var http = null;
         if (window.XMLHttpRequest) {
@@ -379,6 +393,7 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
                 document.getElementById('loader').style.display = 'block';
                 document.getElementById('myDiv').style.display = 'none';
                 http.open("POST", "/formatfs", true);
+                addCsrfHeader(http);
                 http.onreadystatechange = FormatFSAusgeben;
                 http.send(null);
             }
@@ -422,6 +437,7 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
             renderUpdateFilesInfo({ busy: true, firmwareVersion: '%fversion%', storedWebFilesVersion: '', upToDate: false });
             startInterval();
             http.open("POST", "/updatefiles", true);
+            addCsrfHeader(http);
             http.onreadystatechange = UpdateFilesAusgeben;
             http.send(null);
         }

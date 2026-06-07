@@ -12,7 +12,6 @@
 extern String readFile2(fs::FS &fs, const char * path);
 extern String getheader(configData actconf);
 extern configData actconf;
-extern int resetESP;
 extern boolean runDownloadingFiles;
 extern boolean runDownloadingFilesStatus;
 extern size_t webFilesDownloadCompleted;
@@ -22,11 +21,15 @@ extern bool remoteOtaPending;
 extern bool remoteOtaInProgress;
 extern String remoteOtaUrl;
 extern String remoteOtaVersion;
+extern String remoteOtaSha256;
+extern bool remoteOtaUseMdsEndpoint;
+extern bool remoteOtaRebootRequired;
 extern String formatfs(fs::FS &fs);
 extern configData defconf;
 extern int slot;
 extern String getMyDirAsString(fs::FS &fs, const char * dirname, uint8_t levels);
 extern bool reboot;
+extern unsigned long standbySleepBlockedUntilMillis;
 extern int relayPin;
 extern String SendDataViaWifi[2];
 extern String usepassword[2];
@@ -65,6 +68,13 @@ extern uint32_t getLMICseqnoUp();
 void WebServerHandler();
 void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final);
 bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &errorMessage);
+bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &errorMessage, const String &expectedSha256);
+bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &errorMessage, const String &expectedSha256, bool useMdsOtaEndpoint);
+bool queueStableFirmwareUpdateIfNewer(String &message);
+String getCsrfToken();
+bool isCsrfTokenValid(AsyncWebServerRequest *request);
+bool requireCsrfToken(AsyncWebServerRequest *request);
+String maskSecret(const String &secret);
 void printProgress(size_t prg, size_t sz);
 
 #endif

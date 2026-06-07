@@ -40,6 +40,16 @@ H18 2095
 Checksum  ⸮
 */
 
+static void veDirectPause(uint32_t ms) {
+  const unsigned long start = millis();
+  while (millis() - start < ms) {
+    delay(1);
+    yield();
+  }
+}
+
+#define delay(ms) veDirectPause(ms)
+
 // Output data from LoRa monitor via VE.direct as fake device BMV-712 smart
 void sendVEdirect(){
   int i = 0;
@@ -472,4 +482,4 @@ void sendVEdirectBinary(){
   delay(1500);
 }
 
-
+#undef delay

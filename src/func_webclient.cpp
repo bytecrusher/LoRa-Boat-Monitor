@@ -3,11 +3,11 @@
 #include <WiFiClient.h> // WiFi lib for clients
 #include <WiFiClientSecure.h>
 
-#include <ESP32_FTPClient.h>
 #include "FS.h"
 #include <LittleFS.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <mbedtls/sha256.h>
 #include <time.h>
 #include <Configuration.h>
 #include "func_myFunctions.h"
@@ -27,6 +27,38 @@ extern char pendingMdsStandbyEventCause[24];
 extern char pendingMdsWakeupEventCause[24];
 
 namespace {
+const size_t MAX_WEB_FILE_DOWNLOAD_SIZE = 262144;
+
+String normalizeSha256(const String &sha256) {
+  String normalized = sha256;
+  normalized.trim();
+  normalized.toLowerCase();
+
+  if (normalized.length() != 64) {
+    return "";
+  }
+
+  for (size_t i = 0; i < normalized.length(); i++) {
+    const char c = normalized[i];
+    if (!isxdigit(c)) {
+      return "";
+    }
+  }
+
+  return normalized;
+}
+
+String sha256ToHex(const uint8_t digest[32]) {
+  static const char hexChars[] = "0123456789abcdef";
+  String hex;
+  hex.reserve(64);
+  for (size_t i = 0; i < 32; i++) {
+    hex += hexChars[(digest[i] >> 4) & 0x0F];
+    hex += hexChars[digest[i] & 0x0F];
+  }
+  return hex;
+}
+
 String normalizeFirmwareUpdateBaseUrl(const char *configuredValue)
 {
   String normalized = String(configuredValue == nullptr ? "" : configuredValue);
@@ -48,6 +80,69 @@ String normalizeFirmwareUpdateBaseUrl(const char *configuredValue)
   }
 
   return "https://" + normalized + suffix;
+}
+
+bool fetchTextFromUpdateServer(const String &url, String &payload) {
+  WiFiClientSecure client;
+  HTTPClient http;
+
+  client.setCACert(reinterpret_cast<const char*>(cert_cacert_pem_start));
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.setTimeout(10000);
+
+  if (!http.begin(client, url)) {
+    DebugPrintln(1, "- failed to initialize HTTPS manifest request");
+    return false;
+  }
+
+  const int httpCode = http.GET();
+  if (httpCode != HTTP_CODE_OK) {
+    DebugPrint(1, "Manifest request failed: ");
+    DebugPrintln(1, httpCode);
+    http.end();
+    return false;
+  }
+
+  payload = http.getString();
+  payload.trim();
+  http.end();
+  return payload.length() > 0;
+}
+
+bool fetchFirmwareManifest(JsonDocument &manifest) {
+  const String baseUrl = normalizeFirmwareUpdateBaseUrl(actconf.firmwareUpdateUrl);
+  const String manifestUrl = baseUrl + "/firmware-manifest.json";
+  String manifestPayload;
+  if (!fetchTextFromUpdateServer(manifestUrl, manifestPayload)) {
+    return false;
+  }
+
+  DeserializationError error = deserializeJson(manifest, manifestPayload);
+  if (error) {
+    DebugPrint(1, "Firmware manifest JSON error: ");
+    DebugPrintln(1, error.c_str());
+    return false;
+  }
+
+  return true;
+}
+
+String getExpectedWebFileSha256(JsonDocument &manifest, const char *fversion, const char *fileName) {
+  const char *channels[] = {"stable", "beta"};
+  for (const char *channel : channels) {
+    JsonObject entry = manifest[channel].as<JsonObject>();
+    if (entry.isNull()) {
+      continue;
+    }
+    const char *version = entry["version"] | "";
+    if (String(version) != String(fversion)) {
+      continue;
+    }
+    const char *sha256 = entry["webFileHashes"][fileName] | "";
+    return normalizeSha256(String(sha256));
+  }
+
+  return "";
 }
 
 String normalizeSecureUrl(const String &configuredValue)
@@ -162,6 +257,13 @@ bool postMdsPayload(configData actconf, JsonDocument &docpayload, const char *co
 
   String requestBody;
   serializeJson(docpayload, requestBody);
+  JsonDocument debugPayload;
+  deserializeJson(debugPayload, requestBody);
+  if (debugPayload["board"]["apiKey"].is<String>()) {
+    debugPayload["board"]["apiKey"] = "***hidden***";
+  }
+  String debugRequestBody;
+  serializeJson(debugPayload, debugRequestBody);
 
   auto handleMdsResponse = [&](int httpResponseCode, const String &responseBody) -> bool {
     DebugPrint(3, "HTTP response: ");
@@ -212,7 +314,7 @@ bool postMdsPayload(configData actconf, JsonDocument &docpayload, const char *co
   DebugPrintln(3, "MDS host resolved to: " + resolvedIp.toString());
 
   DebugPrint(3, "HTTP POST payload: ");
-  DebugPrintln(3, requestBody);
+  DebugPrintln(3, debugRequestBody.length() > 0 ? debugRequestBody : String("***hidden***"));
 
   if (!client.connect(resolvedIp, 443, host.c_str(), reinterpret_cast<const char*>(cert_cacert_pem_start), nullptr, nullptr)) {
     char errorBuffer[128] = {0};
@@ -311,11 +413,7 @@ bool DownloadFilesFromWeb()
     "lora.html",
     "index.html",
     "index.js",
-    "md5.js",
-    "md5.min.js",
-    "md5.min.js.map",
     "lora.js",
-    "password.html",
     "restart.html",
     "restart.js",
     "sensorv.html",
@@ -325,6 +423,12 @@ bool DownloadFilesFromWeb()
     "settings.js"
   };
 
+  JsonDocument manifest;
+  if (!fetchFirmwareManifest(manifest)) {
+    DebugPrintln(1, "Unable to fetch firmware manifest for web file hash validation");
+    return false;
+  }
+
   webFilesDownloadCompleted = 0;
   webFilesDownloadTotal = sizeof(webFiles) / sizeof(webFiles[0]);
   webFilesDownloadCurrentName = "";
@@ -332,7 +436,14 @@ bool DownloadFilesFromWeb()
   bool allFilesUpdated = true;
   for (size_t i = 0; i < webFilesDownloadTotal; ++i) {
     webFilesDownloadCurrentName = String(webFiles[i]);
-    allFilesUpdated = DownloadFile(webFiles[i], fversion) && allFilesUpdated;
+    const String expectedSha256 = getExpectedWebFileSha256(manifest, fversion, webFiles[i]);
+    if (expectedSha256.length() == 0) {
+      DebugPrint(1, "Missing manifest hash for web file: ");
+      DebugPrintln(1, webFiles[i]);
+      allFilesUpdated = false;
+    } else {
+      allFilesUpdated = DownloadFile(webFiles[i], fversion, expectedSha256) && allFilesUpdated;
+    }
     webFilesDownloadCompleted = i + 1;
   }
 
@@ -345,9 +456,15 @@ bool DownloadFilesFromWeb()
   return allFilesUpdated;
 }
 
-bool DownloadFile(const char *fileName, const char *fversion)
+bool DownloadFile(const char *fileName, const char *fversion, const String &expectedSha256)
 {
-  File targetFile;
+  const String normalizedExpectedSha256 = normalizeSha256(expectedSha256);
+  if (normalizedExpectedSha256.length() == 0) {
+    DebugPrint(1, "Refusing web file download without valid SHA256: ");
+    DebugPrintln(1, fileName);
+    return false;
+  }
+
   const String baseUrl = normalizeFirmwareUpdateBaseUrl(actconf.firmwareUpdateUrl);
   const String myurl = baseUrl + "/" + String(fversion) + "/" + String(fileName);
   WiFiClientSecure client;
@@ -373,26 +490,94 @@ bool DownloadFile(const char *fileName, const char *fversion)
     Serial.printf("[HTTP] GET... code: %d\n", httpCode);
 
     if(httpCode == HTTP_CODE_OK) {
-      const String targetPath = "/" + String(fileName);
-      if (LittleFS.exists(targetPath)) {
-        LittleFS.remove(targetPath);
+      const int contentLength = http.getSize();
+      if (contentLength < 0 || static_cast<size_t>(contentLength) > MAX_WEB_FILE_DOWNLOAD_SIZE) {
+        DebugPrintln(1, "- invalid web file size");
+        http.end();
+        return false;
       }
 
-      targetFile = LittleFS.open(targetPath.c_str(), FILE_WRITE);
+      const String targetPath = "/" + String(fileName);
+      const String tempPath = targetPath + ".tmp";
+      if (LittleFS.exists(tempPath)) {
+        LittleFS.remove(tempPath);
+      }
+
+      File targetFile = LittleFS.open(tempPath.c_str(), FILE_WRITE);
       if (!targetFile) {
         DebugPrintln(1, "- failed to open file for writing");
         http.end();
         return false;
       }
 
-      const int bytesWritten = http.writeToStream(&targetFile);
+      WiFiClient *stream = http.getStreamPtr();
+      uint8_t buffer[1024];
+      size_t written = 0;
+      mbedtls_sha256_context shaContext;
+      mbedtls_sha256_init(&shaContext);
+      mbedtls_sha256_starts_ret(&shaContext, 0);
+
+      while (http.connected() && written < static_cast<size_t>(contentLength)) {
+        const size_t availableBytes = stream->available();
+        if (availableBytes == 0) {
+          delay(1);
+          continue;
+        }
+
+        const size_t remainingBytes = static_cast<size_t>(contentLength) - written;
+        const size_t toRead = min(sizeof(buffer), min(availableBytes, remainingBytes));
+        const size_t bytesRead = stream->readBytes(buffer, toRead);
+        if (bytesRead == 0) {
+          delay(1);
+          continue;
+        }
+
+        if (targetFile.write(buffer, bytesRead) != bytesRead) {
+          DebugPrintln(1, "- failed to write downloaded file");
+          targetFile.close();
+          mbedtls_sha256_free(&shaContext);
+          LittleFS.remove(tempPath);
+          http.end();
+          return false;
+        }
+
+        mbedtls_sha256_update_ret(&shaContext, buffer, bytesRead);
+        written += bytesRead;
+      }
+
       targetFile.close();
 
-      if (bytesWritten < 0) {
-        DebugPrintln(1, "- failed to write downloaded file");
-      } else {
-        downloadSuccess = true;
+      uint8_t digest[32];
+      mbedtls_sha256_finish_ret(&shaContext, digest);
+      mbedtls_sha256_free(&shaContext);
+
+      if (written != static_cast<size_t>(contentLength)) {
+        DebugPrintln(1, "- incomplete web file download");
+        LittleFS.remove(tempPath);
+        http.end();
+        return false;
       }
+
+      const String actualSha256 = sha256ToHex(digest);
+      if (actualSha256 != normalizedExpectedSha256) {
+        DebugPrint(1, "Web file checksum mismatch: ");
+        DebugPrintln(1, fileName);
+        LittleFS.remove(tempPath);
+        http.end();
+        return false;
+      }
+
+      if (LittleFS.exists(targetPath)) {
+        LittleFS.remove(targetPath);
+      }
+      if (!LittleFS.rename(tempPath, targetPath)) {
+        DebugPrintln(1, "- failed to install verified web file");
+        LittleFS.remove(tempPath);
+        http.end();
+        return false;
+      }
+
+      downloadSuccess = true;
     } else if (httpCode == HTTP_CODE_NOT_FOUND) {
       DebugPrintln(1, "- 404 page not found");
     }

@@ -8,6 +8,7 @@
     <link rel='stylesheet' type='text/css' href='/settings-page.css'>
     <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
     <meta name=viewport content='width=device-width, initial-scale=1'>
+    <meta name='csrf-token' content='%csrfToken%'>
     <script>
         window.settingsSelections = {
             crypt: %crypt%,
@@ -38,6 +39,7 @@
             cssStyle: %cssStyle%,
             OledDisplayRotation: %OledDisplayRotation%,
             SendDataViaWifi: %SendDataViaWifi%,
+            autoFirmwareUpdate: %autoFirmwareUpdate%,
             MdsSensorIdBattery: %MdsSensorIdBattery%,
             MdsSensorIdTanks: %MdsSensorIdTanks%,
             MdsSensorIdStatus: %MdsSensorIdStatus%,
@@ -66,10 +68,8 @@
                 <div class="row">
                     <div class="firstColumn">Password Protect Settings Pages</div>
                     <div class="secondColumn">
-                        <select name='usepassword' size='1'>
-                            <option value='0'>Off</option>
-                            <option value='1'>On</option>
-                        </select>
+                        <input type='hidden' name='usepassword' value='1'>
+                        <input type='text' value='On (required)' disabled>
                     </div>
                 </div>
                 <div class="row">
@@ -78,7 +78,7 @@
                 </div>
                 <div class="row">
                     <div class="firstColumn">Web Login Password</div>
-                    <div class="secondColumn"><input type='text' required name='pagepasswd' size='20' value='%password%' maxlength='20' onchange='check_passwd("pagepasswd")'></div>
+                    <div class="secondColumn"><input type='password' name='pagepasswd' size='20' value='' placeholder='%passwordMasked%' maxlength='20' onchange='check_passwd("pagepasswd")'></div>
                 </div>
             </div>
         </div></div>
@@ -175,7 +175,7 @@
                 <div class="row">
                     <div class="firstColumn"><span class="labelText">MDS API Key <span class="infoBadge" tabindex="0">i<span class="infoPopover">Der API-Key wird beim Upload im JSON an <code>board.apiKey</code> gesendet. In den Geraete-Statusdaten wird er nicht mehr im Klartext zurueckgegeben.</span></span></span></div>
                     <div class="secondColumn">
-                        <input type='text' required name='MdsApiKey' size='20' value='%MdsApiKey%' maxlength='30'>
+                        <input type='password' name='MdsApiKey' size='20' value='' placeholder='%MdsApiKeyMasked%' maxlength='30'>
                     </div>
                 </div>
 
@@ -260,7 +260,7 @@
                 <div class="row">
                     <div class="firstColumn">Preferred Wi-Fi Password 1</div>
                     <div class="secondColumn">
-                        <input type='text' required name='cpasswd1' size='20' value='%cpassword1%' maxlength='30' onchange='check_passwd("cpasswd1")'>
+                        <input type='password' name='cpasswd1' size='20' value='' placeholder='%cpassword1Masked%' maxlength='30' onchange='check_passwd("cpasswd1")'>
                     </div>
                 </div>
 
@@ -274,7 +274,7 @@
                 <div class="row">
                     <div class="firstColumn">Preferred Wi-Fi Password 2</div>
                     <div class="secondColumn">
-                        <input type='text' required name='cpasswd2' size='20' value='%cpassword2%' maxlength='30' onchange='check_passwd("cpasswd2")'>
+                        <input type='password' name='cpasswd2' size='20' value='' placeholder='%cpassword2Masked%' maxlength='30' onchange='check_passwd("cpasswd2")'>
                     </div>
                 </div>
 
@@ -288,7 +288,7 @@
                 <div class="row">
                     <div class="firstColumn">Preferred Wi-Fi Password 3</div>
                     <div class="secondColumn">
-                        <input type='text' required name='cpasswd3' size='20' value='%cpassword3%' maxlength='30' onchange='check_passwd("cpasswd3")'>
+                        <input type='password' name='cpasswd3' size='20' value='' placeholder='%cpassword3Masked%' maxlength='30' onchange='check_passwd("cpasswd3")'>
                     </div>
                 </div>
 
@@ -325,7 +325,7 @@
                 <div class="row">
                     <div class="firstColumn">Device Hotspot Password</div>
                     <div class="secondColumn">
-                        <input type='text' required name='spasswd' size='20' value='%spassword%' maxlength='30' onchange='check_passwd("spasswd")'>
+                        <input type='password' name='spasswd' size='20' value='' placeholder='%spasswordMasked%' maxlength='30' onchange='check_passwd("spasswd")'>
                     </div>
                 </div>
 
@@ -360,6 +360,27 @@
                         <input type='text' required name='firmwareUpdateUrl' size='40' value='%firmwareUpdateUrl%' maxlength='120' onchange=''>
                     </div>
                 </div>
+                <div class="row">
+                    <div class="firstColumn"><span class="labelText">Auto Stable Firmware Update <span class="infoBadge" tabindex="0">i<span class="infoPopover">Wenn aktiv, prueft das Geraet bei WLAN-Verbindung das Server-Manifest und installiert nur neuere Stable-Firmware automatisch. Beta-Firmware bleibt manuell.</span></span></span></div>
+                    <div class="secondColumn">
+                        <select name='autoFirmwareUpdate' size='1'>
+                            <option value='Yes'>On</option>
+                            <option value='No'>Off</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="firstColumn"><span class="labelText">MDS OTA Endpoint <span class="infoBadge" tabindex="0">i<span class="infoPopover">Optionaler MDS-Endpunkt fuer Firmware-Pull. Beispiel: <code>https://mds-git.derguntmar.de/ota/getupdate.php</code>.</span></span></span></div>
+                    <div class="secondColumn">
+                        <input type='text' name='mdsOtaUrl' size='50' value='%mdsOtaUrl%' maxlength='99' onchange='check_mds_ota_url("mdsOtaUrl")'>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="firstColumn"><span class="labelText">MDS OTA Secret <span class="infoBadge" tabindex="0">i<span class="infoPopover">Shared Secret fuer den Header <code>X-MDS-OTA-Secret</code>. Leer lassen, um den gespeicherten Wert beizubehalten.</span></span></span></div>
+                    <div class="secondColumn">
+                        <input type='password' name='mdsOtaSecret' size='30' value='' placeholder='%mdsOtaSecretMasked%' maxlength='64'>
+                    </div>
+                </div>
 
             </div>
         </div></div>
@@ -392,14 +413,14 @@
                 <div class="row">
                     <div class="firstColumn">LoRa Network Session Key</div>
                     <div class="secondColumn">
-                        <input type='text' required name='nskey' size='40' value='%nskey%' maxlength='40' onchange='check_key("nskey")'>
+                        <input type='password' name='nskey' size='40' value='' placeholder='%nskeyMasked%' maxlength='32' onchange='check_key("nskey")'>
                     </div>
                 </div>
 
                 <div class="row">
                     <div class="firstColumn">LoRa Application Session Key</div>
                     <div class="secondColumn">
-                        <input type='text' required name='appkey' size='40' value='%appkey%' maxlength='40' onchange='check_key("appkey")'>
+                        <input type='password' name='appkey' size='40' value='' placeholder='%appkeyMasked%' maxlength='32' onchange='check_key("appkey")'>
                     </div>
                 </div>
 
@@ -753,12 +774,13 @@
             <button type='button' id="backToOverviewButton">Back to Overview</button>
             <button type='button' id="logoutBtn" class="initially-hidden">Logout</button>
         </div>
-        <input type='hidden' required name='password' size='20' value='%userpassword%' maxlength='20'>
+        <input type='hidden' name='csrf' value='%csrfToken%'>
     </form>
     <br>
     
     <div class="settings-panel"><div class="mydiv">
-        <form id='form4' action='/reseteeprom'>
+        <form id='form4' action='/reseteeprom' method='post'>
+            <input type='hidden' name='csrf' value='%csrfToken%'>
             <div class="settings-actions">
             <button type="button" id="downloadConfigButton">Download Config</button>
             <button type="button" id="restoreConfigBackupButton" class="button-spacing">Restore OTA Backup</button>

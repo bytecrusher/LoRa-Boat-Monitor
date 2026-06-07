@@ -1,11 +1,6 @@
 #ifndef Definitions_h
 #define Definitions_h
 
-// Passwort settings
-String transactionID = String(random(0, 99999999));// Generate a random transaction ID by initialisation
-String raw = "";                    // Uncrypted raw data
-String md5crypt = "";               // Crypted data
-
 //MAC Address
 uint64_t macAddress;                // MAC address equivalent to Chip-ID
 uint64_t macAddressTrunc;           // Truncated MAC address
@@ -193,7 +188,6 @@ bool loraEvent_activ = false;
 
 // Style parameter
 int style = 1;                    // Toggle display between day (1) und night (0) illumination
-int resetESP = 0;                 // Global marker for reset the ESP32
 
 // Selection arrays (list of arguments in HTTP get response for index calculation)
 String usepassword[2] = {"0", "1"};

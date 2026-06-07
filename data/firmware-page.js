@@ -28,12 +28,38 @@ function firmwareDelay(milliseconds) {
     });
 }
 
+function firmwareCsrfToken() {
+    if (typeof csrfToken === 'function') {
+        return csrfToken();
+    }
+
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+}
+
+function firmwareWithCsrf(options) {
+    const requestOptions = options || {};
+    const method = (requestOptions.method || 'GET').toUpperCase();
+    if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+        return requestOptions;
+    }
+
+    const token = firmwareCsrfToken();
+    if (!token) {
+        return requestOptions;
+    }
+
+    requestOptions.headers = requestOptions.headers || {};
+    requestOptions.headers['X-CSRF-Token'] = token;
+    return requestOptions;
+}
+
 async function firmwareRequest(url, options) {
     if (typeof request === 'function') {
         return request(url, options);
     }
 
-    const response = await fetch(url, options || {});
+    const response = await fetch(url, firmwareWithCsrf(options));
     const text = await response.text();
     let json = null;
     if (text) {
@@ -75,6 +101,7 @@ function otaElements() {
         localInstallButton: firmwareById('localFirmwareButton'),
         stableInstallButton: firmwareById('stableFirmwareButton'),
         betaInstallButton: firmwareById('betaFirmwareButton'),
+        mdsOtaInstallButton: firmwareById('mdsOtaFirmwareButton'),
         mdsTestButton: firmwareById('mdsTestButton'),
         backButton: firmwareById('backToOverviewButton')
     };
@@ -242,8 +269,10 @@ function uploadLocalFirmware() {
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
     formData.append('firmware', file, file.name);
+    formData.append('csrf', firmwareCsrfToken());
 
     xhr.open('POST', '/doUpdate', true);
+    xhr.setRequestHeader('X-CSRF-Token', firmwareCsrfToken());
     xhr.upload.onprogress = function (event) {
         if (!event.lengthComputable) {
             return;
@@ -337,6 +366,11 @@ document.addEventListener('DOMContentLoaded', function () {
     if (elements.betaInstallButton) {
         elements.betaInstallButton.addEventListener('click', function () {
             startRemoteUpdate('beta', 'Please download your config before updating the firmware. The device will download and install the beta firmware. Continue?');
+        });
+    }
+    if (elements.mdsOtaInstallButton) {
+        elements.mdsOtaInstallButton.addEventListener('click', function () {
+            startRemoteUpdate('mds', 'The device will ask MDS for a firmware update using the configured OTA secret. Continue?');
         });
     }
     if (elements.mdsTestButton) {

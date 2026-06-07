@@ -1,5 +1,6 @@
 #include <WebSerial.h>
 #include <Configuration.h>
+#include "func_webServerHandler.h"
 
 extern configData actconf;
 
@@ -11,6 +12,7 @@ const char webserial_html[] PROGMEM = R"rawliteral(
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="%csrfToken%">
   <title>WebSerial</title>
   <style>
     body { font-family: monospace; background: #111; color: #f4f4f4; margin: 0; padding: 1rem; }
@@ -32,6 +34,7 @@ const char webserial_html[] PROGMEM = R"rawliteral(
   <script>
     const log = document.getElementById('log');
     const status = document.getElementById('status');
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
     const append = (text) => {
       log.textContent += text;
       log.scrollTop = log.scrollHeight;
@@ -52,7 +55,15 @@ const char webserial_html[] PROGMEM = R"rawliteral(
       const msg = document.getElementById('msg');
       const value = msg.value.trim();
       if (!value) return;
-      await fetch('/webserial/send?msg=' + encodeURIComponent(value));
+      const body = new URLSearchParams({ msg: value });
+      await fetch('/webserial/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-CSRF-Token': csrfToken
+        },
+        body
+      });
       msg.value = '';
     });
   </script>
@@ -68,6 +79,9 @@ void WebSerialClass::begin(AsyncWebServer *server) {
 
   initialized_ = true;
   events_ = new AsyncEventSource("/webserial/events");
+  if (actconf.crypt == 1) {
+    events_->setAuthentication(actconf.username, actconf.password);
+  }
   events_->onConnect([this](AsyncEventSourceClient *client) {
     client->send(logBuffer_.c_str(), "history", millis());
     client->send((actconf.WebSerialDebug == 1) ? "WebSerial Debug ist aktiv." : "WebSerial Debug ist deaktiviert. Bitte in den Einstellungen aktivieren.", "status", millis());
@@ -78,7 +92,9 @@ void WebSerialClass::begin(AsyncWebServer *server) {
     if (actconf.crypt == 1 && !request->authenticate(actconf.username, actconf.password)) {
       return request->requestAuthentication();
     }
-    request->send_P(200, "text/html", webserial_html);
+    String content = FPSTR(webserial_html);
+    content.replace("%csrfToken%", getCsrfToken());
+    request->send(200, "text/html", content);
   });
 
   server->on("/webserial/", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -89,19 +105,28 @@ void WebSerialClass::begin(AsyncWebServer *server) {
     request->redirect("/webserial");
   });
 
-  server->on("/webserial/send", HTTP_GET, [this](AsyncWebServerRequest *request) {
+  server->on("/webserial/send", HTTP_POST, [this](AsyncWebServerRequest *request) {
     if (actconf.crypt == 1 && !request->authenticate(actconf.username, actconf.password)) {
       return request->requestAuthentication();
     }
 
-    if (request->hasParam("msg")) {
-      String msg = request->getParam("msg")->value();
+    if (!isCsrfTokenValid(request)) {
+      request->send(403, "text/plain", "Invalid CSRF token");
+      return;
+    }
+
+    if (request->hasParam("msg", true)) {
+      String msg = request->getParam("msg", true)->value();
       if (callback_) {
         callback_(reinterpret_cast<uint8_t *>(msg.begin()), msg.length());
       }
       append("> " + msg + "\n");
     }
     request->send(200, "text/plain", "OK");
+  });
+
+  server->on("/webserial/send", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(405, "text/plain", "Use POST");
   });
 }
 

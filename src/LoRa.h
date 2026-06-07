@@ -587,30 +587,6 @@ void onEvent(ev_t ev) {
       break;
     case EV_JOINED:
       DebugPrintln(3, "EV_JOINED");
-      {
-              u4_t netid = 0;
-              devaddr_t devaddr = 0;
-              u1_t nwkKey[16];
-              u1_t artKey[16];
-              LMIC_getSessionKeys(&netid, &devaddr, nwkKey, artKey);
-              DebugPrint(3, "netid: ");
-              DebugPrint(3, netid, DEC);
-              DebugPrint(3, "devaddr: ");
-              DebugPrint(3, devaddr, HEX);
-              DebugPrint(3, "artKey: ");
-              for (size_t i = 0; i < sizeof(artKey); ++i)
-              {
-                DebugPrint(3, artKey[i], HEX);
-                DebugPrint(3, "");
-              }
-              DebugPrintln(3, "");
-              DebugPrint(3, "nwkKey: ");
-              for (size_t i = 0; i < sizeof(nwkKey); ++i)
-              {
-                DebugPrint(3, nwkKey[i], HEX);
-              }
-              DebugPrintln(3, "");
-          }
           // Disable link check validation (automatically enabled
           // during join, but because slow data rates change max TX
           // size, we don't use it in this example.

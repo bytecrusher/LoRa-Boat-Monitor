@@ -10,3 +10,4 @@ firmware 3.bin
 firmware 4.bin
 .env
 scripts/__pycache__/
+cert/cacert 2.pem

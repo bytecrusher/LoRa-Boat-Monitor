@@ -1,5 +1,5 @@
 /* Button style and color */
-button,input::file-selector-button, .custom-file-upload {
+button,input::file-selector-button, .custom-file-upload, .action-grid a {
     font-family: Arial, Helvetica, sans-serif;
     font-size: 14px;
     color: #000000;

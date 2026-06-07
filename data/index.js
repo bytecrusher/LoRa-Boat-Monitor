@@ -14,5 +14,12 @@ function updateIndexPage(myObj) {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+    var webserialButton = document.getElementById('webserialRow');
+    if (webserialButton) {
+        webserialButton.addEventListener('click', function () {
+            navigateTo('/webserial', '_blank');
+        });
+    }
+
     fetchJson('/staticdata.json', updateIndexPage);
 });

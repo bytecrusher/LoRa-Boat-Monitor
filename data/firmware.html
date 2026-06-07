@@ -4,6 +4,7 @@
 <head>
   <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
   <meta name=viewport content='width=device-width, initial-scale=1'>
+  <meta name='csrf-token' content='%csrfToken%'>
   <title>Firmware Update - %devname%</title>
   <link rel='stylesheet' type='text/css' href='/styles.css'>
   <link rel='stylesheet' type='text/css' href='/common.css'>
@@ -15,49 +16,68 @@
   <div id="myDiv" class="animate-bottom" style="display:block;">
     <h3>Firmware Update</h3>
     <div id="otaProgressWrapper" style="display:none; margin-bottom: 16px;">
-      <div style="width:100%; height:8px; background:#e1e4e8; border-radius:4px; overflow:hidden;">
-        <div id="otaProgressBar" style="height:100%; width:0; background:#337ab7; transition: width 0.2s ease;"></div>
+      <div class="progress-track">
+        <div id="otaProgressBar" class="progress-fill"></div>
       </div>
-      <div id="otaProgressText" style="margin-top:8px; font-size: 14px;"></div>
+      <div id="otaProgressText" class="progress-text"></div>
     </div>
-    <form name='upform' action='/doUpdate' method='post' enctype='multipart/form-data'>Install a local firmware file
-      (.bin or .bmb):
-      <p>
+    <form class="page-section" name='upform' action='/doUpdate' method='post' enctype='multipart/form-data'>
+      <h4>Install a local firmware file</h4>
+      <input type='hidden' name='csrf' value='%csrfToken%'>
+      <div class="form-stack">
+        <span class="muted-text">Allowed file types: .bin or .bmb</span>
         <input type='file' required name='image' id='localFirmwareFile'>
-        <input type='text' name='md5' size='40' value='' maxlength='40'>
-      <p>
+        <input type='text' name='md5' size='40' value='' maxlength='40' placeholder='Optional MD5 checksum'>
         <button type='button' id='localFirmwareButton' disabled>Install Local Firmware</button>
+      </div>
     </form>
-    <hr>
-    <form name='upform1' action='/doUpdate' method='post' enctype='multipart/form-data'>Or install the current firmware from the configured update server:
-      <p>
-        <input type='text' name='firmware' size='50' value='%stableFirmwareUrl%' readonly> Version:
+    <form class="page-section" name='upform1' action='/doUpdate' method='post' enctype='multipart/form-data'>
+      <h4>Install current firmware from update server</h4>
+      <input type='hidden' name='csrf' value='%csrfToken%'>
+      <div class="form-stack">
+      <div class="form-row-inline">
+        <input class="readonly-field" type='text' name='firmware' size='50' value='%stableFirmwareUrl%' readonly>
+        <span>Version:</span>
         <input type='text' name='version' size='8' value='%stableVersion%' maxlength='20' readonly>
-      <p>
-        <font size='2'><data>%stableServerAvailable%</data></font>
-      <p>
-        <font size='2'><data>Stored host: %configuredFirmwareUpdateUrl%</data></font><br>
-        <font size='2'><data>Resolved base URL: %configuredFirmwareBaseUrl%</data></font><br>
-        <font size='2'><data>Stable status: %stableStatusDetail%</data></font>
+      </div>
+        <span class="status-text">%stableServerAvailable%</span>
+        <span class="status-text muted-text">Stored host: %configuredFirmwareUpdateUrl%</span>
+        <span class="status-text muted-text">Resolved base URL: %configuredFirmwareBaseUrl%</span>
+        <span class="status-text muted-text">Stable status: %stableStatusDetail%</span>
+        <button type='button' id='stableFirmwareButton'>Install Current Server Firmware</button>
+      </div>
     </form>
-    <button type='button' id='stableFirmwareButton'>Install Current Server Firmware</button>
-    <hr>
 
-    <form name='upform2' action='/doUpdate' method='post' enctype='multipart/form-data'>Beta firmware from the configured update server
-      <p>
-        <input type='text' name='firmware2' size='50' value='%betaFirmwareUrl%' readonly> Version:
+    <form class="page-section" name='upform2' action='/doUpdate' method='post' enctype='multipart/form-data'>
+      <h4>Beta firmware from update server</h4>
+      <input type='hidden' name='csrf' value='%csrfToken%'>
+      <div class="form-stack">
+      <div class="form-row-inline">
+        <input class="readonly-field" type='text' name='firmware2' size='50' value='%betaFirmwareUrl%' readonly>
+        <span>Version:</span>
         <input type='text' name='version2' size='8' value='%version2%' maxlength='20' readonly> ( %serverAvailable% )
-      <p>
-        <font size='2'><data>The device downloads this file directly. No browser cross-origin request is used.</data></font><br>
-        <font size='2'><data>Beta status: %betaStatusDetail%</data></font>
+      </div>
+        <span class="status-text muted-text">The device downloads this file directly. No browser cross-origin request is used.</span>
+        <span class="status-text muted-text">Beta status: %betaStatusDetail%</span>
+        <button type='button' id='betaFirmwareButton'>Install Beta Firmware</button>
+      </div>
     </form>
-    <button type='button' id='betaFirmwareButton'>Install Beta Firmware</button>
-    <hr>
+
+    <form class="page-section" name='upform3' action='/doUpdate' method='post' enctype='multipart/form-data'>
+      <h4>MDS OTA firmware from MaritimeDataServer</h4>
+      <input type='hidden' name='csrf' value='%csrfToken%'>
+      <div class="form-stack">
+        <input class="readonly-field" type='text' name='mdsOtaUrl' size='50' value='%mdsOtaUrl%' readonly>
+        <span class="status-text muted-text">The device asks MDS for an update and sends the configured OTA secret as a request header.</span>
+        <span class="status-text muted-text">MDS OTA Secret: %mdsOtaSecretStatus%</span>
+        <button type='button' id='mdsOtaFirmwareButton'>Install MDS OTA Firmware</button>
+      </div>
+    </form>
+    <div class="page-section">
     <button type='button' id='mdsTestButton'>Test MDS Upload</button>
-    <hr>
-    <b>Info:</b> The device restarts automatically after a successful update.
-    <hr>
+    <p><b>Info:</b> The device restarts automatically after a successful update.</p>
     <button type='button' id='backToOverviewButton'>Back to Overview</button>
+    </div>
   </div>
   <script src='/common.js' type='text/javascript'></script>
   <script src='/firmware-page.js' type='text/javascript'></script>
