@@ -8,6 +8,7 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <mbedtls/sha256.h>
+#include <esp_sleep.h>
 #include <time.h>
 #include <Configuration.h>
 #include "func_myFunctions.h"
@@ -39,7 +40,20 @@ const char MDS_GIT_CERT_FINGERPRINT[] = "BB:B9:F7:5F:FD:F1:DB:03:EE:DC:3E:DF:46:
 
 bool isStandbyEnabledForMds(const configData &config)
 {
-  return String(config.standbyMode) == "On";
+  if (String(config.standbyMode) != "On") {
+    return false;
+  }
+
+  const esp_sleep_wakeup_cause_t wakeupCause = esp_sleep_get_wakeup_cause();
+  const bool wakeupCycleActive =
+      wakeupCause == ESP_SLEEP_WAKEUP_EXT0 ||
+      wakeupCause == ESP_SLEEP_WAKEUP_EXT1 ||
+      wakeupCause == ESP_SLEEP_WAKEUP_TIMER ||
+      wakeupCause == ESP_SLEEP_WAKEUP_TOUCHPAD ||
+      wakeupCause == ESP_SLEEP_WAKEUP_ULP;
+
+  const bool standbyInputInactive = !alarm1;
+  return standbyInputInactive || wakeupCycleActive || pendingMdsDeviceEventStored;
 }
 
 String normalizeSha256(const String &sha256) {
