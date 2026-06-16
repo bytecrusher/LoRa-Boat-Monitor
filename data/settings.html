@@ -40,6 +40,8 @@
             OledDisplayRotation: %OledDisplayRotation%,
             SendDataViaWifi: %SendDataViaWifi%,
             autoFirmwareUpdate: %autoFirmwareUpdate%,
+            standbyFirmwareUpdateCheck: %standbyFirmwareUpdateCheck%,
+            standbyFirmwareUpdateIntervalHours: %standbyFirmwareUpdateIntervalHours%,
             MdsSensorIdBattery: %MdsSensorIdBattery%,
             MdsSensorIdTanks: %MdsSensorIdTanks%,
             MdsSensorIdStatus: %MdsSensorIdStatus%,
@@ -55,13 +57,28 @@
     %header%
     <div id="loader"></div>
     <div id="myDiv" class="animate-bottom initially-hidden">
-    <form id='form1' name='SetForm' method='post' action='savesettings'>
+    <section class="settings-overview">
+        <h2>Settings</h2>
+        <p>Configure network, MDS upload, standby behavior and LoRa transmission. Empty password and secret fields keep their currently stored value.</p>
+        <div class="settings-map">
+            <span>Network</span>
+            <span>MDS</span>
+            <span>Firmware Updates</span>
+            <span>LoRa</span>
+            <span>Sensors</span>
+            <span>Standby</span>
+            <span>Calibration</span>
+            <span>Security</span>
+        </div>
+    </section>
+    <form id='form1' name='SetForm' method='post' action='/savesettings'>
+        <input type='hidden' name='csrf' value='%csrfToken%'>
 
-        <input class="myToggleButton myAllToggleButton" type="button" value="+" id="btAllSettingsPage"> All
+        <input class="myToggleButton myAllToggleButton" type="button" value="+" id="btAllSettingsPage"> Expand all settings
 
         <div class="settings-panel"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btPasswordSettingsPage" data-target="PasswordSettingsPage">Password Settings
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btPasswordSettingsPage" data-target="PasswordSettingsPage">Access Protection
             </h3>
             <div class="collapsible initially-hidden" id="PasswordSettingsPage">
                 <div class="section-note">Controls login protection for settings, update and reboot pages.</div>
@@ -85,7 +102,7 @@
 
         <div class="settings-panel"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btWebInterfaceSettingsPage" data-target="WebInterfaceSettingsPage">Web Interface Settings
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btWebInterfaceSettingsPage" data-target="WebInterfaceSettingsPage">Web Interface
             </h3>
             <div class="collapsible initially-hidden" id="WebInterfaceSettingsPage" >
                 <div class="row">
@@ -103,7 +120,7 @@
 
         <div class="settings-panel"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btOledDisplaySettingsPage" data-target="OledDisplaySettingsPage">OLED Display Settings
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btOledDisplaySettingsPage" data-target="OledDisplaySettingsPage">OLED Display
             </h3>
             <div class="collapsible initially-hidden" id="OledDisplaySettingsPage" >
                 <div class="row">
@@ -120,7 +137,7 @@
 
         <div class="settings-panel"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btNetworkSettingsPage" data-target="NetworkSettingsPage">Network Settings
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btNetworkSettingsPage" data-target="NetworkSettingsPage">Connectivity, MDS and Update Source
             </h3>
             <div class="collapsible initially-hidden" id="NetworkSettingsPage" >
                 <div class="row">
@@ -154,7 +171,7 @@
                 <div class="row section-subtitle">
                     <h5 class="section-heading">MDS Settings</h5>
                 </div>
-                <div class="section-note">Uploads selected sensor groups to the configured Maritime Data Server when Wi-Fi is connected.</div>
+                <div class="section-note">Uploads selected sensor groups to the Maritime Data Server when Wi-Fi is connected. The device sends sensorType and sensorName, not legacy numeric sensor IDs.</div>
                 <div class="row">
                     <div class="firstColumn"><span class="labelText">Enable MDS Upload <span class="infoBadge" tabindex="0">i<span class="infoPopover">Sendet Sensordaten nur bei aktiver WLAN-Verbindung an den Maritime Data Server. Zieladresse und API-Key muessen unten passend konfiguriert sein.</span></span></span></div>
                     <div class="secondColumn">
@@ -249,7 +266,7 @@
                 <div class="row section-subtitle">
                     <h5 class="section-heading">Station Settings</h5>
                 </div>
-                <div class="section-note">These are the saved Wi-Fi client networks that the device tries in order.</div>
+                <div class="section-note">Saved Wi-Fi client networks are tried in this order. Leave password fields empty to keep the stored password.</div>
                 <div class="row">
                     <div class="firstColumn">Preferred Wi-Fi SSID 1</div>
                     <div class="secondColumn">
@@ -314,7 +331,7 @@
                 <div class="row section-subtitle">
                     <h5 class="section-heading">Access Point Settings</h5>
                 </div>
-                <div class="section-note">These settings define the device hotspot used for direct local access.</div>
+                <div class="section-note">The fallback hotspot is used for direct local access when no configured Wi-Fi is available.</div>
                 <div class="row">
                     <div class="firstColumn">Device Hotspot Name (SSID)</div>
                     <div class="secondColumn">
@@ -351,9 +368,9 @@
                 </div>
 
                 <div class="row section-subtitle">
-                    <h5 class="section-heading">Web Update Source</h5>
+                    <h5 class="section-heading">Firmware and Web Interface Update Source</h5>
                 </div>
-                <div class="section-note">Used for checking update information and downloading current web interface files.</div>
+                <div class="section-note">Used for firmware manifests and web interface files. The firmware page uses the same configured update source.</div>
                 <div class="row">
                     <div class="firstColumn"><span class="labelText">Web Update Hostname <span class="infoBadge" tabindex="0">i<span class="infoPopover">Nur der Hostname des Update-Servers, ohne <code>http://</code> oder <code>https://</code>. Darueber werden neue Webdateien und Update-Infos abgefragt.</span></span></span></div>
                     <div class="secondColumn">
@@ -367,6 +384,21 @@
                             <option value='Yes'>On</option>
                             <option value='No'>Off</option>
                         </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="firstColumn"><span class="labelText">Standby Firmware Check <span class="infoBadge" tabindex="0">i<span class="infoPopover">Erlaubt dem Geraet, auch bei einem Standby-Wakeup in groesseren Abstaenden nach neuer Stable-Firmware zu suchen. Es werden dabei kein Access Point, Webserver, mDNS oder NMEA-Server gestartet. Benoetigt Auto Stable Firmware Update = On.</span></span></span></div>
+                    <div class="secondColumn">
+                        <select name='standbyFirmwareUpdateCheck' size='1'>
+                            <option value='Yes'>On</option>
+                            <option value='No'>Off</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="firstColumn"><span class="labelText">Standby Firmware Check Interval <span class="infoBadge" tabindex="0">i<span class="infoPopover">Mindestabstand zwischen zwei Firmware-Pruefungen im Standby-Wakeup. 24 bedeutet etwa einmal taeglich.</span></span></span></div>
+                    <div class="secondColumn">
+                        <input type='number' name='standbyFirmwareUpdateIntervalHours' min='1' max='168' step='1' required inputmode='numeric' value='%standbyFirmwareUpdateIntervalHours%'> hours
                     </div>
                 </div>
                 <div class="row">
@@ -387,7 +419,7 @@
 
         <div class="settings-panel"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btLoRaSettingsPage" data-target="LoRaSettingsPage">LoRa Settings (ABP)
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btLoRaSettingsPage" data-target="LoRaSettingsPage">LoRaWAN Transmission
             </h3>
             <div class="collapsible initially-hidden" id="LoRaSettingsPage" >
                 <div class="section-note">ABP credentials and radio behavior for LoRaWAN transmission.</div>
@@ -497,7 +529,7 @@
 
         <div class="settings-panel"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btDeviceSettingsPage" data-target="DeviceSettingsPage">Device Settings
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btDeviceSettingsPage" data-target="DeviceSettingsPage">Sensors, Device and Logs
             </h3>
             <div class="collapsible initially-hidden" id="DeviceSettingsPage" >
                 <div class="section-note">Local serial output, sensor input options and averaging behavior.</div>
@@ -665,10 +697,10 @@
 
         <div class="settings-panel"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btStandbyModeSettingsPage" data-target="StandbyModeSettingsPage">Standby Mode Settings
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btStandbyModeSettingsPage" data-target="StandbyModeSettingsPage">Standby and Power Saving
             </h3>
             <div class="collapsible initially-hidden" id="StandbyModeSettingsPage" >
-                <div class="section-note">Power-saving behavior while the device is waiting in standby.</div>
+                <div class="section-note">Power-saving behavior while the device is waiting in standby. Keep Wi-Fi off here unless you explicitly need web access or MDS uploads during standby.</div>
                 <div class="row">
                     <div class="firstColumn"><span class="labelText">Enable Standby Mode <span class="infoBadge" tabindex="0">i<span class="infoPopover">Im Standby-Modus kann das Geraet schlafen und bei Alarmzustand wieder aufwachen. Der Alarm-Eingang X1-3 steuert dabei Wake und Sleep.</span></span></span></div>
                     <div class="secondColumn">
@@ -700,10 +732,19 @@
 
         <div class="settings-panel"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btCalibrationSettingsPage" data-target="CalibrationSettingsPage">Calibration Settings
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btCalibrationSettingsPage" data-target="CalibrationSettingsPage">Calibration
             </h3>
             <div class="collapsible initially-hidden" id="CalibrationSettingsPage" >
                 <div class="section-note">Curve coefficients and offsets used to convert ADC values into voltage and tank readings.</div>
+                <div class="calibration-help">
+                    <h5>Battery voltage curve</h5>
+                    <p>The firmware calculates battery voltage with this formula:</p>
+                    <code>Voltage = A2 * ADC * ADC + A1 * ADC + Offset</code>
+                    <p>For the default linear setup, keep <code>A2 = 0</code>. Then use two measured points from a multimeter and the displayed ADC raw value:</p>
+                    <code>A1 = (Voltage2 - Voltage1) / (ADC2 - ADC1)</code>
+                    <code>Offset = Voltage1 - A1 * ADC1</code>
+                    <p>Example workflow: measure battery voltage with a multimeter, note the matching ADC value from Sensor Values, repeat with a second voltage level, then calculate A1 and Offset. Use A2 only if the voltage divider or sensor is clearly non-linear.</p>
+                </div>
                 <div class="row">
                     <div class="firstColumn"><span class="labelText">Battery Voltage Curve A2 <span class="infoBadge" tabindex="0">i<span class="infoPopover">Quadratic calibration coefficient for the battery voltage input. Usually only changed when you use a custom calibration formula.</span></span></span></div>
                     <div class="secondColumn">
@@ -774,7 +815,6 @@
             <button type='button' id="backToOverviewButton">Back to Overview</button>
             <button type='button' id="logoutBtn" class="initially-hidden">Logout</button>
         </div>
-        <input type='hidden' name='csrf' value='%csrfToken%'>
     </form>
     <br>
     

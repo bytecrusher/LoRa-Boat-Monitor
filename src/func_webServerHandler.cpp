@@ -58,6 +58,39 @@ namespace {
 String buildOtaProgressJson();
 String buildUpdateFilesProgressJson();
 void startOtaProgress(const String &phase, size_t totalBytes, const String &message);
+void finishOtaProgress(bool success, const String &message);
+
+String htmlEscape(const String &value) {
+  String escaped;
+  escaped.reserve(value.length());
+  for (size_t i = 0; i < value.length(); i++) {
+    switch (value[i]) {
+      case '&': escaped += "&amp;"; break;
+      case '<': escaped += "&lt;"; break;
+      case '>': escaped += "&gt;"; break;
+      case '"': escaped += "&quot;"; break;
+      case '\'': escaped += "&#39;"; break;
+      default: escaped += value[i]; break;
+    }
+  }
+  return escaped;
+}
+
+int clampConfigInt(int value, int fallback, int minValue, int maxValue) {
+  if (value < minValue || value > maxValue) {
+    return fallback;
+  }
+
+  return value;
+}
+
+unsigned int clampConfigUInt(unsigned int value, unsigned int fallback, unsigned int minValue, unsigned int maxValue) {
+  if (value < minValue || value > maxValue) {
+    return fallback;
+  }
+
+  return value;
+}
 
 String formatHexKey(const uint8_t *key, size_t length) {
   String value = "";
@@ -151,6 +184,19 @@ bool isPrintableAscii(const String &value) {
   return true;
 }
 
+bool isDefaultWebPasswordActive() {
+  return strcmp(actconf.password, defconf.password) == 0;
+}
+
+bool requireNonDefaultWebPassword(AsyncWebServerRequest *request) {
+  if (!isDefaultWebPasswordActive()) {
+    return true;
+  }
+
+  request->send(428, "application/json", "{\"status\":\"error\",\"message\":\"Please change the default web password before using this high-risk action.\"}");
+  return false;
+}
+
 String normalizeMdsOtaUrlForStorage(const String &configuredValue) {
   String normalized = configuredValue;
   normalized.trim();
@@ -227,7 +273,8 @@ String resolveFirmwareUrlFromManifestValue(const String &baseUrl, const String &
   value.trim();
 
   if (value.startsWith("https://")) {
-    return value;
+    const String allowedPrefix = baseUrl + "/";
+    return value.startsWith(allowedPrefix) ? value : String();
   }
 
   while (value.startsWith("/")) {
@@ -345,6 +392,98 @@ String sha256ToHex(const uint8_t digest[32]) {
   return hex;
 }
 
+bool fetchMdsOtaInfo(JsonDocument &response) {
+  response["configured"] = strlen(actconf.mdsOtaSecret) > 0 && String(actconf.mdsOtaUrl).startsWith("https://");
+  response["installedVersion"] = String(actconf.fversion);
+  response["version"] = "";
+  response["status"] = "not-configured";
+  response["message"] = "MDS OTA endpoint or secret is not configured.";
+
+  if (!response["configured"].as<bool>()) {
+    return false;
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    response["status"] = "offline";
+    response["message"] = "No Wi-Fi connection available.";
+    return false;
+  }
+
+  WiFiClientSecure client;
+  HTTPClient http;
+  client.setCACert(reinterpret_cast<const char*>(cert_cacert_pem_start));
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.setTimeout(8000);
+
+  const char *responseHeaders[] = {
+    "x-Firmware-Version",
+    "X-Firmware-Version",
+    "x-ESP32-version",
+    "X-ESP32-Version",
+    "x-SHA256",
+    "X-SHA256"
+  };
+  http.collectHeaders(responseHeaders, 6);
+  http.setUserAgent("ESP32-http-Update");
+
+  String endpoint = String(actconf.mdsOtaUrl);
+  endpoint.trim();
+  if (!http.begin(client, endpoint)) {
+    response["status"] = "error";
+    response["message"] = "Unable to initialize MDS OTA status request.";
+    return false;
+  }
+
+  http.addHeader("X-MDS-OTA-Secret", String(actconf.mdsOtaSecret));
+  http.addHeader("x-ESP32-STA-MAC", WiFi.macAddress());
+  http.addHeader("x-ESP32-sketch-md5", ESP.getSketchMD5());
+  http.addHeader("x-ESP32-sdk-version", String(ESP.getSdkVersion()));
+  http.addHeader("x-ESP32-version", String(actconf.fversion));
+  http.addHeader("X-MDS-OTA-Check", "1");
+
+  const int httpCode = http.GET();
+  response["httpStatus"] = httpCode;
+
+  String version = http.header("x-Firmware-Version");
+  if (version.length() == 0) {
+    version = http.header("X-Firmware-Version");
+  }
+  if (version.length() == 0) {
+    version = http.header("x-ESP32-version");
+  }
+  if (version.length() == 0) {
+    version = http.header("X-ESP32-Version");
+  }
+  version.trim();
+  response["version"] = version;
+
+  String sha256 = normalizeSha256(http.header("x-SHA256"));
+  if (sha256.length() == 0) {
+    sha256 = normalizeSha256(http.header("X-SHA256"));
+  }
+  response["sha256Available"] = sha256.length() == 64;
+
+  if (httpCode == HTTP_CODE_OK) {
+    response["status"] = "update-available";
+    response["message"] = version.length() ? "MDS firmware update available." : "MDS firmware update available, but no version header was returned.";
+  } else if (httpCode == HTTP_CODE_NOT_MODIFIED) {
+    response["status"] = "current";
+    response["message"] = "MDS reports that the installed firmware is current.";
+  } else if (httpCode == HTTP_CODE_FORBIDDEN) {
+    response["status"] = "forbidden";
+    response["message"] = "MDS rejected the OTA secret or request headers.";
+  } else if (httpCode > 0) {
+    response["status"] = "error";
+    response["message"] = "MDS OTA status request failed: HTTP " + String(httpCode);
+  } else {
+    response["status"] = "error";
+    response["message"] = "MDS OTA status request failed.";
+  }
+
+  http.end();
+  return httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_NOT_MODIFIED;
+}
+
 bool resolveStableFirmware(String &firmwareUrl, String &version, String *errorMessage = nullptr, String *sha256 = nullptr) {
   String manifestError;
   if (resolveFirmwareFromManifest("stable", firmwareUrl, version, &manifestError, sha256)) {
@@ -420,28 +559,30 @@ bool resolveBetaFirmware(String &firmwareUrl, String &version, String *errorMess
 
 String settingsTemplateProcessor(const String &var) {
   if (var == "header") return getheader(actconf);
-  if (var == "devname") return String(actconf.devname);
-  if (var == "cssid1") return String(actconf.cssid1);
-  if (var == "cpassword1") return String(actconf.cpassword1);
+  if (var == "devname") return htmlEscape(String(actconf.devname));
+  if (var == "cssid1") return htmlEscape(String(actconf.cssid1));
+  if (var == "cpassword1") return htmlEscape(String(actconf.cpassword1));
   if (var == "cpassword1Masked") return maskSecret(String(actconf.cpassword1));
-  if (var == "cssid2") return String(actconf.cssid2);
-  if (var == "cpassword2") return String(actconf.cpassword2);
+  if (var == "cssid2") return htmlEscape(String(actconf.cssid2));
+  if (var == "cpassword2") return htmlEscape(String(actconf.cpassword2));
   if (var == "cpassword2Masked") return maskSecret(String(actconf.cpassword2));
-  if (var == "cssid3") return String(actconf.cssid3);
-  if (var == "cpassword3") return String(actconf.cpassword3);
+  if (var == "cssid3") return htmlEscape(String(actconf.cssid3));
+  if (var == "cpassword3") return htmlEscape(String(actconf.cpassword3));
   if (var == "cpassword3Masked") return maskSecret(String(actconf.cpassword3));
-  if (var == "username") return String(actconf.username);
-  if (var == "password") return String(actconf.password);
+  if (var == "username") return htmlEscape(String(actconf.username));
+  if (var == "password") return htmlEscape(String(actconf.password));
   if (var == "passwordMasked") return maskSecret(String(actconf.password));
   if (var == "SendDataViaWifi") return String(getindex(SendDataViaWifi, String(actconf.SendDataViaWifi)));
-  if (var == "firmwareUpdateUrl") return String(actconf.firmwareUpdateUrl);
+  if (var == "firmwareUpdateUrl") return htmlEscape(String(actconf.firmwareUpdateUrl));
   if (var == "autoFirmwareUpdate") return String(getindex(SendDataViaWifi, String(actconf.autoFirmwareUpdate)));
-  if (var == "mdsOtaUrl") return String(actconf.mdsOtaUrl);
+  if (var == "standbyFirmwareUpdateCheck") return String(getindex(SendDataViaWifi, String(actconf.standbyFirmwareUpdateCheck)));
+  if (var == "standbyFirmwareUpdateIntervalHours") return String(actconf.standbyFirmwareUpdateIntervalHours);
+  if (var == "mdsOtaUrl") return htmlEscape(String(actconf.mdsOtaUrl));
   if (var == "mdsOtaSecretMasked") return maskSecret(String(actconf.mdsOtaSecret));
   if (var == "csrfToken") return getCsrfToken();
 
-  if (var == "MdsUrl") return String(actconf.MdsUrl);
-  if (var == "MdsApiKey") return String(actconf.MdsApiKey);
+  if (var == "MdsUrl") return htmlEscape(String(actconf.MdsUrl));
+  if (var == "MdsApiKey") return htmlEscape(String(actconf.MdsApiKey));
   if (var == "MdsApiKeyMasked") return maskSecret(String(actconf.MdsApiKey));
   if (var == "MdsSensorIdBattery") return String(actconf.MdsSensorIdBattery);
   if (var == "MdsSensorIdTanks") return String(actconf.MdsSensorIdTanks);
@@ -451,9 +592,9 @@ String settingsTemplateProcessor(const String &var) {
   if (var == "MdsSensorIdDewpoint") return String(actconf.MdsSensorIdDewpoint);
   if (var == "MdsSensorIdVedirect") return String(actconf.MdsSensorIdVedirect);
 
-  if (var == "hostname") return String(actconf.hostname);
-  if (var == "sssid") return String(actconf.sssid);
-  if (var == "spassword") return String(actconf.spassword);
+  if (var == "hostname") return htmlEscape(String(actconf.hostname));
+  if (var == "sssid") return htmlEscape(String(actconf.sssid));
+  if (var == "spassword") return htmlEscape(String(actconf.spassword));
   if (var == "spasswordMasked") return maskSecret(String(actconf.spassword));
 
   if (var == "crypt") return String(getindex(usepassword, String(actconf.crypt)));
@@ -569,6 +710,7 @@ void WebServerHandler()
       }
     }
     if (!requireCsrfToken(request)) {
+      DebugPrintln(2, "Blocked saving settings without a valid CSRF token.");
       return;
     }
 
@@ -625,7 +767,7 @@ void WebServerHandler()
         }
       }
       if (vname[i] == "timeout") {
-        actconf.timeout = toInteger(value[i]);
+        actconf.timeout = clampConfigInt(toInteger(value[i]), defconf.timeout, 3, 240);
       }
       if (vname[i] == "sssid") {
         value[i].toCharArray(actconf.sssid, sizeof(actconf.sssid));
@@ -636,7 +778,7 @@ void WebServerHandler()
         }
       }
       if (vname[i] == "apchannel") {
-        actconf.apchannel = toInteger(value[i]);
+        actconf.apchannel = clampConfigInt(toInteger(value[i]), defconf.apchannel, 1, 13);
       }
       if (vname[i] == "firmwareUpdateUrl") {
         String normalizedFirmwareUpdateUrl = normalizeFirmwareUpdateValueForStorage(value[i]);
@@ -644,6 +786,16 @@ void WebServerHandler()
       }
       if (vname[i] == "autoFirmwareUpdate") {
         value[i].toCharArray(actconf.autoFirmwareUpdate, sizeof(actconf.autoFirmwareUpdate));
+      }
+      if (vname[i] == "standbyFirmwareUpdateCheck") {
+        value[i].toCharArray(actconf.standbyFirmwareUpdateCheck, sizeof(actconf.standbyFirmwareUpdateCheck));
+      }
+      if (vname[i] == "standbyFirmwareUpdateIntervalHours") {
+        String intervalValue = value[i];
+        intervalValue.trim();
+        if (intervalValue.length() > 0) {
+          actconf.standbyFirmwareUpdateIntervalHours = clampConfigInt(toInteger(intervalValue), actconf.standbyFirmwareUpdateIntervalHours, 1, 168);
+        }
       }
       if (vname[i] == "mdsOtaUrl") {
         String normalizedMdsOtaUrl = normalizeMdsOtaUrlForStorage(value[i]);
@@ -655,16 +807,23 @@ void WebServerHandler()
         }
       }
       if (vname[i] == "servermode") {
-        actconf.serverMode = toInteger(value[i]);
+        actconf.serverMode = clampConfigInt(toInteger(value[i]), defconf.serverMode, 0, 4);
       }
       if (vname[i] == "mdnsservice") {
-        actconf.mDNS = toInteger(value[i]);
+        actconf.mDNS = clampConfigInt(toInteger(value[i]), defconf.mDNS, 0, 1);
       }
       if (vname[i] == "SendDataViaWifi") {
         value[i].toCharArray(actconf.SendDataViaWifi, sizeof(actconf.SendDataViaWifi));
       }
       if (vname[i] == "MdsUrl") {
-        value[i].toCharArray(actconf.MdsUrl, sizeof(actconf.MdsUrl));
+        String mdsUrl = value[i];
+        mdsUrl.trim();
+        if (mdsUrl.length() > 0 && mdsUrl.indexOf("://") < 0) {
+          mdsUrl = "https://" + mdsUrl;
+        }
+        if (mdsUrl.startsWith("https://") && mdsUrl.length() < sizeof(actconf.MdsUrl)) {
+          mdsUrl.toCharArray(actconf.MdsUrl, sizeof(actconf.MdsUrl));
+        }
       }
       if (vname[i] == "MdsApiKey") {
         if (value[i].length() > 0) {
@@ -672,25 +831,25 @@ void WebServerHandler()
         }
       }
       if (vname[i] == "MdsSensorIdBattery") {
-        actconf.MdsSensorIdBattery = toInteger(value[i]);
+        actconf.MdsSensorIdBattery = clampConfigInt(toInteger(value[i]), defconf.MdsSensorIdBattery, 0, 1);
       }
       if (vname[i] == "MdsSensorIdTanks") {
-        actconf.MdsSensorIdTanks = toInteger(value[i]);
+        actconf.MdsSensorIdTanks = clampConfigInt(toInteger(value[i]), defconf.MdsSensorIdTanks, 0, 1);
       }
       if (vname[i] == "MdsSensorIdStatus") {
-        actconf.MdsSensorIdStatus = toInteger(value[i]);
+        actconf.MdsSensorIdStatus = clampConfigInt(toInteger(value[i]), defconf.MdsSensorIdStatus, 0, 1);
       }
       if (vname[i] == "MdsSensorIdGps") {
-        actconf.MdsSensorIdGps = toInteger(value[i]);
+        actconf.MdsSensorIdGps = clampConfigInt(toInteger(value[i]), defconf.MdsSensorIdGps, 0, 1);
       }
       if (vname[i] == "MdsSensorIdEnv") {
-        actconf.MdsSensorIdEnv = toInteger(value[i]);
+        actconf.MdsSensorIdEnv = clampConfigInt(toInteger(value[i]), defconf.MdsSensorIdEnv, 0, 1);
       }
       if (vname[i] == "MdsSensorIdDewpoint") {
-        actconf.MdsSensorIdDewpoint = toInteger(value[i]);
+        actconf.MdsSensorIdDewpoint = clampConfigInt(toInteger(value[i]), defconf.MdsSensorIdDewpoint, 0, 1);
       }
       if (vname[i] == "MdsSensorIdVedirect") {
-        actconf.MdsSensorIdVedirect = toInteger(value[i]);
+        actconf.MdsSensorIdVedirect = clampConfigInt(toInteger(value[i]), defconf.MdsSensorIdVedirect, 0, 1);
       }
       // LoRa Settings
       //**************
@@ -721,22 +880,23 @@ void WebServerHandler()
         value[i].toCharArray(actconf.lorafrequency, sizeof(actconf.lorafrequency));
       }
       if (vname[i] == "lchannel") {
-        actconf.lchannel = toInteger(value[i]);
+        actconf.lchannel = clampConfigInt(toInteger(value[i]), defconf.lchannel, 0, 9);
       }
       if (vname[i] == "dynsf") {
-        actconf.dynsf = toInteger(value[i]);
+        actconf.dynsf = clampConfigInt(toInteger(value[i]), defconf.dynsf, 0, 1);
       }
       if (vname[i] == "spreadf") {
-        actconf.spreadf = toInteger(value[i]);
+        actconf.spreadf = clampConfigInt(toInteger(value[i]), defconf.spreadf, 7, 10);
       }
       if (vname[i] == "tinterval") {
-        if(actconf.tinterval != toInteger(value[i])){
-          actconf.tinterval = toInteger(value[i]);
+        const unsigned int newInterval = clampConfigUInt(toInteger(value[i]), defconf.tinterval, 1U, 255U);
+        if(actconf.tinterval != newInterval){
+          actconf.tinterval = newInterval;
           TX_INTERVAL = actconf.tinterval * 60;
         }
       }
       if (vname[i] == "relay") {
-        actconf.relay = toInteger(value[i]);
+        actconf.relay = clampConfigInt(toInteger(value[i]), defconf.relay, 0, 2);
         if(actconf.relay == 0){
           digitalWrite(relayPin, LOW);
           relaytimer = 0;
@@ -746,28 +906,28 @@ void WebServerHandler()
         }
       }
       if (vname[i] == "debugmode") {
-        actconf.debug = toInteger(value[i]);
+        actconf.debug = clampConfigInt(toInteger(value[i]), defconf.debug, 0, 3);
       }
       if (vname[i] == "serspeed") {
-        actconf.serspeed = toInteger(value[i]);
+        actconf.serspeed = clampConfigInt(toInteger(value[i]), defconf.serspeed, 300, 115200);
       }
       if (vname[i] == "WebSerialDebug") {
-        actconf.WebSerialDebug = toInteger(value[i]);
+        actconf.WebSerialDebug = clampConfigInt(toInteger(value[i]), defconf.WebSerialDebug, 0, 1);
       }
       if (vname[i] == "deviceid") {
-        actconf.deviceID = toInteger(value[i]);
+        actconf.deviceID = clampConfigInt(toInteger(value[i]), defconf.deviceID, 0, 9);
       }
       if (vname[i] == "senddata") {
-        actconf.senddata = toInteger(value[i]);
+        actconf.senddata = clampConfigInt(toInteger(value[i]), defconf.senddata, 0, 1);
       }    
       if (vname[i] == "vaverage") {
-        actconf.vaverage = toInteger(value[i]);
+        actconf.vaverage = clampConfigInt(toInteger(value[i]), defconf.vaverage, 1, 100);
       }
       if (vname[i] == "t1average") {
-        actconf.t1average = toInteger(value[i]);
+        actconf.t1average = clampConfigInt(toInteger(value[i]), defconf.t1average, 1, 100);
       }
       if (vname[i] == "t2average") {
-        actconf.t2average = toInteger(value[i]);
+        actconf.t2average = clampConfigInt(toInteger(value[i]), defconf.t2average, 1, 100);
       }   
       if (vname[i] == "tstype") {
         value[i].toCharArray(actconf.tempSensorType, sizeof(actconf.tempSensorType));
@@ -782,7 +942,7 @@ void WebServerHandler()
         value[i].toCharArray(actconf.standbyMode, sizeof(actconf.standbyMode));
       }
       if (vname[i] == "standbySleepDuration") {
-        actconf.standbySleepDuration = toInteger(value[i]);
+        actconf.standbySleepDuration = clampConfigInt(toInteger(value[i]), defconf.standbySleepDuration, 1, 1440);
       }
       if (vname[i] == "loraOperationMode") {
         value[i].toCharArray(actconf.loraOperationMode, sizeof(actconf.loraOperationMode));
@@ -818,10 +978,10 @@ void WebServerHandler()
         actconf.t2offset = toFloat(value[i]);
       }
       if (vname[i] == "cssStyle") {
-        actconf.cssStyle = toFloat(value[i]);
+        actconf.cssStyle = clampConfigInt(toInteger(value[i]), defconf.cssStyle, 0, 2);
       }
       if (vname[i] == "OledDisplayRotation") {
-        actconf.OledDisplayRotation = toFloat(value[i]);
+        actconf.OledDisplayRotation = clampConfigInt(toInteger(value[i]), defconf.OledDisplayRotation, 0, 1);
       }
     }
 
@@ -846,7 +1006,7 @@ void WebServerHandler()
     String content = readFile2(LittleFS, "/index.html");
     //content.replace("%header%", String(readFile2(LittleFS, "/header.html")));
     content.replace("%header%", getheader(actconf));
-    content.replace("%devname%", String(actconf.devname));
+    content.replace("%devname%", htmlEscape(String(actconf.devname)));
 
     if (content == "- failed to open file for reading"){
       request->redirect("/initialsetup.html");
@@ -870,17 +1030,17 @@ void WebServerHandler()
       }
     }
     String content = initialsetup_html;
-    content.replace("%devname%", String(actconf.devname));
-    content.replace("%crights%", String(actconf.crights));
+    content.replace("%devname%", htmlEscape(String(actconf.devname)));
+    content.replace("%crights%", htmlEscape(String(actconf.crights)));
     content.replace("%fversion%", String(actconf.fversion));
     content.replace("%wificonfig%", wificonfig_html);
-    content.replace("%cssid1%", String(actconf.cssid1));
+    content.replace("%cssid1%", htmlEscape(String(actconf.cssid1)));
     content.replace("%cpassword1%", "");
     content.replace("%cpassword1Masked%", maskSecret(String(actconf.cpassword1)));
-    content.replace("%cssid2%", String(actconf.cssid2));
+    content.replace("%cssid2%", htmlEscape(String(actconf.cssid2)));
     content.replace("%cpassword2%", "");
     content.replace("%cpassword2Masked%", maskSecret(String(actconf.cpassword2)));
-    content.replace("%cssid3%", String(actconf.cssid3));
+    content.replace("%cssid3%", htmlEscape(String(actconf.cssid3)));
     content.replace("%cpassword3%", "");
     content.replace("%cpassword3Masked%", maskSecret(String(actconf.cpassword3)));
     content.replace("%quality%", String(int(quality)));
@@ -918,16 +1078,16 @@ void WebServerHandler()
 
     String content = "";
     content = initialsetup_html;
-    content.replace("%devname%", String(actconf.devname));
-    content.replace("%crights%", String(actconf.crights));
+    content.replace("%devname%", htmlEscape(String(actconf.devname)));
+    content.replace("%crights%", htmlEscape(String(actconf.crights)));
     content.replace("%fversion%", String(actconf.fversion));
-    content.replace("%cssid1%", String(actconf.cssid1));
+    content.replace("%cssid1%", htmlEscape(String(actconf.cssid1)));
     content.replace("%cpassword1%", "");
     content.replace("%cpassword1Masked%", maskSecret(String(actconf.cpassword1)));
-    content.replace("%cssid2%", String(actconf.cssid2));
+    content.replace("%cssid2%", htmlEscape(String(actconf.cssid2)));
     content.replace("%cpassword2%", "");
     content.replace("%cpassword2Masked%", maskSecret(String(actconf.cpassword2)));
-    content.replace("%cssid3%", String(actconf.cssid3));
+    content.replace("%cssid3%", htmlEscape(String(actconf.cssid3)));
     content.replace("%cpassword3%", "");
     content.replace("%cpassword3Masked%", maskSecret(String(actconf.cpassword3)));
     content.replace("%quality%", String(int(quality)));
@@ -953,7 +1113,7 @@ void WebServerHandler()
     }
     String content = readFile2(LittleFS, "/sensorv.html");
     content.replace("%header%", getheader(actconf));
-    content.replace("%devname%", String(actconf.devname));
+    content.replace("%devname%", htmlEscape(String(actconf.devname)));
     content.replace("%csrfToken%", getCsrfToken());
 
     String envSensorString = "";
@@ -1039,7 +1199,7 @@ void WebServerHandler()
     }
     String content = readFile2(LittleFS, "/lora.html");
     content.replace("%header%", getheader(actconf));
-    content.replace("%devname%", String(actconf.devname));
+    content.replace("%devname%", htmlEscape(String(actconf.devname)));
     request->send(200, "text/html", content);
   });
 
@@ -1056,7 +1216,7 @@ void WebServerHandler()
       int paramsNr = request->params();
 
       for(int i=0;i<paramsNr;i++){
-        AsyncWebParameter* p = request->getParam(i);
+        const AsyncWebParameter* p = request->getParam(i);
         if (p->name() == "data") {
           inputMessage = p->value();
           if (inputMessage == "alarm1") {
@@ -1103,7 +1263,8 @@ void WebServerHandler()
     }
     content = readFile2(LittleFS, "/restart.html");
     content.replace("%header%", getheader(actconf));
-    content.replace("%devname%", String(actconf.devname));
+    content.replace("%devname%", htmlEscape(String(actconf.devname)));
+    content.replace("%csrfToken%", getCsrfToken());
 
     request->send(200, "text/html", content);
   });
@@ -1149,20 +1310,20 @@ void WebServerHandler()
     const bool betaAvailable = resolveBetaFirmware(betaFirmwareUrl, betaVersion, &betaError);
 
     content.replace("%stableServerAvailable%", stableAvailable ? "Server available" : "Server not available");
-    content.replace("%stableVersion%", stableAvailable ? stableVersion : "-");
-    content.replace("%stableFirmwareUrl%", stableAvailable ? stableFirmwareUrl : "");
+    content.replace("%stableVersion%", htmlEscape(stableAvailable ? stableVersion : "-"));
+    content.replace("%stableFirmwareUrl%", htmlEscape(stableAvailable ? stableFirmwareUrl : ""));
     content.replace("%serverAvailable%", betaAvailable ? "Server available" : "Server not available");
-    content.replace("%version2%", betaAvailable ? betaVersion : "-");
-    content.replace("%betaFirmwareUrl%", betaAvailable ? betaFirmwareUrl : "");
-    content.replace("%configuredFirmwareUpdateUrl%", String(actconf.firmwareUpdateUrl));
-    content.replace("%configuredFirmwareBaseUrl%", getConfiguredFirmwareBaseUrl());
-    content.replace("%stableStatusDetail%", stableAvailable ? "OK" : stableError);
-    content.replace("%betaStatusDetail%", betaAvailable ? "OK" : betaError);
-    content.replace("%mdsOtaUrl%", String(actconf.mdsOtaUrl));
+    content.replace("%version2%", htmlEscape(betaAvailable ? betaVersion : "-"));
+    content.replace("%betaFirmwareUrl%", htmlEscape(betaAvailable ? betaFirmwareUrl : ""));
+    content.replace("%configuredFirmwareUpdateUrl%", htmlEscape(String(actconf.firmwareUpdateUrl)));
+    content.replace("%configuredFirmwareBaseUrl%", htmlEscape(getConfiguredFirmwareBaseUrl()));
+    content.replace("%stableStatusDetail%", htmlEscape(stableAvailable ? "OK" : stableError));
+    content.replace("%betaStatusDetail%", htmlEscape(betaAvailable ? "OK" : betaError));
+    content.replace("%mdsOtaUrl%", htmlEscape(String(actconf.mdsOtaUrl)));
     content.replace("%mdsOtaSecretStatus%", strlen(actconf.mdsOtaSecret) > 0 ? "configured" : "not configured");
 
     content.replace("%header%", getheader(actconf));
-    content.replace("%devname%", String(actconf.devname));
+    content.replace("%devname%", htmlEscape(String(actconf.devname)));
     content.replace("%fversion%", String(actconf.fversion));
     content.replace("%csrfToken%", getCsrfToken());
     content.replace("%getSdkVersion%", String(ESP.getSdkVersion()));
@@ -1181,7 +1342,9 @@ void WebServerHandler()
     if (!requireCsrfToken(request)) {
       return;
     }
-
+    if (!requireNonDefaultWebPassword(request)) {
+      return;
+    }
     if (WiFi.status() != WL_CONNECTED) {
       request->send(503, "application/json", buildOtaResponse("error", "No Wi-Fi connection available for remote update.", false, false, false));
       return;
@@ -1249,7 +1412,7 @@ void WebServerHandler()
     }
     String content = readFile2(LittleFS, "/devinfo.html");
     content.replace("%header%", getheader(actconf));
-    content.replace("%devname%", String(actconf.devname));
+    content.replace("%devname%", htmlEscape(String(actconf.devname)));
     content.replace("%fversion%", String(actconf.fversion));
     content.replace("%license%", String(actconf.license));
     content.replace("%getSdkVersion%", String(ESP.getSdkVersion()));
@@ -1264,12 +1427,12 @@ void WebServerHandler()
         mdnsname =F( "not activ");
       }
     content.replace("%mdnsname%", mdnsname);
-    content.replace("%sssid%", String(actconf.sssid));
+    content.replace("%sssid%", htmlEscape(String(actconf.sssid)));
     content.replace("%softAPIP%", WiFi.softAPIP().toString());
     content.replace("%WiFichannel%", String(WiFi.channel()));
-    content.replace("%cssid1%", String(actconf.cssid1));
-    content.replace("%cssid2%", String(actconf.cssid2));
-    content.replace("%cssid3%", String(actconf.cssid3));
+    content.replace("%cssid1%", htmlEscape(String(actconf.cssid1)));
+    content.replace("%cssid2%", htmlEscape(String(actconf.cssid2)));
+    content.replace("%cssid3%", htmlEscape(String(actconf.cssid3)));
     content.replace("%localIP%", WiFi.localIP().toString());
     String mystring = String(actconf.devaddr, HEX);
     mystring.toUpperCase();
@@ -1520,6 +1683,14 @@ void WebServerHandler()
     json_Device["Device"]["MeasuringValues"]["Alarm"]["Value"] = String(alarm1);
     json_Device["Device"]["MeasuringValues"]["Alarm"]["Unit"] = "bin";  // TODO: bring into staticdata.json
 
+    const int standbyInputRawLevel = digitalRead(alarmPin);
+    json_Device["Device"]["MeasuringValues"]["StandbyInputPin"]["Value"] = String(alarmPin);
+    json_Device["Device"]["MeasuringValues"]["StandbyInputPin"]["Unit"] = "GPIO";
+    json_Device["Device"]["MeasuringValues"]["StandbyInputLevel"]["Value"] = standbyInputRawLevel == LOW ? "LOW" : "HIGH";
+    json_Device["Device"]["MeasuringValues"]["StandbyInputLevel"]["Unit"] = "active LOW";
+    json_Device["Device"]["MeasuringValues"]["StandbyInputState"]["Value"] = alarm1 ? "Active" : "Inactive";
+    json_Device["Device"]["MeasuringValues"]["StandbyInputState"]["Unit"] = alarm1 ? "awake/active" : "standby/sleep";
+
     json_Device["Device"]["MeasuringValues"]["Relay"]["Value"] = String(actconf.relay);
     json_Device["Device"]["MeasuringValues"]["Relay"]["Unit"] = "bin";  // TODO: bring into staticdata.json
 
@@ -1612,6 +1783,9 @@ void WebServerHandler()
     if (!requireCsrfToken(request)) {
       return;
     }
+    if (!requireNonDefaultWebPassword(request)) {
+      return;
+    }
     actconf = defconf;
     saveEEPROMConfig(defconf);
     request->send(200, "text/javascript", "ok, EEPROM erased.");
@@ -1625,6 +1799,9 @@ void WebServerHandler()
       }
     }
     if (!requireCsrfToken(request)) {
+      return;
+    }
+    if (!requireNonDefaultWebPassword(request)) {
       return;
     }
 
@@ -1696,6 +1873,9 @@ void WebServerHandler()
       if (!requireCsrfToken(request)) {
         return;
       }
+      if (!requireNonDefaultWebPassword(request)) {
+        return;
+      }
     };
 
   auto handleOtaUpload = [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data,
@@ -1706,6 +1886,15 @@ void WebServerHandler()
                       }
                     }
                     if (!isCsrfTokenValid(request)) {
+                      if (index == 0) {
+                        finishOtaProgress(false, "Invalid CSRF token.");
+                      }
+                      return;
+                    }
+                    if (isDefaultWebPasswordActive()) {
+                      if (index == 0) {
+                        finishOtaProgress(false, "Default web password must be changed before firmware updates.");
+                      }
                       return;
                     }
                     handleDoUpdate(request, filename, index, data, len, final);
@@ -1765,6 +1954,9 @@ void WebServerHandler()
       if (!requireCsrfToken(request)) {
         return;
       }
+      if (!requireNonDefaultWebPassword(request)) {
+        return;
+      }
       request->send(200);
     },
     [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data,
@@ -1775,6 +1967,9 @@ void WebServerHandler()
                       }
                     }
                     if (!isCsrfTokenValid(request)) {
+                      return;
+                    }
+                    if (isDefaultWebPasswordActive()) {
                       return;
                     }
                     handleUpload(request, filename, index, data, len, final);
@@ -1812,6 +2007,9 @@ void WebServerHandler()
     if (!requireCsrfToken(request)) {
       return;
     }
+    if (!requireNonDefaultWebPassword(request)) {
+      return;
+    }
     formatfs(LittleFS);
     request->send(200, "text/html", "done");
   });
@@ -1823,6 +2021,9 @@ void WebServerHandler()
       }
     }
     if (!requireCsrfToken(request)) {
+      return;
+    }
+    if (!requireNonDefaultWebPassword(request)) {
       return;
     }
     runDownloadingFiles = true;
@@ -1884,6 +2085,20 @@ void WebServerHandler()
     request->send(200, "application/json", buildOtaProgressJson());
   });
 
+  httpServer.on("/mdsotainfo", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (actconf.crypt == 1) {
+      if(!request->authenticate(actconf.username, actconf.password)) {
+        return request->requestAuthentication();
+      }
+    }
+
+    JsonDocument response;
+    fetchMdsOtaInfo(response);
+    String body;
+    serializeJson(response, body);
+    request->send(200, "application/json", body);
+  });
+
   httpServer.on("/testMdsUpload", HTTP_POST, [](AsyncWebServerRequest *request) {
     if (actconf.crypt == 1) {
       if(!request->authenticate(actconf.username, actconf.password)) {
@@ -1893,7 +2108,9 @@ void WebServerHandler()
     if (!requireCsrfToken(request)) {
       return;
     }
-
+    if (!requireNonDefaultWebPassword(request)) {
+      return;
+    }
     if (WiFi.status() != WL_CONNECTED) {
       request->send(503, "application/json", "{\"status\":\"error\",\"message\":\"No Wi-Fi connection available for MDS test.\"}");
       return;
@@ -1901,10 +2118,21 @@ void WebServerHandler()
 
     DebugPrintln(3, "Manual Test MDS Upload triggered");
     const bool success = sendToMDS(actconf);
+    JsonDocument response;
     if (success) {
-      request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"MDS test upload sent successfully.\"}");
+      response["status"] = "ok";
+      response["message"] = "MDS test upload sent successfully.";
+      response["detail"] = getLastMdsStatus();
+      String body;
+      serializeJson(response, body);
+      request->send(200, "application/json", body);
     } else {
-      request->send(502, "application/json", "{\"status\":\"error\",\"message\":\"MDS test upload failed. See WebSerial or serial log for details.\"}");
+      response["status"] = "error";
+      response["message"] = "MDS test upload failed.";
+      response["detail"] = getLastMdsStatus();
+      String body;
+      serializeJson(response, body);
+      request->send(502, "application/json", body);
     }
   });
 
@@ -1917,8 +2145,8 @@ void WebServerHandler()
     {
       String content = readFile2(LittleFS, "/error.html");
       content.replace("%header%", getheader(actconf));
-      content.replace("%devname%", String(actconf.devname));
-      content.replace("%path%", request->url());
+      content.replace("%devname%", htmlEscape(String(actconf.devname)));
+      content.replace("%path%", htmlEscape(request->url()));
       request->send(404, "text/html", content);
     }
   });
@@ -2097,7 +2325,7 @@ bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &er
     return false;
   }
 
-  const String normalizedExpectedSha256 = normalizeSha256(expectedSha256);
+  String normalizedExpectedSha256 = normalizeSha256(expectedSha256);
   if (!filesystemUpdate && expectedSha256.length() > 0 && normalizedExpectedSha256.length() == 0) {
     errorMessage = "Remote firmware checksum is invalid.";
     finishOtaProgress(false, errorMessage);
@@ -2116,8 +2344,8 @@ bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &er
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   http.setTimeout(15000);
   if (useMdsOtaEndpoint) {
-    const char *responseHeaders[] = { "x-MD5", "X-MD5" };
-    http.collectHeaders(responseHeaders, 2);
+    const char *responseHeaders[] = { "x-SHA256", "X-SHA256", "x-MD5", "X-MD5" };
+    http.collectHeaders(responseHeaders, 4);
     http.setUserAgent("ESP32-http-Update");
   }
 
@@ -2158,6 +2386,17 @@ bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &er
   const int contentLength = http.getSize();
   String expectedMd5 = "";
   if (useMdsOtaEndpoint) {
+    normalizedExpectedSha256 = normalizeSha256(http.header("x-SHA256"));
+    if (normalizedExpectedSha256.length() == 0) {
+      normalizedExpectedSha256 = normalizeSha256(http.header("X-SHA256"));
+    }
+    if (normalizedExpectedSha256.length() == 0) {
+      errorMessage = "MDS OTA response is missing a valid SHA256 checksum.";
+      finishOtaProgress(false, errorMessage);
+      http.end();
+      return false;
+    }
+
     expectedMd5 = http.header("x-MD5");
     if (expectedMd5.length() == 0) {
       expectedMd5 = http.header("X-MD5");
@@ -2285,11 +2524,14 @@ void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size
   if (!index){
     Serial.println("Update");
     content_len = request->contentLength();
+    localOtaInProgress = true;
+    standbySleepBlockedUntilMillis = millis() + 180000UL;
     startOtaProgress(filesystemUpdate ? "upload-filesystem" : "upload-firmware", content_len,
                      filesystemUpdate ? "Uploading file system update..." : "Uploading firmware...");
     // Detect filesystem uploads both from modern field names and legacy filenames.
     int cmd = filesystemUpdate ? U_PART : U_FLASH;
     if (!filesystemUpdate && !saveConfigBackupToLittleFS(actconf)) {
+      localOtaInProgress = false;
       finishOtaProgress(false, "Config backup failed. Firmware update cancelled.");
       request->send(500, "application/json", buildOtaResponse("error", "Config backup failed. Firmware update cancelled.", false, false, false));
       return;
@@ -2301,30 +2543,37 @@ void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size
     if (!Update.begin(UPDATE_SIZE_UNKNOWN, cmd)) {
 #endif
       Update.printError(Serial);
+      localOtaInProgress = false;
       finishOtaProgress(false, "Unable to start OTA update.");
       request->send(500, "application/json", buildOtaResponse("error", "Unable to start OTA update.", false, false, !filesystemUpdate));
       return;
     }
   }
 
-  if (Update.write(data, len) != len) {
+  const size_t written = Update.write(data, len);
+  if (written != len) {
     Update.printError(Serial);
+    Update.abort();
+    localOtaInProgress = false;
     finishOtaProgress(false, "Update write failed.");
-#ifdef ESP8266
-  } else {
-    Serial.printf("Progress: %d%%\n", (Update.progress()*100)/Update.size());
-#endif
-  } else {
-    updateOtaProgress(filesystemUpdate ? "upload-filesystem" : "upload-firmware",
-                      index + len,
-                      content_len,
-                      filesystemUpdate ? "Uploading file system update..." : "Uploading firmware...");
+    request->send(500, "application/json", buildOtaResponse("error", "Update write failed.", false, false, !filesystemUpdate));
+    return;
   }
+#ifdef ESP8266
+  if (Update.size() > 0) {
+    Serial.printf("Progress: %d%%\n", (Update.progress() * 100) / Update.size());
+  }
+#endif
+  updateOtaProgress(filesystemUpdate ? "upload-filesystem" : "upload-firmware",
+                    index + len,
+                    content_len,
+                    filesystemUpdate ? "Uploading file system update..." : "Uploading firmware...");
   //Serial.printf("Progress: %d%%\n", (Update.progress()*100)/Update.size());
   if (final) {
     updateOtaProgress("finalizing", content_len, content_len, "Finalizing update...");
     if (!Update.end(true)){
       Update.printError(Serial);
+      localOtaInProgress = false;
       finishOtaProgress(false, "Update failed. See serial log for details.");
       request->send(500, "application/json", buildOtaResponse("error", "Update failed. See serial log for details.", false, false, !filesystemUpdate));
     } else {
@@ -2337,9 +2586,8 @@ void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size
         : "Firmware update complete. Device reboots now.";
       finishOtaProgress(true, message);
       request->send(200, "application/json", buildOtaResponse("ok", message, true, false, !filesystemUpdate));
-      Serial.flush();
-      delay(250);
-      ESP.restart();
+      localOtaInProgress = false;
+      scheduledRestartMillis = millis() + 2000UL;
     }
   }
 }
