@@ -641,6 +641,10 @@ body > h3 {
     margin-top: var(--space-4);
 }
 
+.metric-grid.compact-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .metric-card {
     display: grid;
     gap: 4px;
@@ -693,11 +697,48 @@ body > h3 {
     flex: 0 1 auto;
 }
 
+.toolbar-row.maintenance-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+    align-items: stretch;
+}
+
+.toolbar-row.maintenance-actions > * {
+    width: 100%;
+    min-width: 0;
+}
+
+.toolbar-row.maintenance-actions .action-span-2 {
+    grid-column: 1 / -1;
+}
+
 .toolbar-row .button-primary,
 .toolbar-row .button-secondary,
 .toolbar-row .button-danger,
 .toolbar-row .custom-file-upload {
     min-width: 180px;
+}
+
+.action-card {
+    display: grid;
+    gap: var(--space-2);
+    align-content: start;
+    padding: 14px;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.16));
+    border-radius: var(--radius-sm);
+    background: var(--surface-soft, rgba(255, 255, 255, 0.05));
+}
+
+.action-card strong {
+    color: var(--heading, #fff);
+    font-size: 0.98rem;
+}
+
+.action-card p {
+    margin: 0;
+    color: var(--muted, #8a8f98);
+    font-size: 0.9rem;
 }
 
 .button-secondary,
@@ -762,6 +803,23 @@ body > h3 {
 .progress-inline {
     display: grid;
     gap: var(--space-1);
+}
+
+.progress-inline.compact {
+    gap: 8px;
+}
+
+.progress-inline.compact .progress-track {
+    height: 8px;
+}
+
+.status-inline-note {
+    margin-top: var(--space-3);
+    padding: 12px 14px;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.035);
+    color: var(--muted, #8a8f98);
 }
 
 .visually-hidden {
@@ -925,6 +983,15 @@ body > h3 {
     .page-actions > *,
     .toolbar-row > * {
         width: 100%;
+    }
+
+    .metric-grid.compact-metrics,
+    .toolbar-row.maintenance-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .toolbar-row.maintenance-actions .action-span-2 {
+        grid-column: auto;
     }
 
     .progress-dialog {

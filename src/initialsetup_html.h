@@ -26,13 +26,12 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
 
     <div id='loader'></div>
     <div style='display:none;' id='myDiv' class='animate-bottom file-manager-shell'>
-        <section class="page-section">
+        <section class="page-section" data-used-bytes="%USEDSPIFFSvalue%" data-total-bytes="%TOTALSPIFFSvalue%">
             <div class="page-hero">
                 <h3>File Manager</h3>
                 <p class="muted-text">Manage the local LittleFS storage on the device. Web interface files should match the installed firmware version.</p>
             </div>
-            %wificonfig%
-            <div class="metric-grid">
+            <div class="metric-grid compact-metrics">
                 <article class="metric-card">
                     <span class="status-label">Free</span>
                     <strong id="freespiffs">%FREESPIFFS%</strong>
@@ -46,12 +45,11 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
                     <strong id="totalspiffs">%TOTALSPIFFS%</strong>
                 </article>
             </div>
-            <div class="section-spacer progress-inline">
+            <div class="section-spacer progress-inline compact">
                 <div class="progress-track">
                     <div class="progress-fill" id="filesystemUsageBar" style="width:0%;"></div>
                 </div>
                 <div class="progress-text">Used storage: <span id="filesystemUsageText">0%</span></div>
-                <progress class="visually-hidden" id="file" value="%USEDSPIFFSvalue%" max="%TOTALSPIFFSvalue%"> %USEDSPIFFSvalue%% </progress>
             </div>
         </section>
 
@@ -75,24 +73,39 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
                     <p class="muted-text">Use the update action to download web files that match the installed firmware. Formatting clears the whole file system.</p>
                 </div>
             </div>
-            <div class="toolbar-row">
-                <button type='button' id='updatefilesbutton' class="button-primary" value='Update Files' onclick='UpdateFiles()'>Get Files from Server</button>
-                <button type='button' class="button-danger" value='Format FS' onclick='FormatFS()'>Format Filesystem</button>
-                <form method='POST' action='/upload' enctype='multipart/form-data' id='upload_form' class="inline-upload-form">
-                    <input type='hidden' name='csrf' value='%csrfToken%'>
-                    <label for='upload' class='custom-file-upload'>Upload Single File</label>
-                    <input type='file' id='upload' name='upload' onchange='uploadConfig();'>
-                </form>
-                <button type='button' class="button-secondary" onclick="window.open('/', '_self');">Back to Overview</button>
+            <div class="toolbar-row maintenance-actions">
+                <div class="action-card">
+                    <strong>Sync Web Files</strong>
+                    <p>Loads the web interface files that match the installed firmware version.</p>
+                    <button type='button' id='updatefilesbutton' class="button-primary" value='Update Files' onclick='UpdateFiles()'>Get Files from Server</button>
+                </div>
+                <div class="action-card">
+                    <strong>Upload One File</strong>
+                    <p>Use this only when you want to replace a single file manually.</p>
+                    <form method='POST' action='/upload' enctype='multipart/form-data' id='upload_form' class="inline-upload-form">
+                        <input type='hidden' name='csrf' value='%csrfToken%'>
+                        <label for='upload' class='custom-file-upload'>Upload Single File</label>
+                        <input type='file' id='upload' name='upload' onchange='uploadConfig();'>
+                    </form>
+                </div>
+                <div class="action-card">
+                    <strong>Reset Storage</strong>
+                    <p>Deletes all files in LittleFS. Use carefully.</p>
+                    <button type='button' class="button-danger" value='Format FS' onclick='FormatFS()'>Format Filesystem</button>
+                </div>
+                <div class="action-card">
+                    <strong>Navigation</strong>
+                    <p>Return to the overview page without changing any files.</p>
+                    <button type='button' class="button-secondary" onclick="window.open('/', '_self');">Back to Overview</button>
+                </div>
             </div>
-            <div id='updatefilesinfo' class="muted-text"></div>
-            <div class="progress-inline">
+            <div id='updatefilesinfo' class="status-inline-note">Checking whether the installed web files match the firmware version.</div>
+            <div class="progress-inline compact">
                 <div id="updatefilesprogress" style="display:none;">
                     <div class="progress-track">
                         <div id="updatefilesprogressfill" class="progress-fill" style="width:0%;"></div>
                     </div>
                 </div>
-                <progress id="updatefilesprogressbar" class="visually-hidden" value="0" max="100">0%</progress>
                 <span id="updatefilesprogresstext" class="progress-text"></span>
             </div>
         </section>
@@ -144,15 +157,15 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
     };
 
     function updateFilesystemUsage() {
-        var progress = document.getElementById('file');
+        var section = document.querySelector('.file-manager-shell .page-section[data-used-bytes]');
         var fill = document.getElementById('filesystemUsageBar');
         var text = document.getElementById('filesystemUsageText');
-        if (!progress || !fill || !text) {
+        if (!section || !fill || !text) {
             return;
         }
 
-        var used = Number(progress.value || 0);
-        var total = Number(progress.max || 0);
+        var used = Number(section.getAttribute('data-used-bytes') || 0);
+        var total = Number(section.getAttribute('data-total-bytes') || 0);
         var percent = total > 0 ? Math.min(100, Math.max(0, Math.round((used / total) * 100))) : 0;
         fill.style.width = percent + '%';
         text.textContent = percent + '%';
