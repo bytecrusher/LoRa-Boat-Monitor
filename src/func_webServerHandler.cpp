@@ -1299,25 +1299,15 @@ void WebServerHandler()
     String content = "";
     content = readFile2(LittleFS, "/firmware.html");
 
-    String stableFirmwareUrl;
-    String stableVersion;
-    String stableError;
-    const bool stableAvailable = resolveStableFirmware(stableFirmwareUrl, stableVersion, &stableError);
-
     String betaFirmwareUrl;
     String betaVersion;
     String betaError;
     const bool betaAvailable = resolveBetaFirmware(betaFirmwareUrl, betaVersion, &betaError);
 
-    content.replace("%stableServerAvailable%", stableAvailable ? "Server available" : "Server not available");
-    content.replace("%stableVersion%", htmlEscape(stableAvailable ? stableVersion : "-"));
-    content.replace("%stableFirmwareUrl%", htmlEscape(stableAvailable ? stableFirmwareUrl : ""));
     content.replace("%serverAvailable%", betaAvailable ? "Server available" : "Server not available");
     content.replace("%version2%", htmlEscape(betaAvailable ? betaVersion : "-"));
     content.replace("%betaFirmwareUrl%", htmlEscape(betaAvailable ? betaFirmwareUrl : ""));
-    content.replace("%configuredFirmwareUpdateUrl%", htmlEscape(String(actconf.firmwareUpdateUrl)));
     content.replace("%configuredFirmwareBaseUrl%", htmlEscape(getConfiguredFirmwareBaseUrl()));
-    content.replace("%stableStatusDetail%", htmlEscape(stableAvailable ? "OK" : stableError));
     content.replace("%betaStatusDetail%", htmlEscape(betaAvailable ? "OK" : betaError));
     content.replace("%mdsOtaUrl%", htmlEscape(String(actconf.mdsOtaUrl)));
     content.replace("%mdsOtaSecretStatus%", strlen(actconf.mdsOtaSecret) > 0 ? "configured" : "not configured");
@@ -1363,9 +1353,7 @@ void WebServerHandler()
     String sha256;
     String resolveError;
     bool resolved = false;
-    if (source == "stable") {
-      resolved = resolveStableFirmware(remoteUrl, version, &resolveError, &sha256);
-    } else if (source == "beta") {
+    if (source == "beta") {
       resolved = resolveBetaFirmware(remoteUrl, version, &resolveError, &sha256);
     } else if (source == "mds") {
       remoteUrl = String(actconf.mdsOtaUrl);
@@ -2159,49 +2147,6 @@ void WebServerHandler()
     request->send_P(200, "text/html", logout_html2);
   });
     
-}
-
-bool queueStableFirmwareUpdateIfNewer(String &message) {
-  if (WiFi.status() != WL_CONNECTED) {
-    message = "No Wi-Fi connection available for automatic firmware update.";
-    return false;
-  }
-
-  if (remoteOtaPending || remoteOtaInProgress) {
-    message = "Remote OTA update is already pending or running.";
-    return false;
-  }
-
-  String remoteUrl;
-  String version;
-  String sha256;
-  String resolveError;
-  if (!resolveStableFirmware(remoteUrl, version, &resolveError, &sha256) || remoteUrl.length() == 0 || version.length() == 0) {
-    message = "Unable to resolve stable firmware from update server.";
-    if (resolveError.length()) {
-      message += " " + resolveError;
-    }
-    return false;
-  }
-
-  sha256 = normalizeSha256(sha256);
-  if (sha256.length() == 0) {
-    message = "Automatic firmware update skipped because firmware-manifest.json has no valid SHA256 checksum.";
-    return false;
-  }
-
-  if (compareFirmwareVersions(version, String(actconf.fversion)) <= 0) {
-    message = "Installed firmware is already current: " + String(actconf.fversion);
-    return false;
-  }
-
-  remoteOtaUrl = remoteUrl;
-  remoteOtaVersion = version;
-  remoteOtaSha256 = sha256;
-  remoteOtaPending = true;
-  startOtaProgress("queued", 0, "Automatic stable firmware update queued on device...");
-  message = "Automatic stable firmware update queued: " + version;
-  return true;
 }
 
 #ifdef ESP8266

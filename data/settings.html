@@ -39,9 +39,6 @@
             cssStyle: %cssStyle%,
             OledDisplayRotation: %OledDisplayRotation%,
             SendDataViaWifi: %SendDataViaWifi%,
-            autoFirmwareUpdate: %autoFirmwareUpdate%,
-            standbyFirmwareUpdateCheck: %standbyFirmwareUpdateCheck%,
-            standbyFirmwareUpdateIntervalHours: %standbyFirmwareUpdateIntervalHours%,
             MdsSensorIdBattery: %MdsSensorIdBattery%,
             MdsSensorIdTanks: %MdsSensorIdTanks%,
             MdsSensorIdStatus: %MdsSensorIdStatus%,
@@ -368,37 +365,13 @@
                 </div>
 
                 <div class="row section-subtitle">
-                    <h5 class="section-heading">Firmware and Web Interface Update Source</h5>
+                    <h5 class="section-heading">Beta Firmware and Web Interface Update Source</h5>
                 </div>
-                <div class="section-note">Used for firmware manifests and web interface files. The firmware page uses the same configured update source.</div>
+                <div class="section-note">Used for beta firmware manifests and web interface files. The firmware page uses the same configured update source for beta installs and file downloads.</div>
                 <div class="row">
                     <div class="firstColumn"><span class="labelText">Web Update Hostname <span class="infoBadge" tabindex="0">i<span class="infoPopover">Nur der Hostname des Update-Servers, ohne <code>http://</code> oder <code>https://</code>. Darueber werden neue Webdateien und Update-Infos abgefragt.</span></span></span></div>
                     <div class="secondColumn">
                         <input type='text' required name='firmwareUpdateUrl' size='40' value='%firmwareUpdateUrl%' maxlength='120' onchange=''>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="firstColumn"><span class="labelText">Auto Stable Firmware Update <span class="infoBadge" tabindex="0">i<span class="infoPopover">Wenn aktiv, prueft das Geraet bei WLAN-Verbindung das Server-Manifest und installiert nur neuere Stable-Firmware automatisch. Beta-Firmware bleibt manuell.</span></span></span></div>
-                    <div class="secondColumn">
-                        <select name='autoFirmwareUpdate' size='1'>
-                            <option value='Yes'>On</option>
-                            <option value='No'>Off</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="firstColumn"><span class="labelText">Standby Firmware Check <span class="infoBadge" tabindex="0">i<span class="infoPopover">Erlaubt dem Geraet, auch bei einem Standby-Wakeup in groesseren Abstaenden nach neuer Stable-Firmware zu suchen. Es werden dabei kein Access Point, Webserver, mDNS oder NMEA-Server gestartet. Benoetigt Auto Stable Firmware Update = On.</span></span></span></div>
-                    <div class="secondColumn">
-                        <select name='standbyFirmwareUpdateCheck' size='1'>
-                            <option value='Yes'>On</option>
-                            <option value='No'>Off</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="firstColumn"><span class="labelText">Standby Firmware Check Interval <span class="infoBadge" tabindex="0">i<span class="infoPopover">Mindestabstand zwischen zwei Firmware-Pruefungen im Standby-Wakeup. 24 bedeutet etwa einmal taeglich.</span></span></span></div>
-                    <div class="secondColumn">
-                        <input type='number' name='standbyFirmwareUpdateIntervalHours' min='1' max='168' step='1' required inputmode='numeric' value='%standbyFirmwareUpdateIntervalHours%'> hours
                     </div>
                 </div>
                 <div class="row">

@@ -30,6 +30,8 @@ extern int slot;
 extern String getMyDirAsString(fs::FS &fs, const char * dirname, uint8_t levels);
 extern bool reboot;
 extern unsigned long standbySleepBlockedUntilMillis;
+extern bool localOtaInProgress;
+extern unsigned long scheduledRestartMillis;
 extern int relayPin;
 extern String SendDataViaWifi[2];
 extern String usepassword[2];
@@ -70,7 +72,6 @@ void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size
 bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &errorMessage);
 bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &errorMessage, const String &expectedSha256);
 bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &errorMessage, const String &expectedSha256, bool useMdsOtaEndpoint);
-bool queueStableFirmwareUpdateIfNewer(String &message);
 String getCsrfToken();
 bool isCsrfTokenValid(AsyncWebServerRequest *request);
 bool requireCsrfToken(AsyncWebServerRequest *request);
