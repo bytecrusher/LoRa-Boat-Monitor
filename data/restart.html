@@ -14,17 +14,19 @@
 <body class="restart-page">
   %header%
   
-  <div class="hidden" id="loader"></div>
-  <div id="myDiv" class="animate-bottom restart-panel">
-    <h3>Restart</h3>
-    The device returns to the overview page automatically after the restart.
-    <br><br>
-    <button id="restartDeviceButton">Restart Device</button>
-    <br>
-    <hr>
-    <br>
-    <button id="restartBackButton">Back to Overview</button>
-    <br>
+  <div class="hidden" id="loader" style="display:none;"></div>
+  <div id="myDiv" class="animate-bottom restart-panel" style="display:block;">
+    <div class="page-hero">
+      <h3>Restart Device</h3>
+      <p class="muted-text">Use this only when you want to reboot the ESP immediately. After a successful restart, the page returns to the overview automatically.</p>
+    </div>
+    <div class="notice notice-info">
+      Sensor acquisition, Wi-Fi and the web interface will be briefly interrupted during the reboot.
+    </div>
+    <div class="button-row">
+      <button id="restartDeviceButton">Restart Device</button>
+      <button id="restartBackButton" class="button-secondary">Back to Overview</button>
+    </div>
   </div>
 </body>
 

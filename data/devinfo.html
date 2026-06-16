@@ -8,10 +8,21 @@
   <meta name=viewport content='width=device-width, initial-scale=1'>
 </head>
 
-<body>
+<body class="device-info-page">
   <script src='/common.js' type='text/javascript'></script>
   <script src='/app.js' type='text/javascript'></script>
   %header%
+  <div class="page-content">
+  <section class="page-section">
+    <div class="page-hero">
+      <h3>Device Information</h3>
+      <p class="muted-text">Read-only overview of firmware, connectivity, LoRa status and live runtime values.</p>
+    </div>
+  </section>
+  <section class="page-section data-table-panel device-info-shell">
+  <div class="table-toolbar">
+    <p class="muted-text">Values in the live section update while the device is running.</p>
+  </div>
   <table class="data-table readonly-table">
     <tr>
       <td>
@@ -256,6 +267,24 @@
     </tr>
 
     <tr>
+      <td>Standby Input State</td>
+      <td><input id='standbyInputState' type='text' name='standbyInputState' size='15' value='0' disabled></td>
+      <td>[active LOW]</td>
+    </tr>
+
+    <tr>
+      <td>Standby Input Level</td>
+      <td><input id='standbyInputLevel' type='text' name='standbyInputLevel' size='15' value='0' disabled></td>
+      <td>[GPIO level]</td>
+    </tr>
+
+    <tr>
+      <td>Standby Input Pin</td>
+      <td><input id='standbyInputPin' type='text' name='standbyInputPin' size='15' value='0' disabled></td>
+      <td>[GPIO]</td>
+    </tr>
+
+    <tr>
       <td>Relay</td>
       <td><input id='relay' type='text' name='relay' size='15' value='0' disabled></td>
       <td>[bin]</td>
@@ -291,11 +320,12 @@
       <td></td>
     </tr>
   </table>
-  <br>
-  <hr>
-  <br>
-  <form action='/'><button type='submit'>Back to Overview</button></form>
-  <br>
-  <br>
+  </section>
+  <section class="page-section">
+    <div class="button-row">
+      <button type='button' class="button-secondary" onclick="window.location.assign('/')">Back to Overview</button>
+    </div>
+  </section>
+  </div>
 </body>
 </html>

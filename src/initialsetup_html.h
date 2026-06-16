@@ -2,211 +2,100 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html><head>
     <title>Filesystem - %devname%</title>
     <link rel='stylesheet' type='text/css' href='/styles.css'>
+    <link rel='stylesheet' type='text/css' href='/common.css'>
     <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name='csrf-token' content='%csrfToken%'>
     <style type='text/css'>
-        /* General text definitions */
-        body {
-            color: rgb(200, 200, 200);
-            font-family: arial;
-            /*padding: 50px;
-            background-color: #222;*/
-        }
-
-        /* Background definitions */
-        body {
-            background-color: rgb(32, 32, 32);
-            background-image: linear-gradient(45deg, black 25%, transparent 25%, transparent 75%, black 75%, black),
-                linear-gradient(45deg, black 25%, transparent 25%, transparent 75%, black 75%, black),
-                linear-gradient(to bottom, rgb(8, 8, 8), rgb(32, 32, 32));
-            background-size: 10px 10px, 10px 10px, 10px 5px;
-            background-position: 0px 0px, 5px 5px, 0px 0px;
-        }
-
-        /* Text color definitions for head letters */
-        a {
-            color: rgb(255, 255, 255);
-        }
-
-        h2 {
-            color: rgb(255, 255, 255);
-        }
-
-        h3 {
-            color: rgb(255, 255, 255);
-        }
-
-        table {
-            font-family: arial, sans-serif;
-            border-collapse: collapse;
-            width: 100%;
-        }
-            td, th {
-            border: 1px solid #dddddd;
-            text-align: left;
-            /*padding: 8px;*/
-        }
-
-        /* Center the loader */
-        #loader {
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            z-index: 1;
-            width: 120px;
-            height: 120px;
-            margin: -76px 0 0 -76px;
-            border: 16px solid #f3f3f3;
-            border-radius: 50%;
-            border-top: 16px solid #3498db;
-            -webkit-animation: spin 2s linear infinite;
-            animation: spin 2s linear infinite;
-        }
-        
-        @-webkit-keyframes spin {
-            0% { -webkit-transform: rotate(0deg); }
-            100% { -webkit-transform: rotate(360deg); }
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        /* Add animation to 'page content' */
-        .animate-bottom {
-            position: relative;
-            -webkit-animation-name: animatebottom;
-            -webkit-animation-duration: 1s;
-            animation-name: animatebottom;
-            animation-duration: 1s
-        }
-        
-        @-webkit-keyframes animatebottom {
-            from { bottom:-100px; opacity:0 } 
-            to { bottom:0px; opacity:1 }
-        }
-        
-        @keyframes animatebottom { 
-            from{ bottom:-100px; opacity:0 } 
-            to{ bottom:0; opacity:1 }
-        }
-        
-        #myDiv {
-            display: none;
-            /*text-align: center;*/
-        }
-
-        button,input::file-selector-button, .custom-file-upload {
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 14px;
-            color: #000000;
-            padding: 10px 20px;
-            background: -moz-linear-gradient(top,
-                    #ffffff 0%,
-                    #ffffff 50%,
-                    #bdbbbd);
-            background: -webkit-gradient(linear, left top, left bottom,
-                    from(#ffffff),
-                    color-stop(0.50, #ffffff),
-                    to(#bdbbbd));
-            border-radius: 10px;
-            border: 3px solid #dedcd5;
-        }
-
-        .led {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background-color: rgba(255, 255, 255, 0.25);
-            box-shadow: #000 0 -1px 6px 1px;
-        }
-        .led-red {
-            background-color: #F00;
-            box-shadow: #000 0 -1px 6px 1px, inset #600 0 -1px 8px, #F00 0 3px 11px;
-        }
-
-        .led-green {
-            background-color: #80FF00;
-            box-shadow: #000 0 -1px 6px 1px, inset #460 0 -1px 8px, #80FF00 0 3px 11px;
-        }
-
-        progress {
-            display:inline-block;
-            width:190px;
-            /*height:20px;
-            padding:15px 0 0 0;*/
-            margin:0;
-            /*background:none;*/
-            border: 0;
-            border-radius: 15px;
-            text-align: left;
-            position:relative;
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 0.8em;
-        }
-
-        progress::-webkit-progress-bar {
-            height:11px;
-            width:150px;
-            margin:0 auto;
-            background-color: #CCC;
-            border-radius: 15px;
-            box-shadow:0px 0px 6px #777 inset;
-        }
-        progress::-webkit-progress-value {
-            display:inline-block;
-            float:left;
-            height:11px;
-            margin:0px -10px 0 0;
-            background: #0A0;
-            border-radius: 15px;
-            box-shadow:0px 0px 6px #666 inset;
-        }
-        progress:after {
-            margin:-26px 0 0 -7px;
-            padding:0;
-            display:inline-block;
-            float:left;
-            content: attr(value) '%';
-        }
-
-        .box { float: left; }
-        .box:last-child { margin-right: 0; }
-
         input[type="file"] {
             display: none;
         }
     </style>
-  </head><body>
-  <div style="float: left; width: 100%">
-    <div class="box"><h2>%devname%</h2></div>
-    <div class="box" style="margin-top: 30px; margin-left: 20px;">
+  </head><body class="file-manager-page">
+    <div class="header-layout">
+      <div class="header-title-group">
+        <h2>%devname%</h2>
+      </div>
+      <div class="header-status-group">
         <div id='myping' class="led"></div>
+        <span class="header-status-text">Device reachability</span>
+      </div>
     </div>
-</div>
-<div>%crights%, %fversion%, CQ: <data id='quality'>%quality%</data>%</div>
-  <hr>
-  <h3><data class="blink" id='info'></data></h3>
+    <div class="header-meta">%crights%, %fversion%, CQ: <data id='quality'>%quality%</data>%</div>
+    <div class="notice hidden" id="infoNotice"><data class="blink" id='info'></data></div>
 
     <div id='loader'></div>
-    <div style='display:none;' id='myDiv' class='animate-bottom'>
-        %wificonfig%
-        <p><progress id="file" value="%USEDSPIFFSvalue%" max="%TOTALSPIFFSvalue%" style="margin-right: 10px"> %USEDSPIFFSvalue%% </progress> Free: <span id="freespiffs">%FREESPIFFS%</span> | Used: <span id="usedspiffs">%USEDSPIFFS%</span> | Total: <span id="totalspiffs">%TOTALSPIFFS%</span></p>
-        <div id='table'></div>
-        <button type='button' style='margin: 20px' value='Format FS' onclick='FormatFS()'>Format Filesystem</button>
-        <button type='button' id='updatefilesbutton' value='Update Files' onclick='UpdateFiles()'>Get Files from Server</button>
-        <div id='updatefilesinfo' style='margin-top: 8px; margin-bottom: 8px;'></div>
-        <progress id="updatefilesprogressbar" value="0" max="100" style="display:none; margin-right: 10px">0%</progress>
-        <span id="updatefilesprogresstext"></span>
-        <button type='button' style='margin: 20px' value='Format FS' onclick='getTable()'>Show Files</button>
-        <form method='POST' action='/upload' enctype='multipart/form-data' id='upload_form' style="display: -webkit-inline-flex; margin-right: 20px;">
-            <input type='hidden' name='csrf' value='%csrfToken%'>
-            <label for='upload' class='custom-file-upload' style='display: block;'>Upload single File</label>
-            <input type='file' id='upload' name='upload' onchange='uploadConfig();'>
-        </form>
-        <button onclick="window.open('/', '_self');">Back</button>
+    <div style='display:none;' id='myDiv' class='animate-bottom file-manager-shell'>
+        <section class="page-section">
+            <div class="page-hero">
+                <h3>File Manager</h3>
+                <p class="muted-text">Manage the local LittleFS storage on the device. Web interface files should match the installed firmware version.</p>
+            </div>
+            %wificonfig%
+            <div class="metric-grid">
+                <article class="metric-card">
+                    <span class="status-label">Free</span>
+                    <strong id="freespiffs">%FREESPIFFS%</strong>
+                </article>
+                <article class="metric-card">
+                    <span class="status-label">Used</span>
+                    <strong id="usedspiffs">%USEDSPIFFS%</strong>
+                </article>
+                <article class="metric-card">
+                    <span class="status-label">Total</span>
+                    <strong id="totalspiffs">%TOTALSPIFFS%</strong>
+                </article>
+            </div>
+            <div class="section-spacer progress-inline">
+                <div class="progress-track">
+                    <div class="progress-fill" id="filesystemUsageBar" style="width:0%;"></div>
+                </div>
+                <div class="progress-text">Used storage: <span id="filesystemUsageText">0%</span></div>
+                <progress class="visually-hidden" id="file" value="%USEDSPIFFSvalue%" max="%TOTALSPIFFSvalue%"> %USEDSPIFFSvalue%% </progress>
+            </div>
+        </section>
+
+        <section class="page-section">
+            <div class="table-toolbar">
+                <div>
+                    <h4>Stored Files</h4>
+                    <p class="muted-text">Load the current file list from the device when you need it.</p>
+                </div>
+                <div class="button-group">
+                    <button type='button' class="button-secondary" onclick='getTable()'>Show Files</button>
+                </div>
+            </div>
+            <div id='table' class='file-table-shell'></div>
+        </section>
+
+        <section class="page-section toolbar-stack">
+            <div class="table-toolbar">
+                <div>
+                    <h4>Maintenance</h4>
+                    <p class="muted-text">Use the update action to download web files that match the installed firmware. Formatting clears the whole file system.</p>
+                </div>
+            </div>
+            <div class="toolbar-row">
+                <button type='button' id='updatefilesbutton' class="button-primary" value='Update Files' onclick='UpdateFiles()'>Get Files from Server</button>
+                <button type='button' class="button-danger" value='Format FS' onclick='FormatFS()'>Format Filesystem</button>
+                <form method='POST' action='/upload' enctype='multipart/form-data' id='upload_form' class="inline-upload-form">
+                    <input type='hidden' name='csrf' value='%csrfToken%'>
+                    <label for='upload' class='custom-file-upload'>Upload Single File</label>
+                    <input type='file' id='upload' name='upload' onchange='uploadConfig();'>
+                </form>
+                <button type='button' class="button-secondary" onclick="window.open('/', '_self');">Back to Overview</button>
+            </div>
+            <div id='updatefilesinfo' class="muted-text"></div>
+            <div class="progress-inline">
+                <div id="updatefilesprogress" style="display:none;">
+                    <div class="progress-track">
+                        <div id="updatefilesprogressfill" class="progress-fill" style="width:0%;"></div>
+                    </div>
+                </div>
+                <progress id="updatefilesprogressbar" class="visually-hidden" value="0" max="100">0%</progress>
+                <span id="updatefilesprogresstext" class="progress-text"></span>
+            </div>
+        </section>
     </div>
 <script>
     function check_ssid(iname) {
@@ -250,50 +139,70 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
     function showPage() {
         document.getElementById('loader').style.display = 'none';
         document.getElementById('myDiv').style.display = 'block';
+        updateFilesystemUsage();
         refreshUpdateFilesInfo();
     };
+
+    function updateFilesystemUsage() {
+        var progress = document.getElementById('file');
+        var fill = document.getElementById('filesystemUsageBar');
+        var text = document.getElementById('filesystemUsageText');
+        if (!progress || !fill || !text) {
+            return;
+        }
+
+        var used = Number(progress.value || 0);
+        var total = Number(progress.max || 0);
+        var percent = total > 0 ? Math.min(100, Math.max(0, Math.round((used / total) * 100))) : 0;
+        fill.style.width = percent + '%';
+        text.textContent = percent + '%';
+    }
 
     function renderUpdateFilesInfo(info) {
         var button = document.getElementById('updatefilesbutton');
         var status = document.getElementById('updatefilesinfo');
         var progressBar = document.getElementById('updatefilesprogressbar');
         var progressText = document.getElementById('updatefilesprogresstext');
+        var progressWrap = document.getElementById('updatefilesprogress');
+        var progressFill = document.getElementById('updatefilesprogressfill');
         if (!button || !status || !info) {
             return;
         }
 
         if (info.busy) {
-            button.innerHTML = 'Downloading Files from Server...';
+            button.textContent = 'Downloading Files from Server...';
             button.disabled = true;
-            status.innerHTML = 'Web files are currently being downloaded for firmware ' + info.firmwareVersion + '.';
-            if (progressBar && progressText) {
-                progressBar.style.display = 'inline-block';
+            status.textContent = 'Web files are currently being downloaded for firmware ' + info.firmwareVersion + '.';
+            if (progressBar && progressText && progressWrap && progressFill) {
+                progressWrap.style.display = 'block';
                 progressBar.value = info.percent || 0;
-                progressText.innerHTML = (info.percent || 0) + '%';
+                progressFill.style.width = (info.percent || 0) + '%';
+                progressText.textContent = (info.percent || 0) + '%';
                 if (info.currentFile && info.currentFile.length > 0) {
-                    progressText.innerHTML += ' - ' + info.currentFile + ' (' + info.completed + '/' + info.total + ')';
+                    progressText.textContent += ' - ' + info.currentFile + ' (' + info.completed + '/' + info.total + ')';
                 }
             }
             return;
         }
 
         button.disabled = false;
-        if (progressBar && progressText) {
-            progressBar.style.display = 'none';
+        if (progressBar && progressText && progressWrap && progressFill) {
+            progressWrap.style.display = 'none';
             progressBar.value = info.percent || 0;
-            progressText.innerHTML = '';
+            progressFill.style.width = (info.percent || 0) + '%';
+            progressText.textContent = '';
         }
         if (info.upToDate) {
-            button.innerHTML = 'Get Files from Server';
-            status.innerHTML = 'Web files are up to date for installed firmware ' + info.firmwareVersion + '.';
+            button.textContent = 'Get Files from Server';
+            status.textContent = 'Web files are up to date for installed firmware ' + info.firmwareVersion + '.';
             return;
         }
 
-        button.innerHTML = 'Get Files from Server';
+        button.textContent = 'Get Files from Server';
         if (info.storedWebFilesVersion && info.storedWebFilesVersion.length > 0) {
-            status.innerHTML = 'Installed firmware: ' + info.firmwareVersion + ' | Stored web files: ' + info.storedWebFilesVersion + ' | Download recommended.';
+            status.textContent = 'Installed firmware: ' + info.firmwareVersion + ' | Stored web files: ' + info.storedWebFilesVersion + ' | Download recommended.';
         } else {
-            status.innerHTML = 'No stored web file version found. Download recommended for firmware ' + info.firmwareVersion + '.';
+            status.textContent = 'No stored web file version found. Download recommended for firmware ' + info.firmwareVersion + '.';
         }
     };
 
@@ -514,7 +423,7 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
             offlineTimer = 0;
             document.getElementById("myping").classList.add('led-green');
             document.getElementById("myping").classList.remove('led-red');
-            document.getElementById("myping").innerHTML = "";
+            document.getElementById("myping").textContent = "";
             // Turn off the green led.
             setTimeout(function () { 
                 document.getElementById("myping").classList.remove('led-green');
@@ -528,7 +437,7 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
             offlineTimer = setTimeout(function () { 
             document.getElementById("myping").classList.add('led-red');
             document.getElementById("myping").classList.remove('led-green');
-            document.getElementById("myping").innerHTML = "<div style='margin-left:20px;'>Offline</div>";
+            document.getElementById("myping").textContent = "Offline";
             }, 3000);
         }
         xmlhttpheader.open('GET', '/getdata', true);
