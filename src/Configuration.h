@@ -6,13 +6,13 @@
 // Default configuration
 // Types 'byte' und 'word' doesn't work!
 typedef struct {
-  int valid = 14;                            // Number of configuration (Please change when the structure or values are changed)
+  int valid = 16;                            // Number of configuration (Please change when the structure or values are changed)
   int crypt = 1;                            // Activate for critical webside a password query [0 = off|1 = on]
   char username[31] = "admin";
   char password[31] = "boatmonitor";        // Password for critical websites (settings, update and reboot)
   char devname[21] = "LoRa Boat Monitor";   // Device name for web configuration
   char crights[29] = "NoWa (C) (mod by Gunni) 2023";       // Copy rights
-  char fversion[7] = "V1.10c";               // Firmware version
+  char fversion[7] = "V1.13h";               // Firmware version
   char license[12] = "GPL3";                // License type
   int debug = 3;                            // Debug mode 0=off 1=Errors 2=Errors + Warnings 3=Errors + Warnings + Messages
   int corder1 = 1;                          // Set the Order or Priority for connecting to wifi
@@ -101,6 +101,8 @@ typedef struct {
   int OledDisplayRotation = 0;              // OLED Display Rotation: 0 = 0°, 1 = 180°
   char mdsOtaUrl[100] = "https://mds-git.derguntmar.de/ota/getupdate.php"; // MDS OTA endpoint
   char mdsOtaSecret[65] = "";                // Shared secret for the MDS OTA endpoint
+  char standbyFirmwareUpdateCheck[8] = "No"; // Allow automatic stable firmware checks during standby wakeups [Yes|No]
+  int standbyFirmwareUpdateIntervalHours = 24; // Minimum interval for standby firmware checks in hours [1...168]
 } configData;
 
 #endif

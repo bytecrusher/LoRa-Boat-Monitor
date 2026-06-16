@@ -204,7 +204,9 @@ Pflichtstruktur:
   "board": {
     "apiKey": "string",
     "macAddress": "string",
-    "protocolVersion": "1"
+    "protocolVersion": "1",
+    "firmwareVersion": "V1.13h",
+    "standbyEnabled": true
   },
   "sensors": [
     {
@@ -247,7 +249,8 @@ Empfohlene Payload fuer externe Geraete ohne bekannte `sensorId`:
   "board": {
     "apiKey": "my_api_key",
     "macAddress": "24:6F:28:7B:A9:14",
-    "protocolVersion": "1"
+    "protocolVersion": "1",
+    "standbyEnabled": false
   },
   "sensors": [
     {
@@ -292,6 +295,12 @@ Verhalten bei neuen oder unvollstaendig provisionierten Boards:
 - `board.apiKey` muss dem konfigurierten API-Key entsprechen
 - `board.protocolVersion` muss aktuell `"1"` sein
 - `board.macAddress` wird auf `boardConfig` aufgeloest
+- `board.firmwareVersion` ist optional und kann von ESP32-Geraeten zur Diagnose/Versionsanzeige mitgesendet werden
+- `board.standbyEnabled` ist optional und wird als Boolean interpretiert
+- akzeptierte Werte fuer `board.standbyEnabled` sind `true/false`, `1/0`, `yes/no`, `on/off`, `enabled/disabled`
+- die Alias-Felder `standby_enabled`, `standbyModeEnabled` und `sleepEnabled` werden gleich behandelt
+- `alwaysOnline` wird ebenfalls akzeptiert, aber invertiert interpretiert
+- `standbyEnabled = false` bedeutet fuer MDS: Board ist dauerhaft online; MDS kann dann einen persistenten WakeupStan-Eintrag wie `Always online` erzeugen
 - falls das Board noch nicht existiert, wird es automatisch angelegt
 - falls `sensorId` fehlt, wird der Sensor automatisch aus `sensorConfig` des Boards aufgeloest
 
@@ -512,12 +521,17 @@ Weitere Header werden geloggt, aber nicht zwingend validiert.
   - wenn die MAC nicht fuer Updates konfiguriert ist
 - `200`
   - wenn eine neue Firmware geliefert wird
+  - Muss den Response-Header `x-SHA256` oder `X-SHA256` mit der SHA256-Pruefsumme der ausgelieferten Firmware enthalten.
+  - Sollte den Response-Header `x-Firmware-Version` mit der ausgelieferten Firmware-Version enthalten, damit der ESP die MDS-OTA-Version im Webinterface anzeigen kann.
 - `304`
   - wenn keine neuere Firmware vorhanden ist
 
 ### Dateipfade
 
 - Firmware-Binaerdateien: `var/ota/bin/`
+- Empfohlene Metadateien fuer automatische Deploys:
+  - `var/ota/bin/firmware.version`
+  - `var/ota/bin/firmware.sha256`
 - OTA-Logs: `var/ota/logs/`
 
 

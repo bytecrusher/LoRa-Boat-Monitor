@@ -156,6 +156,7 @@ paths:
                     apiKey: my_api_key
                     macAddress: "94:B9:7E:FE:F5:40"
                     protocolVersion: "1"
+                    standbyEnabled: true
                   sensors:
                     - sensorType: ADC
                       sensorName: Battery
@@ -559,6 +560,19 @@ paths:
       responses:
         '200':
           description: Neue Firmware wird ausgeliefert
+          headers:
+            x-Firmware-Version:
+              required: false
+              description: Version der ausgelieferten Firmware fuer die Anzeige im ESP-Webinterface.
+              schema:
+                type: string
+                example: V1.13h
+            x-SHA256:
+              required: true
+              description: SHA256-Pruefsumme der ausgelieferten Firmware-Datei.
+              schema:
+                type: string
+                pattern: '^[A-Fa-f0-9]{64}$'
           content:
             application/octet-stream:
               schema:
@@ -703,6 +717,17 @@ components:
         protocolVersion:
           type: string
           const: "1"
+        firmwareVersion:
+          type: string
+          description: Optionale Firmware-Version des sendenden ESP32-Geraets
+          example: V1.13h
+        standbyEnabled:
+          type: boolean
+          description: >
+            Optionales Board-Flag fuer Standby/Sleep-Unterstuetzung. `false`
+            bedeutet "always online". Akzeptierte Alias-Felder im Ingest sind
+            `standby_enabled`, `standbyModeEnabled`, `sleepEnabled` und
+            invertiert `alwaysOnline`.
     ReceiveJsonSensor:
       type: object
       required: [date, time]

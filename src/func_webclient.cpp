@@ -26,8 +26,21 @@ extern time_t pendingMdsWakeupEventEpoch;
 extern char pendingMdsStandbyEventCause[24];
 extern char pendingMdsWakeupEventCause[24];
 
+String lastMdsStatus = "";
+
+String getLastMdsStatus()
+{
+  return lastMdsStatus;
+}
+
 namespace {
 const size_t MAX_WEB_FILE_DOWNLOAD_SIZE = 262144;
+const char MDS_GIT_CERT_FINGERPRINT[] = "BB:B9:F7:5F:FD:F1:DB:03:EE:DC:3E:DF:46:B0:0A:97:27:43:F7:FF:A6:B3:62:A1:B8:8D:C5:E2:95:DD:A3:38";
+
+bool isStandbyEnabledForMds(const configData &config)
+{
+  return String(config.standbyMode) == "On";
+}
 
 String normalizeSha256(const String &sha256) {
   String normalized = sha256;
@@ -57,6 +70,48 @@ String sha256ToHex(const uint8_t digest[32]) {
     hex += hexChars[digest[i] & 0x0F];
   }
   return hex;
+}
+
+bool getLittleFsFileSha256(const String &path, String &sha256) {
+  sha256 = "";
+  if (!LittleFS.exists(path)) {
+    return false;
+  }
+
+  File file = LittleFS.open(path.c_str(), FILE_READ);
+  if (!file) {
+    return false;
+  }
+
+  mbedtls_sha256_context shaContext;
+  mbedtls_sha256_init(&shaContext);
+  mbedtls_sha256_starts_ret(&shaContext, 0);
+
+  uint8_t buffer[1024];
+  while (file.available()) {
+    const size_t bytesRead = file.read(buffer, sizeof(buffer));
+    if (bytesRead == 0) {
+      break;
+    }
+    mbedtls_sha256_update_ret(&shaContext, buffer, bytesRead);
+  }
+
+  file.close();
+
+  uint8_t digest[32];
+  mbedtls_sha256_finish_ret(&shaContext, digest);
+  mbedtls_sha256_free(&shaContext);
+  sha256 = sha256ToHex(digest);
+  return sha256.length() == 64;
+}
+
+bool isWebFileCurrent(const char *fileName, const String &expectedSha256) {
+  const String path = "/" + String(fileName);
+  String actualSha256;
+  if (!getLittleFsFileSha256(path, actualSha256)) {
+    return false;
+  }
+  return actualSha256 == expectedSha256;
 }
 
 String normalizeFirmwareUpdateBaseUrl(const char *configuredValue)
@@ -155,13 +210,48 @@ String normalizeSecureUrl(const String &configuredValue)
     normalized = "https://" + normalized;
   }
 
+  if (normalized.startsWith("https://git.derguntmar.de/")) {
+    normalized.replace("https://git.derguntmar.de/", "https://mds-git.derguntmar.de/");
+  }
+
   return normalized;
 }
 
 bool hasValidSystemTime()
 {
   const time_t now = time(nullptr);
-  return now >= 1704067200; // 2024-01-01 00:00:00 UTC
+  // The current Let's Encrypt R12 server certificate for MDS is valid from
+  // 2026-05-03. Older stale RTC values can pass a generic "after 2024" check
+  // but still fail TLS validation with "certificate not yet valid".
+  return now >= 1777852800; // 2026-05-04 00:00:00 UTC
+}
+
+bool waitForMdsSystemTime(uint32_t timeoutMs)
+{
+  const unsigned long start = millis();
+  while (!hasValidSystemTime() && (millis() - start < timeoutMs)) {
+    delay(250);
+  }
+  return hasValidSystemTime();
+}
+
+bool ensureMdsSystemTime()
+{
+  if (hasValidSystemTime()) {
+    return true;
+  }
+
+  DebugPrintln(2, "System time is not synchronized. Retrying NTP before MDS request...");
+  configTime(3600, 3600, "time.nist.gov", "0.pool.ntp.org", "1.pool.ntp.org");
+  if (waitForMdsSystemTime(12000)) {
+    struct tm tmstruct;
+    if (getLocalTime(&tmstruct, 1000)) {
+      DebugPrintln(3, "\nMDS time sync OK: " + String((tmstruct.tm_year) + 1900) + "-" + String((tmstruct.tm_mon) + 1) + "-" + String(tmstruct.tm_mday) + " " + String(tmstruct.tm_hour) + ":" + String(tmstruct.tm_min) + ":" + String(tmstruct.tm_sec));
+    }
+    return true;
+  }
+
+  return false;
 }
 
 bool parseHttpStatusCode(const String &statusLine, int &httpResponseCode)
@@ -239,37 +329,46 @@ void addMdsSensorRecord(JsonArray &sensors, int enabledMarker, const char *senso
 
 bool postMdsPayload(configData actconf, JsonDocument &docpayload, const char *contextLabel)
 {
+  lastMdsStatus = "";
   const String mdsUrl = normalizeSecureUrl(String(actconf.MdsUrl));
   if (mdsUrl.length() == 0) {
+    lastMdsStatus = "MDS URL missing";
     DebugPrintln(1, "MDS URL missing, skipping WiFi upload");
     return false;
   }
 
   if (!mdsUrl.startsWith("https://")) {
+    lastMdsStatus = "Refusing insecure MDS URL. Please use https://";
     DebugPrintln(1, "Refusing insecure MDS URL. Please use https://");
     return false;
   }
 
-  if (!hasValidSystemTime()) {
+  if (!ensureMdsSystemTime()) {
+    lastMdsStatus = "System time is not synchronized";
     DebugPrintln(2, "Skipping MDS request because system time is not synchronized yet");
     return false;
   }
 
   String requestBody;
   serializeJson(docpayload, requestBody);
-  JsonDocument debugPayload;
-  deserializeJson(debugPayload, requestBody);
-  if (debugPayload["board"]["apiKey"].is<String>()) {
-    debugPayload["board"]["apiKey"] = "***hidden***";
-  }
   String debugRequestBody;
-  serializeJson(debugPayload, debugRequestBody);
+  if (actconf.debug >= 3) {
+    JsonDocument debugPayload;
+    deserializeJson(debugPayload, requestBody);
+    if (debugPayload["board"]["apiKey"].is<String>()) {
+      debugPayload["board"]["apiKey"] = "***hidden***";
+    }
+    serializeJson(debugPayload, debugRequestBody);
+  } else {
+    debugRequestBody = "***hidden***";
+  }
 
   auto handleMdsResponse = [&](int httpResponseCode, const String &responseBody) -> bool {
     DebugPrint(3, "HTTP response: ");
     DebugPrintln(3, httpResponseCode);
     if (responseBody.length() > 0) {
       DebugPrintln(3, responseBody);
+      lastMdsStatus = responseBody;
     }
 
     bool success = false;
@@ -282,6 +381,7 @@ bool postMdsPayload(configData actconf, JsonDocument &docpayload, const char *co
           DebugPrintln(3, String("MDS auto resolved rows: ") + int(responseJson["autoResolvedSensorRows"] | 0));
           DebugPrintln(3, String("MDS auto created sensor configs: ") + int(responseJson["autoCreatedSensorConfigs"] | 0));
           success = (httpResponseCode == HTTP_CODE_OK) && ((int(responseJson["insertedSensorRows"] | 0)) > 0);
+          lastMdsStatus = success ? "MDS upload accepted" : "MDS response did not insert rows";
         } else {
           success = (httpResponseCode == HTTP_CODE_OK);
         }
@@ -293,7 +393,6 @@ bool postMdsPayload(configData actconf, JsonDocument &docpayload, const char *co
   };
 
   WiFiClientSecure client;
-  client.setCACert(reinterpret_cast<const char*>(cert_cacert_pem_start));
   client.setHandshakeTimeout(15);
   client.setTimeout(15);
 
@@ -305,9 +404,16 @@ bool postMdsPayload(configData actconf, JsonDocument &docpayload, const char *co
   const int pathStart = urlWithoutScheme.indexOf('/');
   const String host = pathStart >= 0 ? urlWithoutScheme.substring(0, pathStart) : urlWithoutScheme;
   const String path = pathStart >= 0 ? urlWithoutScheme.substring(pathStart) : "/";
+  const bool usePinnedMdsCertificate = (host == "mds-git.derguntmar.de");
+  if (usePinnedMdsCertificate) {
+    client.setInsecure();
+  } else {
+    client.setCACert(reinterpret_cast<const char*>(cert_cacert_pem_start));
+  }
 
   IPAddress resolvedIp;
   if (!WiFi.hostByName(host.c_str(), resolvedIp)) {
+    lastMdsStatus = "DNS lookup failed for MDS host: " + host;
     DebugPrintln(1, "DNS lookup failed for MDS host: " + host);
     return false;
   }
@@ -316,13 +422,24 @@ bool postMdsPayload(configData actconf, JsonDocument &docpayload, const char *co
   DebugPrint(3, "HTTP POST payload: ");
   DebugPrintln(3, debugRequestBody.length() > 0 ? debugRequestBody : String("***hidden***"));
 
-  if (!client.connect(resolvedIp, 443, host.c_str(), reinterpret_cast<const char*>(cert_cacert_pem_start), nullptr, nullptr)) {
+  if (!client.connect(host.c_str(), 443)) {
     char errorBuffer[128] = {0};
     client.lastError(errorBuffer, sizeof(errorBuffer));
+    lastMdsStatus = "Failed to connect to MDS host";
+    if (errorBuffer[0] != '\0') {
+      lastMdsStatus += ": " + String(errorBuffer);
+    }
     DebugPrintln(1, "Failed to connect to MDS host: " + host + " (" + resolvedIp.toString() + ")");
     if (errorBuffer[0] != '\0') {
       DebugPrintln(1, "TLS client error: " + String(errorBuffer));
     }
+    return false;
+  }
+
+  if (usePinnedMdsCertificate && !client.verify(MDS_GIT_CERT_FINGERPRINT, host.c_str())) {
+    lastMdsStatus = "MDS TLS fingerprint verification failed";
+    DebugPrintln(1, "MDS TLS fingerprint verification failed");
+    client.stop();
     return false;
   }
 
@@ -442,7 +559,12 @@ bool DownloadFilesFromWeb()
       DebugPrintln(1, webFiles[i]);
       allFilesUpdated = false;
     } else {
-      allFilesUpdated = DownloadFile(webFiles[i], fversion, expectedSha256) && allFilesUpdated;
+      if (isWebFileCurrent(webFiles[i], expectedSha256)) {
+        DebugPrint(3, "Web file already current, skipping download: ");
+        DebugPrintln(3, webFiles[i]);
+      } else {
+        allFilesUpdated = DownloadFile(webFiles[i], fversion, expectedSha256) && allFilesUpdated;
+      }
     }
     webFilesDownloadCompleted = i + 1;
   }
@@ -593,6 +715,7 @@ bool DownloadFile(const char *fileName, const char *fversion, const String &expe
 bool sendToMDS(configData actconf)
 {
   if (WiFi.status() != WL_CONNECTED) {
+    lastMdsStatus = "WiFi is not connected";
     DebugPrintln(2, "Skipping MDS sensor upload because WiFi is not connected");
     return false;
   }
@@ -604,6 +727,8 @@ bool sendToMDS(configData actconf)
   board["apiKey"] = String(actconf.MdsApiKey);
   board["protocolVersion"] = "1";
   board["macAddress"] = WiFi.macAddress();
+  board["firmwareVersion"] = String(actconf.fversion);
+  board["standbyEnabled"] = isStandbyEnabledForMds(actconf);
 
   char mdsDate[11];
   char mdsTime[9];
@@ -625,6 +750,7 @@ bool sendToMDS(configData actconf)
   }
 
   if (sensors.size() == 0) {
+    lastMdsStatus = "No MDS sensor groups are enabled";
     DebugPrintln(2, "Skipping MDS sensor upload because no MDS uploads are enabled");
     return false;
   }
@@ -635,11 +761,13 @@ bool sendToMDS(configData actconf)
 bool sendMdsDeviceEvent(configData actconf, const char *sensorName)
 {
   if (WiFi.status() != WL_CONNECTED) {
+    lastMdsStatus = "WiFi is not connected";
     DebugPrintln(2, String("Skipping MDS device event because WiFi is not connected: ") + String(sensorName == nullptr ? "" : sensorName));
     return false;
   }
 
   if (actconf.MdsSensorIdStatus <= 0) {
+    lastMdsStatus = "MDS status upload is disabled";
     DebugPrintln(2, "Skipping MDS device event because status upload is disabled");
     return false;
   }
@@ -651,6 +779,8 @@ bool sendMdsDeviceEvent(configData actconf, const char *sensorName)
   board["apiKey"] = String(actconf.MdsApiKey);
   board["protocolVersion"] = "1";
   board["macAddress"] = WiFi.macAddress();
+  board["firmwareVersion"] = String(actconf.fversion);
+  board["standbyEnabled"] = isStandbyEnabledForMds(actconf);
 
   char mdsDate[11];
   char mdsTime[9];
