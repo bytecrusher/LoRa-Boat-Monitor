@@ -506,9 +506,9 @@ body > h3 {
 }
 
 .status-line {
-    display: flex;
-    justify-content: space-between;
-    gap: var(--space-3);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    column-gap: var(--space-3);
     align-items: center;
     padding: 9px 0;
     border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.16));
@@ -516,13 +516,14 @@ body > h3 {
 
 .status-line span {
     color: var(--muted, #8a8f98);
+    min-width: 0;
 }
 
 .status-line strong {
     color: var(--heading, #fff);
     min-width: 0;
     text-align: right;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
 }
 
 .action-grid form,
