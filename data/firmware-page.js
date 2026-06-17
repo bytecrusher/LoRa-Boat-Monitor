@@ -468,8 +468,10 @@ function renderWebFilesInfo(info) {
     setText('webFilesStatus', info.error ? 'Error' : (info.busy ? 'Updating...' : (info.upToDate ? 'Up to date' : 'Update available')));
 
     if (elements.webFilesUpdateButton) {
-        elements.webFilesUpdateButton.disabled = info.busy || (!info.error && info.upToDate);
-        elements.webFilesUpdateButton.textContent = info.error ? 'Retry Web Files Download' : 'Get Files from Server';
+        elements.webFilesUpdateButton.disabled = info.busy;
+        elements.webFilesUpdateButton.textContent = info.error
+            ? 'Retry Web Files Download'
+            : (info.upToDate ? 'Reinstall Web Files' : 'Get Files from Server');
     }
 }
 

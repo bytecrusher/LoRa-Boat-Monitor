@@ -213,7 +213,7 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
             progressText.textContent = '';
         }
         if (info.upToDate) {
-            button.textContent = 'Get Files from Server';
+            button.textContent = 'Reinstall Web Files';
             status.textContent = 'Web files are up to date for installed firmware ' + info.firmwareVersion + '.';
             return;
         }
@@ -246,7 +246,7 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
             http = new ActiveXObject("Microsoft.XMLHTTP");
         }
         if (http != null) {
-            http.open("GET", "/updatefilesprogress", true);
+            http.open("GET", "/updatefilesinfo?ts=" + Date.now(), true);
             http.onreadystatechange = function() {
                 if (http.readyState == XMLHttpRequest.DONE && http.status == 200) {
                     try {
@@ -274,43 +274,35 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
             http = new ActiveXObject("Microsoft.XMLHTTP");
         }
         if (http != null) {
-            refreshUpdateFilesInfo();
-            http.open("GET", "/updatefilesstatus", true);
+            http.open("GET", "/updatefilesprogress?ts=" + Date.now(), true);
             http.onreadystatechange = meineFunktionAusgeben;
             http.send(null);
         }
 
         function meineFunktionAusgeben() {
-            if (http.readyState == XMLHttpRequest.DONE) {
-                if (http.status == 200) {
-                    result = http.responseText;
-                    if (result == 0) {
+            if (http.readyState != XMLHttpRequest.DONE) {
+                return;
+            }
+
+            if (http.status == 200) {
+                try {
+                    var progress = JSON.parse(http.responseText);
+                    renderUpdateFilesInfo(progress);
+                    if (!progress.busy) {
                         clearInterval(meinIntervall);
                         refreshUpdateFilesInfo();
-                        var status = document.getElementById('updatefilesinfo');
-                        if (status && status.textContent.indexOf('failed') >= 0) {
-                            return;
-                        }
-                        alert('Files successfully downloaded.');
-                        location.reload();
-                    } else if (result == 1) {
-                        refreshUpdateFilesInfo();
                     }
-                }
-                else if (http.status == 400) {
+                } catch (error) {
                     clearInterval(meinIntervall);
-                    alert('There was an error 400');
-                    //document.getElementById('status').innerHTML = ('Status: Error while updatefilesstatus GET.');
                     refreshUpdateFilesInfo();
-                    alert('Files not successfully downloaded.');
-                    }
-                else {
-                    clearInterval(meinIntervall);
-                    alert('something else other than 200 was returned');
-                    //document.getElementById('status').innerHTML = ('Status: Error while updatefilesstatus GET.');
-                    refreshUpdateFilesInfo();
+                    alert('Unable to read web files download status.');
                 }
+                return;
             }
+
+            clearInterval(meinIntervall);
+            refreshUpdateFilesInfo();
+            alert('Error while checking web files download status.');
         }
     };
 
@@ -368,8 +360,6 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
             http = new ActiveXObject("Microsoft.XMLHTTP");
         }
         if (http != null) {
-            renderUpdateFilesInfo({ busy: true, firmwareVersion: '%fversion%', storedWebFilesVersion: '', upToDate: false });
-            startInterval();
             http.open("POST", "/updatefiles", true);
             addCsrfHeader(http);
             http.onreadystatechange = UpdateFilesAusgeben;
@@ -379,9 +369,9 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
         function UpdateFilesAusgeben() {
             if (http.readyState == XMLHttpRequest.DONE) {                
                 if (http.status == 200) {
-                    //document.getElementById("myDiv").innerHTML = xmlhttp.responseText;
                     console.log('Update Files requested...');
-                    //document.getElementById('status').innerHTML = ('Status: Update Files requested...');
+                    renderUpdateFilesInfo({ busy: true, firmwareVersion: '%fversion%', storedWebFilesVersion: '', upToDate: false, message: 'Starting web files download...' });
+                    startInterval();
                 }
                 else if (http.status == 400) {
                     clearInterval(meinIntervall);
