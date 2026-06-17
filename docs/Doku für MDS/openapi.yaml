@@ -814,6 +814,11 @@ components:
               type: string
             decoded_payload:
               type: object
+              properties:
+                macAddress:
+                  type: string
+                  description: Optional vom ESP im LoRa-Payload mitgesendete MAC-Adresse.
+                  example: "94:B9:7E:FE:F5:40"
               additionalProperties: true
             normalized_payload:
               type: object

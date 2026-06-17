@@ -3,7 +3,7 @@
 // under PAYLOAD FORMATS and save it.
 // https://console.thethingsnetwork.org/applications/lora-testsensor/payload-formats
 
-// The paylod has 21 bytes
+// The payload has 33 bytes
 // Test payload: 
 
 // mydata[0] Low Byte Counter
@@ -33,6 +33,12 @@
 // mydata[24] Low Byte Tank Level 2
 // mydata[25] High Byte Tank Level 2
 // mydata[26] Low Byte Alarm1 and Relay
+// mydata[27] MAC byte 1
+// mydata[28] MAC byte 2
+// mydata[29] MAC byte 3
+// mydata[30] MAC byte 4
+// mydata[31] MAC byte 5
+// mydata[32] MAC byte 6
 
 
 // Payload smaple: 0A00541FE027770B9517D6043F1AA702751AFF133D0F0000000001
@@ -102,6 +108,9 @@ function decodeUplink(input) {
 //  data.level1 = ((input.bytes[23] << 8) | input.bytes[22]) / 100;
 //  data.level2 = ((input.bytes[25] << 8) | input.bytes[24]) / 100;
   data.alarm1 = input.bytes[26] & 0x01;
+  if (input.bytes.length >= 33) {
+    data.macAddress = formatMacAddress(input.bytes, 27);
+  }
 //  data.relay = (input.bytes[26] & 0x10) / 0x10;
 
   var warnings = [];
@@ -115,4 +124,16 @@ function decodeUplink(input) {
     data: data,
     warnings: warnings
   };
+}
+
+function formatMacAddress(bytes, offset) {
+  var parts = [];
+  for (var i = 0; i < 6; i++) {
+    var part = (bytes[offset + i] || 0).toString(16).toUpperCase();
+    if (part.length < 2) {
+      part = "0" + part;
+    }
+    parts.push(part);
+  }
+  return parts.join(":");
 }

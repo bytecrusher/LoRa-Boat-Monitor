@@ -78,8 +78,23 @@ function decodeUplink(bytes) {
 //  decoded.level1 = ((bytes[23] << 8) | bytes[22]) / 100;
 //  decoded.level2 = ((bytes[25] << 8) | bytes[24]) / 100;
   decoded.alarm1 = bytes[26] & 0x01;
+  if (bytes.length >= 33) {
+    decoded.macAddress = formatMacAddress(bytes, 27);
+  }
   decoded.relay = (bytes[26] & 0x10) / 0x10;
   return {"data": decoded};
+}
+
+function formatMacAddress(bytes, offset) {
+  var parts = [];
+  for (var i = 0; i < 6; i++) {
+    var part = (bytes[offset + i] || 0).toString(16).toUpperCase();
+    if (part.length < 2) {
+      part = "0" + part;
+    }
+    parts.push(part);
+  }
+  return parts.join(":");
 }
 
 module.exports = { format_payload };

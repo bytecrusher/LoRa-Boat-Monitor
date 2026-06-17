@@ -149,7 +149,7 @@ const lmic_pinmap lmic_pins = {
 };
 
 // Payload arry;
-static uint8_t mydata[28];// 13 words + 1 word for array end
+static uint8_t mydata[33];// 27 sensor/status bytes + 6 ESP MAC bytes
                           // mydata[0] Low Byte Counter
                           // mydata[1] High Byte Counter
                           // mydata[2] Low Byte Temperature
@@ -177,8 +177,12 @@ static uint8_t mydata[28];// 13 words + 1 word for array end
                           // mydata[24] Low Byte Tank Level 2
                           // mydata[25] High Byte Tank Level 2
                           // mydata[26] Low Byte Alarm1 and Relay
-                          // mydata[27] Array End
-                          // mydata[28] Array End
+                          // mydata[27] MAC byte 1
+                          // mydata[28] MAC byte 2
+                          // mydata[29] MAC byte 3
+                          // mydata[30] MAC byte 4
+                          // mydata[31] MAC byte 5
+                          // mydata[32] MAC byte 6
 
 // Schedule TX every this many seconds (might become longer due to duty
 // cycle limitations).

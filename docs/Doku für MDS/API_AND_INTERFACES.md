@@ -114,6 +114,7 @@ Aus `decoded_payload` werden aktuell u. a. diese Felder gelesen:
 - `level1`
 - `level2`
 - `longitude`
+- `macAddress`
 - `position.context.lat`
 - `position.context.lng`
 - `pressure`
@@ -131,7 +132,8 @@ Aus `decoded_payload` werden aktuell u. a. diese Felder gelesen:
 
 1. TTN sendet einen Uplink an `/webhooks/ttn.php`
 2. MDS extrahiert Board-Identifier:
-   - bevorzugt `device_id`
+   - bevorzugt `decoded_payload.macAddress`, wenn vom ESP im LoRa-Payload mitgesendet
+   - danach `device_id`
    - sonst `dev_eui`
 3. MDS sucht das Board ueber:
    - `ttnAppId`

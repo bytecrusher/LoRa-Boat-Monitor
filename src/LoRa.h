@@ -539,6 +539,10 @@ void do_send(osjob_t *j)
       DebugPrintln(3, String(alarm1));
     }
 
+    for (uint8_t macByteIndex = 0; macByteIndex < 6; macByteIndex++) {
+      mydata[27 + macByteIndex] = (macAddress >> (8 * macByteIndex)) & 0xFF;
+    }
+
     // Relay
     if (debugValues) {
       DebugPrint(3, "Relay: ");
@@ -553,7 +557,7 @@ void do_send(osjob_t *j)
 
     //        flashLED(100);  // Flash white LED on LoRa board
     loraSendDurationTime = millis();
-    LMIC_setTxData2(1, mydata, sizeof(mydata) - 1, 0);
+    LMIC_setTxData2(1, mydata, sizeof(mydata), 0);
     DebugPrintln(3, "Packet queued");
   }
   // Next TX is scheduled after TX_COMPLETE event.
