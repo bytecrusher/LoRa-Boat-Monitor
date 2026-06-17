@@ -144,6 +144,10 @@ boolean runDownloadingFilesStatus = false;
 size_t webFilesDownloadCompleted = 0;
 size_t webFilesDownloadTotal = 0;
 String webFilesDownloadCurrentName = "";
+String webFilesDownloadStatusMessage = "";
+bool webFilesDownloadError = false;
+uint8_t webFilesDownloadRetryCount = 0;
+unsigned long webFilesDownloadStartedMillis = 0;
 bool remoteOtaPending = false;
 bool remoteOtaInProgress = false;
 String remoteOtaUrl = "";
@@ -1366,11 +1370,38 @@ void state1(){
   }
 
   static unsigned long nextWebFilesDownloadAttempt = 0;
+  if (runDownloadingFiles && WiFi.status() != WL_CONNECTED) {
+    webFilesDownloadStatusMessage = "Waiting for WiFi connection before downloading web files.";
+    if (webFilesDownloadStartedMillis > 0 && millis() - webFilesDownloadStartedMillis > 60000UL) {
+      runDownloadingFiles = false;
+      runDownloadingFilesStatus = false;
+      webFilesDownloadError = true;
+      webFilesDownloadStatusMessage = "Web files download cancelled because WiFi is not connected.";
+    }
+  }
+
   if (runDownloadingFiles && WiFi.status() == WL_CONNECTED && millis() >= nextWebFilesDownloadAttempt) {
     runDownloadingFilesStatus = true;
+    webFilesDownloadError = false;
+    webFilesDownloadStatusMessage = "Downloading web files from server.";
     const bool webFilesCurrent = DownloadFilesFromWeb();
-    runDownloadingFiles = !webFilesCurrent;
-    nextWebFilesDownloadAttempt = webFilesCurrent ? 0 : (millis() + 30000UL);
+    if (webFilesCurrent) {
+      runDownloadingFiles = false;
+      webFilesDownloadRetryCount = 0;
+      webFilesDownloadStatusMessage = "Web files updated successfully.";
+      nextWebFilesDownloadAttempt = 0;
+    } else {
+      webFilesDownloadRetryCount++;
+      if (webFilesDownloadRetryCount >= 3) {
+        runDownloadingFiles = false;
+        webFilesDownloadError = true;
+        webFilesDownloadStatusMessage = "Web files download failed. Please retry.";
+        nextWebFilesDownloadAttempt = 0;
+      } else {
+        webFilesDownloadStatusMessage = "Web files download failed. Retrying shortly.";
+        nextWebFilesDownloadAttempt = millis() + 30000UL;
+      }
+    }
     runDownloadingFilesStatus = false;
   }
 

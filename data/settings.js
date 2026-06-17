@@ -49,9 +49,7 @@ function bindSettingsPageEvents() {
 
     var settingsForm = byId("form1");
     if (settingsForm) {
-        settingsForm.addEventListener("submit", function () {
-            setBusyState("Saving settings...");
-        });
+        settingsForm.addEventListener("submit", saveSettings);
     }
 }
 
@@ -79,6 +77,64 @@ function applySettingsSelections() {
 function showPage() {
     byId("loader").style.display = "none";
     byId("myDiv").style.display = "block";
+}
+
+function settingsCsrfToken(form) {
+    if (typeof csrfToken === "function") {
+        var token = csrfToken();
+        if (token) {
+            return token;
+        }
+    }
+
+    var csrfField = form ? form.querySelector("input[name='csrf']") : null;
+    return csrfField ? csrfField.value : "";
+}
+
+async function saveSettings(event) {
+    event.preventDefault();
+
+    var form = event.currentTarget;
+    var token = settingsCsrfToken(form);
+    var formData = new FormData(form);
+    if (token) {
+        formData.set("csrf", token);
+    }
+    var body = new URLSearchParams(formData);
+
+    setBusyState("Saving settings...");
+
+    try {
+        var response = await fetch("/savesettings", {
+            method: "POST",
+            headers: token ? {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-CSRF-Token": token
+            } : {
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: body.toString(),
+            credentials: "same-origin",
+            redirect: "follow"
+        });
+
+        if (!response.ok) {
+            var message = "Settings could not be saved.";
+            try {
+                var json = await response.json();
+                if (json && json.message) {
+                    message = json.message;
+                }
+            } catch (error) {
+            }
+            throw new Error(message);
+        }
+
+        window.location.assign("/settings.html");
+    } catch (error) {
+        clearBusyState();
+        alert(error && error.message ? error.message : "Settings could not be saved.");
+    }
 }
 
 function ToggleSection(ele, target) {
@@ -279,17 +335,38 @@ function handleSubmit (event) {
  * @param {event} Event The file loaded event
  */
 function logFile (event) {
-    let str = event.target.result;
-    let json = JSON.parse(str);
-    Object.entries(json).forEach((entry) => {
-        const [key, value] = entry;
-        //console.log(`${key}: ${value}`);
-        document.getElementsByName(`${key}`)[0].value = value;
+    const form = document.getElementById("form1");
+    if (!form) return;
+
+    let json;
+    try {
+        json = JSON.parse(event.target.result);
+    } catch (error) {
+        alert("Config file could not be read. Please select a valid JSON backup.");
+        return;
+    }
+
+    Object.entries(json).forEach(function (entry) {
+        const key = entry[0];
+        const value = entry[1];
+        if (key === "csrf") return;
+
+        const fields = document.getElementsByName(key);
+        if (!fields.length) return;
+
+        const field = fields[0];
+        if (field.tagName === "SELECT") {
+            field.value = value;
+        } else if (field.type !== "hidden") {
+            field.value = value;
+        }
     });
-    //console.log('string', str);
-    //console.log('json', json);
-    //window.open('/savesettings', '_self');
-    document.getElementById("form1").submit();
+
+    if (typeof form.requestSubmit === "function") {
+        form.requestSubmit();
+    } else {
+        saveSettings({ preventDefault: function () {}, currentTarget: form });
+    }
 }
 
 function download(content, fileName, contentType) {

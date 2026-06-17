@@ -1,5 +1,6 @@
 #include "func_myFunctions.h"
 #include <Configuration.h>
+#include <WiFi.h>
 
 namespace {
 struct ConfigStorageHeader {
@@ -69,6 +70,22 @@ void flushSerial2UntilSentenceStart() {
       break;
     }
   }
+}
+
+String htmlEscapeLocal(const String &value) {
+  String escaped;
+  escaped.reserve(value.length());
+  for (size_t i = 0; i < value.length(); i++) {
+    switch (value[i]) {
+      case '&': escaped += "&amp;"; break;
+      case '<': escaped += "&lt;"; break;
+      case '>': escaped += "&gt;"; break;
+      case '"': escaped += "&quot;"; break;
+      case '\'': escaped += "&#39;"; break;
+      default: escaped += value[i]; break;
+    }
+  }
+  return escaped;
 }
 }  // namespace
 
@@ -743,15 +760,16 @@ void readValues(configData myactconf) {
       if (debugBME280) {
         DebugPrint(3, "Temperature = ");
       }
+      const float temperatureC = bme.readTemperature();
       if(String(actconf.tempUnit) == "C"){
-        temperature = bme.readTemperature();
+        temperature = temperatureC;
         if (debugBME280) {
           DebugPrint(3, temperature);
           DebugPrintln(3, " *C");
         }
       }
       else{
-        temperature = bme.readTemperature() * 9 / 5 + 32;
+        temperature = temperatureC * 9 / 5 + 32;
         if (debugBME280) {
           DebugPrint(3, temperature);
           DebugPrintln(3, " *F");
@@ -788,8 +806,7 @@ void readValues(configData myactconf) {
       if (debugBME280) {
         DebugPrint(3, "Dewpoint = ");
       }
-      dewp = dewpoint(temperature, humidity);
-      // temperature is chnanged in the correct unit!
+      dewp = dewpoint(temperatureC, humidity);
       if(String(actconf.tempUnit) == "C"){
         if (debugBME280) {
           DebugPrint(3, dewp);
@@ -797,6 +814,7 @@ void readValues(configData myactconf) {
         }
       }
       else{
+        dewp = dewp * 9 / 5 + 32;
         if (debugBME280) {
           DebugPrint(3, dewp);
           DebugPrintln(3, " *F");
@@ -836,7 +854,7 @@ void readValues(configData myactconf) {
       if (debugVEdirect) {
         DebugPrint(3, "Voltage = ");
       }
-      voltage = myactconf.a2vslope * myactconf.a2vslope * analogVoltageRaw + myactconf.a1vslope * analogVoltageRaw + myactconf.voffset;
+      voltage = myactconf.a2vslope * analogVoltageRaw * analogVoltageRaw + myactconf.a1vslope * analogVoltageRaw + myactconf.voffset;
       if (debugVEdirect) {
         DebugPrint(3, analogVoltageRaw);
         DebugPrintln(3, " dig");
@@ -876,12 +894,7 @@ void readValues(configData myactconf) {
       DebugPrint(3, tank1);
       DebugPrint(3, " V ");
     }
-    if(tank1 < 1){
-      tank1p = (tank1 * myactconf.a2t1slope * myactconf.a2t1slope) + (tank1 * myactconf.a1t1slope) + myactconf.t1offset;
-    }
-    else{
-      tank1p = 0;
-    }
+    tank1p = (myactconf.a2t1slope * tank1 * tank1) + (myactconf.a1t1slope * tank1) + myactconf.t1offset;
   	// Limiting
   	if(tank1p > 100){
       tank1p = 100;
@@ -914,12 +927,7 @@ void readValues(configData myactconf) {
       DebugPrint(3, tank2);
       DebugPrint(3, " V ");
     }
-     if(tank2 < 1){
-      tank2p = (tank2 * myactconf.a2t2slope * myactconf.a2t2slope) + (tank2 * myactconf.a1t2slope) + myactconf.t2offset;
-    }
-    else{
-      tank2p = 0;
-    }
+    tank2p = (myactconf.a2t2slope * tank2 * tank2) + (myactconf.a1t2slope * tank2) + myactconf.t2offset;
   	// Limiting
   	if(tank2p > 100){
       tank2p = 100;
@@ -1442,9 +1450,9 @@ String humanReadableSize(const size_t bytes) {
 String getheader(configData myactconf) {
   String content = readFile2(LittleFS, "/header.html");
   //content.replace("%header%", String(readFile2(LittleFS, "/header.html")));
-  content.replace("%devname%", String(myactconf.devname));
-  content.replace("%crights%", String(myactconf.crights));
-  content.replace("%fversion%", String(myactconf.fversion));
+  content.replace("%devname%", htmlEscapeLocal(String(myactconf.devname)));
+  content.replace("%crights%", htmlEscapeLocal(String(myactconf.crights)));
+  content.replace("%fversion%", htmlEscapeLocal(String(myactconf.fversion)));
   content.replace("%quality%", String(int(quality)));
   return content;
 }

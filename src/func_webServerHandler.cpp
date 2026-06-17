@@ -76,6 +76,22 @@ String htmlEscape(const String &value) {
   return escaped;
 }
 
+String jsonEscape(const String &value) {
+  String escaped;
+  escaped.reserve(value.length());
+  for (size_t i = 0; i < value.length(); i++) {
+    switch (value[i]) {
+      case '\\': escaped += "\\\\"; break;
+      case '"': escaped += "\\\""; break;
+      case '\n': escaped += "\\n"; break;
+      case '\r': escaped += "\\r"; break;
+      case '\t': escaped += "\\t"; break;
+      default: escaped += value[i]; break;
+    }
+  }
+  return escaped;
+}
+
 int clampConfigInt(int value, int fallback, int minValue, int maxValue) {
   if (value < minValue || value > maxValue) {
     return fallback;
@@ -1963,6 +1979,19 @@ void WebServerHandler()
     if (!requireNonDefaultWebPassword(request)) {
       return;
     }
+    if (WiFi.status() != WL_CONNECTED) {
+      webFilesDownloadError = true;
+      webFilesDownloadStatusMessage = "No WiFi connection available for web files download.";
+      request->send(503, "application/json", "{\"status\":\"error\",\"message\":\"No WiFi connection available for web files download.\"}");
+      return;
+    }
+    webFilesDownloadCompleted = 0;
+    webFilesDownloadTotal = 0;
+    webFilesDownloadCurrentName = "";
+    webFilesDownloadStatusMessage = "Web files download queued.";
+    webFilesDownloadError = false;
+    webFilesDownloadRetryCount = 0;
+    webFilesDownloadStartedMillis = millis();
     runDownloadingFiles = true;
     request->send(200, "text/html", "done");
   });
@@ -2007,6 +2036,11 @@ void WebServerHandler()
     response += storedWebFilesVersion;
     response += "\",\"upToDate\":";
     response += upToDate ? "true" : "false";
+    response += ",\"error\":";
+    response += webFilesDownloadError ? "true" : "false";
+    response += ",\"message\":\"";
+    response += jsonEscape(webFilesDownloadStatusMessage);
+    response += "\"";
     response += "}";
 
     request->send(200, "application/json", response);
@@ -2181,6 +2215,9 @@ String buildUpdateFilesProgressJson() {
   json["completed"] = webFilesDownloadCompleted;
   json["total"] = webFilesDownloadTotal;
   json["currentFile"] = webFilesDownloadCurrentName;
+  json["message"] = webFilesDownloadStatusMessage;
+  json["error"] = webFilesDownloadError;
+  json["retryCount"] = webFilesDownloadRetryCount;
   json["percent"] = webFilesDownloadTotal > 0 ? (webFilesDownloadCompleted * 100) / webFilesDownloadTotal : 0;
 
   String response;

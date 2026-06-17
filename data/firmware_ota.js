@@ -19,11 +19,20 @@ function otaElement(id) {
     return byId(id);
 }
 
+function clampOtaPercent(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+        return 0;
+    }
+    return Math.max(0, Math.min(100, Math.round(number)));
+}
+
 function disableAll() {
     const overlay = otaElement('overlay');
     if (overlay) {
         overlay.style.display = 'block';
     }
+    setElementsDisabled('button, input, select', true);
 }
 
 function enableAll() {
@@ -31,6 +40,7 @@ function enableAll() {
     if (overlay) {
         overlay.style.display = 'none';
     }
+    setElementsDisabled('button, input, select', false);
 }
 
 async function waitForReboot(targetUrl, retries) {
@@ -58,7 +68,7 @@ function applyOtaProgress(progress) {
         return;
     }
 
-    const percent = progress.percent || 0;
+    const percent = clampOtaPercent(progress.percent);
     otaElement('progressBar').style.width = percent + '%';
     if (progress.total > 0) {
         setText('loaded_n_total', percent + '% (' + progress.current + ' / ' + progress.total + ' bytes)');
@@ -99,7 +109,7 @@ function handleUploadProgress(event) {
         return;
     }
 
-    const percent = Math.round((event.loaded / event.total) * 100);
+    const percent = clampOtaPercent((event.loaded / event.total) * 100);
     setText('loaded_n_total', 'Uploaded ' + event.loaded + ' bytes of ' + event.total);
     otaElement('progressBar').style.width = percent + '%';
     setText('status', percent + '% uploaded... please wait');

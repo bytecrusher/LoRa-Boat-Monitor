@@ -14,6 +14,42 @@
   <h3><data class="blink" id='info'></data></h3>
 
   <div class="page-content">
+    <section class="dashboard-hero">
+      <div>
+        <h2>Device Dashboard</h2>
+        <p class="muted-text">Live overview of power, connectivity, firmware and standby state.</p>
+      </div>
+      <div class="dashboard-version">
+        <span class="status-label">Firmware</span>
+        <strong id="dashboardFirmware">-</strong>
+      </div>
+    </section>
+
+    <section class="status-grid">
+      <article class="status-card">
+        <span class="status-label">Battery</span>
+        <strong><span id="dashboardBatteryVoltage">-</span> V</strong>
+        <span class="muted-text"><span id="dashboardBatteryCapacity">-</span>% charge</span>
+      </article>
+      <article class="status-card">
+        <span class="status-label">MDS Upload</span>
+        <strong id="dashboardMdsState">-</strong>
+        <span class="muted-text" id="dashboardMdsUrl">-</span>
+      </article>
+      <article class="status-card">
+        <span class="status-label">Standby Input</span>
+        <strong id="dashboardStandbyState">-</strong>
+        <span class="muted-text">GPIO <span id="dashboardStandbyPin">-</span>, <span id="dashboardStandbyLevel">-</span></span>
+      </article>
+      <article class="status-card">
+        <span class="status-label">Web Files</span>
+        <strong id="dashboardWebFiles">Checking...</strong>
+        <span class="muted-text" id="dashboardWebFilesDetail">-</span>
+      </article>
+    </section>
+
+    <section class="page-section navigation-section">
+      <h3>Navigation</h3>
     <div class="action-grid">
       <a href='sensorv.html' id='sensorv'>Sensor Values</a>
       <a href='firmware.html' id='firmware'>Firmware & Web Update</a>
@@ -25,6 +61,7 @@
       <a href='https://github.com/norbert-walter/LoRa-Boat-Monitor' id='help'>Documentation</a>
       <button class="action-button" id='webserialRow' type="button">Browser Serial Console</button>
     </div>
+    </section>
   </div>
 
   <br>

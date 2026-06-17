@@ -184,7 +184,7 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
         if (info.busy) {
             button.textContent = 'Downloading Files from Server...';
             button.disabled = true;
-            status.textContent = 'Web files are currently being downloaded for firmware ' + info.firmwareVersion + '.';
+            status.textContent = info.message || ('Web files are currently being downloaded for firmware ' + info.firmwareVersion + '.');
             if (progressText && progressWrap && progressFill) {
                 progressWrap.style.display = 'block';
                 progressFill.style.width = (info.percent || 0) + '%';
@@ -197,6 +197,16 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
         }
 
         button.disabled = false;
+        if (info.error) {
+            button.textContent = 'Retry Download';
+            status.textContent = info.message || 'Web files download failed. Please retry.';
+            if (progressText && progressWrap && progressFill) {
+                progressWrap.style.display = 'none';
+                progressFill.style.width = '0%';
+                progressText.textContent = '';
+            }
+            return;
+        }
         if (progressText && progressWrap && progressFill) {
             progressWrap.style.display = 'none';
             progressFill.style.width = (info.percent || 0) + '%';
@@ -277,7 +287,10 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
                     if (result == 0) {
                         clearInterval(meinIntervall);
                         refreshUpdateFilesInfo();
-                        //document.getElementById('status').innerHTML = ('Status: Updated Files successfull.');
+                        var status = document.getElementById('updatefilesinfo');
+                        if (status && status.textContent.indexOf('failed') >= 0) {
+                            return;
+                        }
                         alert('Files successfully downloaded.');
                         location.reload();
                     } else if (result == 1) {
@@ -285,12 +298,14 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
                     }
                 }
                 else if (http.status == 400) {
+                    clearInterval(meinIntervall);
                     alert('There was an error 400');
                     //document.getElementById('status').innerHTML = ('Status: Error while updatefilesstatus GET.');
                     refreshUpdateFilesInfo();
                     alert('Files not successfully downloaded.');
                     }
                 else {
+                    clearInterval(meinIntervall);
                     alert('something else other than 200 was returned');
                     //document.getElementById('status').innerHTML = ('Status: Error while updatefilesstatus GET.');
                     refreshUpdateFilesInfo();
@@ -369,12 +384,14 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
                     //document.getElementById('status').innerHTML = ('Status: Update Files requested...');
                 }
                 else if (http.status == 400) {
+                    clearInterval(meinIntervall);
                     //alert('There was an error 400');
                     //document.getElementById('status').innerHTML = ('Status: Error while Downlaoding Files from server.');
                     refreshUpdateFilesInfo();
                     alert('Error while Downlaoding Files from server. (Error 400)');
                 }
                 else {
+                    clearInterval(meinIntervall);
                     alert('something else other than 200 was returned');
                     //document.getElementById('status').innerHTML = ('Status: Error while Downlaoding Files from server.');
                     refreshUpdateFilesInfo();

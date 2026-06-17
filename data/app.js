@@ -46,6 +46,9 @@ function setSensorInfo(myObj) {
   setElementValue('tank2', myObj.Device.MeasuringValues.Tank2Voltage.Value);
   setElementValue('tank2adc', myObj.Device.MeasuringValues.Tank2adc.Value);
   setElementValue('alarm', myObj.Device.MeasuringValues.Alarm.Value);
+  setElementValue('standbyInputState', myObj.Device.MeasuringValues.StandbyInputState.Value);
+  setElementValue('standbyInputLevel', myObj.Device.MeasuringValues.StandbyInputLevel.Value);
+  setElementValue('standbyInputPin', myObj.Device.MeasuringValues.StandbyInputPin.Value);
   setElementValue('relay', myObj.Device.MeasuringValues.Relay.Value);
   setElementValue('rtimer', myObj.Device.MeasuringValues.RelayTimer.Value);
   setElementValue('envSensor', myObj.Device.MeasuringValues.EnvSensor.Value);
@@ -61,9 +64,9 @@ function setServerModeInfo(myObj) {
   }
 
   if (myObj.Device.NetworkParameter.ServerMode == 4) {
-    infoElement.innerHTML = '(Demo Mode)';
+    infoElement.textContent = '(Demo Mode)';
   } else {
-    infoElement.innerHTML = '';
+    infoElement.textContent = '';
   }
 }
 
@@ -88,7 +91,7 @@ function read_static_json() {
 
     var infoElement = document.getElementById('info');
     if (infoElement && myObj.Device.NetworkParameter.ServerMode == 4) {
-      infoElement.innerHTML = '(Demo Mode)';
+      infoElement.textContent = '(Demo Mode)';
     }
   });
 }

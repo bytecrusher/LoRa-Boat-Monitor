@@ -1,96 +1,29 @@
-/* Button style and color */
-button, .action-grid a {
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: 14px;
-    color: #050505;
-    padding: 10px 20px;
-    background: -moz-linear-gradient(top,
-            #363636 0%,
-            #d95f5f 50%,
-            #ff0000 50%,
-            #f70000);
-    background: -webkit-gradient(linear, left top, left bottom,
-            from(#363636),
-            color-stop(0.50, #d95f5f),
-            color-stop(0.50, #ff0000),
-            to(#f70000));
-    -moz-border-radius: 10px;
-    -webkit-border-radius: 10px;
-    border-radius: 10px;
-    border: 3px solid #eb1717;
-    -moz-box-shadow:
-        0px 1px 3px rgba(000, 000, 000, 0.5),
-        inset 0px 0px 2px rgba(245, 12, 12, 1);
-    -webkit-box-shadow:
-        0px 1px 3px rgba(000, 000, 000, 0.5),
-        inset 0px 0px 2px rgba(245, 12, 12, 1);
-    box-shadow:
-        0px 1px 3px rgba(000, 000, 000, 0.5),
-        inset 0px 0px 2px rgba(245, 12, 12, 1);
-    text-shadow:
-        0px -1px 0px rgba(000, 000, 000, 0.2),
-        0px 1px 0px rgba(71, 68, 71, 0.4);
-}
-
-/* Text color definitions for heat letters */
-a {
-    color: rgb(255, 0, 0);
-}
-
-h1 {
-    color: rgb(255, 0, 0);
-}
-
-h2 {
-    color: rgb(255, 0, 0);
-}
-
-h3 {
-    color: rgb(255, 0, 0);
-}
-
-h4 {
-    color: rgb(255, 0, 0);
-}
-
-h5 {
-    color: rgb(255, 0, 0);
-}
-
-h6 {
-    color: rgb(255, 0, 0);
-}
-
-h7 {
-    color: rgb(255, 0, 0);
-}
-
-/* General text definitions */
-body {
-    color: rgb(200, 0, 0);
-    font-family: arial;
-}
-
-/* Blinking text definition */
-blink {
-    animation: blinker 0.6s linear infinite;
-}
-
-@keyframes blinker {
-    50% {
-        opacity: 0;
-    }
-}
-
-/* Background definitions */
-body {
-    background-color: rgb(32, 32, 32);
-    background-image: linear-gradient(45deg, black 25%, transparent 25%, transparent 75%, black 75%, black), linear-gradient(45deg, black 25%, transparent 25%, transparent 75%, black 75%, black), linear-gradient(to bottom, rgb(8, 8, 8), rgb(32, 32, 32));
-    background-size: 10px 10px, 10px 10px, 10px 5px;
-    background-position: 0px 0px, 5px 5px, 0px 0px;
-}
-
-/* SVG line colors */
-svg {
-    stroke: #C0C0C0;
+:root {
+    --page-bg: #16080a;
+    --page-bg-soft: #2a0e13;
+    --surface: rgba(37, 14, 19, 0.92);
+    --surface-top: rgba(47, 17, 24, 0.94);
+    --surface-soft: rgba(255, 255, 255, 0.07);
+    --surface-strong: #471923;
+    --text: #ffe9eb;
+    --muted: #e0a8ae;
+    --heading: #fff5f6;
+    --accent: #ff4d5d;
+    --accent-strong: #ffb3ba;
+    --ambient: rgba(255, 77, 93, 0.14);
+    --border: rgba(255, 179, 186, 0.17);
+    --shadow: 0 10px 26px rgba(0, 0, 0, 0.3);
+    --shadow-soft: 0 7px 20px rgba(0, 0, 0, 0.2);
+    --control-bg: rgba(255, 245, 246, 0.09);
+    --control-text: #fff5f6;
+    --control-muted: #efd8dc;
+    --control-muted-text: #1f0c10;
+    --progress-track: rgba(255, 255, 255, 0.17);
+    --button-text: #21080c;
+    --button-border: rgba(255, 179, 186, 0.36);
+    --button-ring: rgba(255, 77, 93, 0.14);
+    --focus-border: rgba(255, 179, 186, 0.75);
+    --focus-ring: rgba(255, 77, 93, 0.18);
+    --link-decoration: rgba(255, 179, 186, 0.45);
+    --warning: #ffd166;
 }

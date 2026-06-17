@@ -8,6 +8,7 @@ bool DownloadFile(const char *fileName, const char *fversion, const String &expe
 bool DownloadFilesFromWeb();
 bool sendToMDS(configData actconf);
 bool sendMdsDeviceEvent(configData actconf, const char *sensorName);
+String getLastMdsStatus();
 //StaticJsonDocument<200> collectJsonData();
 
 #endif

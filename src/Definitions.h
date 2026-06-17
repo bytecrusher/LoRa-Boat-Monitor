@@ -8,7 +8,7 @@ uint chipId;                        // Chip-ID as part from MAC address
 
 // EEPROM settings (max size is 4096 Byte)
 int cfgStart = 1024;                // Start adress in EEPROM (Attention! The first 32 Byte are used beginning with adress 0)
-int sizeEEPROM = 2048;              // Used size of EEPROM 2kB (limit for config file size)
+int sizeEEPROM = 4096;              // EEPROM RAM copy must cover cfgStart + configData + header.
 
 // WLAN client settings
 String hname;                       // Hostname

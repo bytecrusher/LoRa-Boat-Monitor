@@ -5,14 +5,19 @@ function restartById(id) {
 }
 
 function restartToggleClass(id, className, enabled) {
-    if (typeof toggleClass === "function") {
-        toggleClass(id, className, enabled);
+    var element = restartById(id);
+    if (!element) {
         return;
     }
 
-    var element = restartById(id);
-    if (element) {
+    if (typeof toggleClass === "function") {
+        toggleClass(id, className, enabled);
+    } else {
         element.classList.toggle(className, Boolean(enabled));
+    }
+
+    if (className === "hidden") {
+        element.style.display = enabled ? "none" : "block";
     }
 }
 
@@ -21,7 +26,12 @@ async function restartRequest(url, options) {
         return request(url, options);
     }
 
-    var response = await fetch(url, options || {});
+    var requestOptions = options || {};
+    if (typeof withCsrf === "function") {
+        requestOptions = withCsrf(requestOptions);
+    }
+
+    var response = await fetch(url, requestOptions);
     var text = await response.text();
     var json = null;
     if (text) {
@@ -66,6 +76,8 @@ async function restartDevice() {
 }
 
 document.addEventListener("DOMContentLoaded", function () {
+    setRestartState(false);
+
     var restartButton = restartById("restartDeviceButton");
     if (restartButton) {
         restartButton.addEventListener("click", restartDevice);

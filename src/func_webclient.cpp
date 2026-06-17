@@ -17,6 +17,7 @@ extern const uint8_t cert_cacert_pem_start[] asm("_binary_cert_cacert_pem_start"
 extern size_t webFilesDownloadCompleted;
 extern size_t webFilesDownloadTotal;
 extern String webFilesDownloadCurrentName;
+extern String webFilesDownloadStatusMessage;
 extern time_t lastStandbyEventEpoch;
 extern time_t lastWakeupEventEpoch;
 extern char lastStandbyEventCause[24];
@@ -522,6 +523,7 @@ bool DownloadFilesFromWeb()
 {
   const char *fversion = actconf.fversion;
   DebugPrintln(3, "Downloading web files for installed firmware version: " + String(fversion));
+  webFilesDownloadStatusMessage = "Fetching firmware manifest.";
 
   const char *webFiles[] = {
     "css_black.css",
@@ -557,6 +559,7 @@ bool DownloadFilesFromWeb()
   JsonDocument manifest;
   if (!fetchFirmwareManifest(manifest)) {
     DebugPrintln(1, "Unable to fetch firmware manifest for web file hash validation");
+    webFilesDownloadStatusMessage = "Unable to fetch firmware manifest.";
     return false;
   }
 
@@ -567,16 +570,19 @@ bool DownloadFilesFromWeb()
   bool allFilesUpdated = true;
   for (size_t i = 0; i < webFilesDownloadTotal; ++i) {
     webFilesDownloadCurrentName = String(webFiles[i]);
+    webFilesDownloadStatusMessage = "Checking " + webFilesDownloadCurrentName + ".";
     const String expectedSha256 = getExpectedWebFileSha256(manifest, fversion, webFiles[i]);
     if (expectedSha256.length() == 0) {
       DebugPrint(1, "Missing manifest hash for web file: ");
       DebugPrintln(1, webFiles[i]);
+      webFilesDownloadStatusMessage = "Missing manifest hash for " + webFilesDownloadCurrentName + ".";
       allFilesUpdated = false;
     } else {
       if (isWebFileCurrent(webFiles[i], expectedSha256)) {
         DebugPrint(3, "Web file already current, skipping download: ");
         DebugPrintln(3, webFiles[i]);
       } else {
+        webFilesDownloadStatusMessage = "Downloading " + webFilesDownloadCurrentName + ".";
         allFilesUpdated = DownloadFile(webFiles[i], fversion, expectedSha256) && allFilesUpdated;
       }
     }
@@ -587,6 +593,7 @@ bool DownloadFilesFromWeb()
 
   if (allFilesUpdated) {
     saveWebFilesVersion(fversion);
+    webFilesDownloadStatusMessage = "Web files updated successfully.";
   }
 
   return allFilesUpdated;

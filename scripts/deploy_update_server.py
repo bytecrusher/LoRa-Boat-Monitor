@@ -10,7 +10,10 @@ import json
 import os
 import posixpath
 import re
+import ssl
+import subprocess
 import sys
+import tempfile
 from ftplib import FTP, FTP_TLS, error_perm
 from pathlib import Path
 
@@ -28,6 +31,7 @@ EXCLUDED_DATA_FILES = {
 STABLE_MARKERS = ("latestVersion.txt", "latestStableVersion.txt", "ActualVersion.txt")
 BETA_MARKERS = ("latestBetaVersion.txt",)
 MANIFEST_FILE = "firmware-manifest.json"
+DEFAULT_MDS_OTA_SSH_TARGET = "hosting157867@derguntmar.de:httpdocs/mds-git.derguntmar.de/var/ota/bin"
 
 
 def load_project_env() -> None:
@@ -91,6 +95,22 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print actions without uploading files.",
     )
+    parser.add_argument(
+        "--mds-ota-dir",
+        default=os.environ.get("MDS_OTA_FTP_DIR", ""),
+        help="Optional FTP directory for MDS OTA firmware files, e.g. var/ota/bin.",
+    )
+    parser.add_argument(
+        "--mds-ota-target",
+        default=os.environ.get("MDS_OTA_SSH_TARGET", DEFAULT_MDS_OTA_SSH_TARGET),
+        help="Optional SSH/SCP target for MDS OTA firmware files, e.g. user@host:path/to/var/ota/bin.",
+    )
+    parser.add_argument(
+        "--skip-mds-ota",
+        action="store_true",
+        default=os.environ.get("SKIP_MDS_OTA_UPLOAD", "").lower() in {"1", "true", "yes"},
+        help="Skip the additional MDS OTA firmware upload.",
+    )
     return parser.parse_args()
 
 
@@ -126,7 +146,7 @@ def ensure_ftp_config(args: argparse.Namespace) -> None:
 def connect_ftp(args: argparse.Namespace) -> FTP:
     ftp: FTP
     if args.tls:
-        ftp = FTP_TLS()
+        ftp = FTP_TLS(context=ssl.create_default_context())
     else:
         ftp = FTP()
 
@@ -244,6 +264,87 @@ def build_manifest(
     return json.dumps(manifest, indent=2, sort_keys=True) + "\n"
 
 
+def upload_mds_ota_files(
+    ftp: FTP,
+    remote_root: str,
+    version: str,
+    firmware_sha256: str,
+    dry_run: bool,
+) -> None:
+    if not remote_root:
+        print("MDS OTA upload skipped: MDS_OTA_FTP_DIR is not configured.")
+        return
+
+    cleaned_root = remote_root.strip("/")
+    print(f"Preparing MDS OTA firmware files in {cleaned_root}")
+    upload_file(
+        ftp,
+        FIRMWARE_BIN,
+        posixpath.join(cleaned_root, "firmware.bin"),
+        dry_run,
+    )
+    upload_file(
+        ftp,
+        FIRMWARE_BIN,
+        posixpath.join(cleaned_root, f"{version}.bin"),
+        dry_run,
+    )
+    upload_text(
+        ftp,
+        version + "\n",
+        posixpath.join(cleaned_root, "firmware.version"),
+        dry_run,
+    )
+    upload_text(
+        ftp,
+        firmware_sha256 + "\n",
+        posixpath.join(cleaned_root, "firmware.sha256"),
+        dry_run,
+    )
+
+
+def split_scp_target(target: str) -> tuple[str, str]:
+    if ":" not in target:
+        raise ValueError("MDS OTA SSH target must use the form user@host:path")
+    host, remote_dir = target.split(":", 1)
+    if not host or not remote_dir:
+        raise ValueError("MDS OTA SSH target must include host and remote path")
+    return host, remote_dir.rstrip("/")
+
+
+def run_command(command: list[str], dry_run: bool) -> None:
+    print("+ " + " ".join(command))
+    if dry_run:
+        return
+    subprocess.run(command, check=True)
+
+
+def upload_mds_ota_files_ssh(
+    target: str,
+    version: str,
+    firmware_sha256: str,
+    dry_run: bool,
+) -> None:
+    if not target:
+        print("MDS OTA SSH upload skipped: MDS_OTA_SSH_TARGET is not configured.")
+        return
+
+    host, remote_dir = split_scp_target(target)
+    print(f"Preparing MDS OTA firmware files via SSH in {host}:{remote_dir}")
+    run_command(["ssh", host, "mkdir", "-p", remote_dir], dry_run)
+    run_command(["scp", str(FIRMWARE_BIN), f"{host}:{remote_dir}/firmware.bin"], dry_run)
+    run_command(["scp", str(FIRMWARE_BIN), f"{host}:{remote_dir}/{version}.bin"], dry_run)
+
+    with tempfile.TemporaryDirectory(prefix="loraboatmonitor-ota-") as temp_dir_name:
+        temp_dir = Path(temp_dir_name)
+        version_file = temp_dir / "firmware.version"
+        sha256_file = temp_dir / "firmware.sha256"
+        version_file.write_text(version + "\n", encoding="utf-8")
+        sha256_file.write_text(firmware_sha256 + "\n", encoding="utf-8")
+        run_command(["scp", str(version_file), f"{host}:{remote_dir}/firmware.version"], dry_run)
+        run_command(["scp", str(sha256_file), f"{host}:{remote_dir}/firmware.sha256"], dry_run)
+
+
 def collect_release_files(version: str) -> list[tuple[Path, str]]:
     if not FIRMWARE_BIN.exists():
         raise FileNotFoundError(f"Missing firmware image: {FIRMWARE_BIN}")
@@ -307,6 +408,24 @@ def main() -> int:
             manifest_remote_path,
             args.dry_run,
         )
+
+        if args.skip_mds_ota:
+            print("MDS OTA upload skipped by --skip-mds-ota.")
+        elif args.mds_ota_dir:
+            upload_mds_ota_files(
+                ftp,  # type: ignore[arg-type]
+                args.mds_ota_dir,
+                version,
+                firmware_sha256,
+                args.dry_run,
+            )
+        else:
+            upload_mds_ota_files_ssh(
+                args.mds_ota_target,
+                version,
+                firmware_sha256,
+                args.dry_run,
+            )
     finally:
         if ftp is not None:
             ftp.quit()

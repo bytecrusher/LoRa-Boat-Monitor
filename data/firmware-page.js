@@ -465,10 +465,11 @@ function renderWebFilesInfo(info) {
 
     setText('webFilesInstalledVersion', info.storedWebFilesVersion || '-');
     setText('webFilesFirmwareVersion', info.firmwareVersion || '-');
-    setText('webFilesStatus', info.busy ? 'Updating...' : (info.upToDate ? 'Up to date' : 'Update available'));
+    setText('webFilesStatus', info.error ? 'Error' : (info.busy ? 'Updating...' : (info.upToDate ? 'Up to date' : 'Update available')));
 
     if (elements.webFilesUpdateButton) {
-        elements.webFilesUpdateButton.disabled = info.busy || info.upToDate;
+        elements.webFilesUpdateButton.disabled = info.busy || (!info.error && info.upToDate);
+        elements.webFilesUpdateButton.textContent = info.error ? 'Retry Web Files Download' : 'Get Files from Server';
     }
 }
 
@@ -488,7 +489,7 @@ function renderWebFilesProgress(progress) {
     }
 
     const percent = clampPercent(progress.percent);
-    elements.webFilesProgressWrapper.style.display = progress.active || percent > 0 || progress.message ? 'block' : 'none';
+    elements.webFilesProgressWrapper.style.display = progress.busy || percent > 0 || progress.message ? 'block' : 'none';
     elements.webFilesProgressBar.style.width = percent + '%';
     elements.webFilesProgressText.textContent = progress.message
         ? progress.message + ' (' + percent + '%)'
@@ -510,9 +511,9 @@ async function pollWebFilesProgress() {
         renderWebFilesProgress(progress);
         await refreshWebFilesInfo();
 
-        if (!progress.active && (progress.success || progress.phase === 'error' || progress.percent >= 100)) {
+        if (!progress.busy && (progress.error || progress.percent >= 100)) {
             stopWebFilesProgressPolling();
-            showFirmwareMessage(progress.phase === 'error' ? 'error' : 'success', progress.message || 'Web interface files updated.');
+            showFirmwareMessage(progress.error ? 'error' : 'success', progress.message || 'Web interface files updated.');
         }
     } catch (error) {
     }
@@ -542,7 +543,8 @@ async function startWebFilesUpdate() {
         }
         startWebFilesProgressPolling();
     } catch (error) {
-        showFirmwareMessage('error', 'Could not start web interface file download.');
+        const message = error && error.json && error.json.message ? error.json.message : 'Could not start web interface file download.';
+        showFirmwareMessage('error', message);
     }
 }
 

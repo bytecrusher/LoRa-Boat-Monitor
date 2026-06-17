@@ -13,7 +13,7 @@ function setElementValue(id, value) {
         return;
     }
 
-    element.innerHTML = value;
+    element.textContent = value == null ? '' : value;
 }
 
 function setText(id, value) {
