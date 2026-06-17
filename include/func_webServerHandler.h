@@ -6,7 +6,6 @@
 #include <ESPAsyncWebServer.h>  // asynchron webserver lib
 #include <LittleFS.h>
 #include "initialsetup_html.h"  // HTML file for initial setup of the devide (if filesystem is formated)
-#include "wificonfig_html.h"    // HTML file for wifi config. (obsolete)
 #include "func_myFunctions.h"
 
 extern String readFile2(fs::FS &fs, const char * path);

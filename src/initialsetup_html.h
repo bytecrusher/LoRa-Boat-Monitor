@@ -26,7 +26,7 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
 
     <div id='loader'></div>
     <div style='display:none;' id='myDiv' class='animate-bottom file-manager-shell'>
-        <section class="page-section" data-used-bytes="%USEDSPIFFSvalue%" data-total-bytes="%TOTALSPIFFSvalue%">
+        <section class="page-section" data-used-bytes="%USED_FILESYSTEM_BYTES%" data-total-bytes="%TOTAL_FILESYSTEM_BYTES%">
             <div class="page-hero">
                 <h3>File Manager</h3>
                 <p class="muted-text">Manage the local LittleFS storage on the device. Web interface files should match the installed firmware version.</p>
@@ -34,15 +34,15 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
             <div class="metric-grid compact-metrics">
                 <article class="metric-card">
                     <span class="status-label">Free</span>
-                    <strong id="freespiffs">%FREESPIFFS%</strong>
+                    <strong id="freefilesystem">%FREE_FILESYSTEM%</strong>
                 </article>
                 <article class="metric-card">
                     <span class="status-label">Used</span>
-                    <strong id="usedspiffs">%USEDSPIFFS%</strong>
+                    <strong id="usedfilesystem">%USED_FILESYSTEM%</strong>
                 </article>
                 <article class="metric-card">
                     <span class="status-label">Total</span>
-                    <strong id="totalspiffs">%TOTALSPIFFS%</strong>
+                    <strong id="totalfilesystem">%TOTAL_FILESYSTEM%</strong>
                 </article>
             </div>
             <div class="section-spacer progress-inline compact">
@@ -174,7 +174,6 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
     function renderUpdateFilesInfo(info) {
         var button = document.getElementById('updatefilesbutton');
         var status = document.getElementById('updatefilesinfo');
-        var progressBar = document.getElementById('updatefilesprogressbar');
         var progressText = document.getElementById('updatefilesprogresstext');
         var progressWrap = document.getElementById('updatefilesprogress');
         var progressFill = document.getElementById('updatefilesprogressfill');
@@ -186,9 +185,8 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
             button.textContent = 'Downloading Files from Server...';
             button.disabled = true;
             status.textContent = 'Web files are currently being downloaded for firmware ' + info.firmwareVersion + '.';
-            if (progressBar && progressText && progressWrap && progressFill) {
+            if (progressText && progressWrap && progressFill) {
                 progressWrap.style.display = 'block';
-                progressBar.value = info.percent || 0;
                 progressFill.style.width = (info.percent || 0) + '%';
                 progressText.textContent = (info.percent || 0) + '%';
                 if (info.currentFile && info.currentFile.length > 0) {
@@ -199,9 +197,8 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
         }
 
         button.disabled = false;
-        if (progressBar && progressText && progressWrap && progressFill) {
+        if (progressText && progressWrap && progressFill) {
             progressWrap.style.display = 'none';
-            progressBar.value = info.percent || 0;
             progressFill.style.width = (info.percent || 0) + '%';
             progressText.textContent = '';
         }

@@ -6,13 +6,13 @@
 // Default configuration
 // Types 'byte' und 'word' doesn't work!
 typedef struct {
-  int valid = 16;                            // Number of configuration (Please change when the structure or values are changed)
+  int valid = 17;                            // Number of configuration (Please change when the structure or values are changed)
   int crypt = 1;                            // Activate for critical webside a password query [0 = off|1 = on]
   char username[31] = "admin";
   char password[31] = "boatmonitor";        // Password for critical websites (settings, update and reboot)
   char devname[21] = "LoRa Boat Monitor";   // Device name for web configuration
   char crights[29] = "NoWa (C) (mod by Gunni) 2023";       // Copy rights
-  char fversion[7] = "V1.13m";               // Firmware version
+  char fversion[7] = "V1.13n";               // Firmware version
   char license[12] = "GPL3";                // License type
   int debug = 3;                            // Debug mode 0=off 1=Errors 2=Errors + Warnings 3=Errors + Warnings + Messages
   int corder1 = 1;                          // Set the Order or Priority for connecting to wifi
@@ -37,7 +37,6 @@ typedef struct {
   int serspeed = 115200;                    // Serial speed in [Bd] 8N1 [300|1200|2400|4800|9600|19200|38400|57600|74880|115200]
   int WebSerialDebug = 0;                   // Control Web Serial Debug
   char firmwareUpdateUrl[50] = "loraboatmonitorwebserverdata.derguntmar.de";  // Url for getting firmware updates from
-  char autoFirmwareUpdate[8] = "No";         // Automatically install newer stable firmware from update server [Yes|No]
   int skin = 0;                             // Skin for websides [0|1|2]
 
   // LoRaWAN device, network and session key
@@ -57,8 +56,6 @@ typedef struct {
   int instrumentSize = 400;                 // Instrument size X * Y [pix] [200|250|300|350|400|450|500|550|600]
   int deviceID = 0;                         // ID of LoRa device [0...9]
   int senddata = 1;                         // Send sensor data to NMEA0183 [0|1] 0=off 1=on (WIMWV, WIVWR, WIVPW, PWINF) for Serial or JSON
-  int sendubidots = 0;                      // Send telegrams to Ubidots [0|1] 0=off 1=on
-
   float voffset = 6.47301;                  // Voltage offset [V]
   float a1vslope = 0.02860676;              // Volatge calibration coefficient a1
   float a2vslope = 0;                       // Volatge calibration coefficient a2
@@ -81,7 +78,7 @@ typedef struct {
   char standbyMode[4] = "Off";              // Select Standby mode [Off|On]
   int standbySleepDuration = 15;            // Time to sleep in Standby in minutes.
   char loraOperationMode[8] = "Standby";    // Select if Lora only sends in Standby mode [Off|Standby|PowerOn|Always]
-  char WifiStandbyMode[8] = "No";           // Select if Wifi used in Standby mode [Yes|No] // obsolete?
+  char WifiStandbyMode[8] = "No";           // Select if Wifi used in Standby mode [Yes|No]
   char SendDataViaWifi[8] = "No";           // Select if Wifi sends in Standby mode data to MDS [Yes|No]
 
   char MdsUrl[100] = "https://yourservername/ingest/receivejson.php";
@@ -101,8 +98,6 @@ typedef struct {
   int OledDisplayRotation = 0;              // OLED Display Rotation: 0 = 0°, 1 = 180°
   char mdsOtaUrl[100] = "https://mds-git.derguntmar.de/ota/getupdate.php"; // MDS OTA endpoint
   char mdsOtaSecret[65] = "";                // Shared secret for the MDS OTA endpoint
-  char standbyFirmwareUpdateCheck[8] = "No"; // Allow automatic stable firmware checks during standby wakeups [Yes|No]
-  int standbyFirmwareUpdateIntervalHours = 24; // Minimum interval for standby firmware checks in hours [1...168]
 } configData;
 
 #endif

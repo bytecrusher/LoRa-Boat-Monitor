@@ -574,9 +574,6 @@ String settingsTemplateProcessor(const String &var) {
   if (var == "passwordMasked") return maskSecret(String(actconf.password));
   if (var == "SendDataViaWifi") return String(getindex(SendDataViaWifi, String(actconf.SendDataViaWifi)));
   if (var == "firmwareUpdateUrl") return htmlEscape(String(actconf.firmwareUpdateUrl));
-  if (var == "autoFirmwareUpdate") return String(getindex(SendDataViaWifi, String(actconf.autoFirmwareUpdate)));
-  if (var == "standbyFirmwareUpdateCheck") return String(getindex(SendDataViaWifi, String(actconf.standbyFirmwareUpdateCheck)));
-  if (var == "standbyFirmwareUpdateIntervalHours") return String(actconf.standbyFirmwareUpdateIntervalHours);
   if (var == "mdsOtaUrl") return htmlEscape(String(actconf.mdsOtaUrl));
   if (var == "mdsOtaSecretMasked") return maskSecret(String(actconf.mdsOtaSecret));
   if (var == "csrfToken") return getCsrfToken();
@@ -783,19 +780,6 @@ void WebServerHandler()
       if (vname[i] == "firmwareUpdateUrl") {
         String normalizedFirmwareUpdateUrl = normalizeFirmwareUpdateValueForStorage(value[i]);
         normalizedFirmwareUpdateUrl.toCharArray(actconf.firmwareUpdateUrl, sizeof(actconf.firmwareUpdateUrl));
-      }
-      if (vname[i] == "autoFirmwareUpdate") {
-        value[i].toCharArray(actconf.autoFirmwareUpdate, sizeof(actconf.autoFirmwareUpdate));
-      }
-      if (vname[i] == "standbyFirmwareUpdateCheck") {
-        value[i].toCharArray(actconf.standbyFirmwareUpdateCheck, sizeof(actconf.standbyFirmwareUpdateCheck));
-      }
-      if (vname[i] == "standbyFirmwareUpdateIntervalHours") {
-        String intervalValue = value[i];
-        intervalValue.trim();
-        if (intervalValue.length() > 0) {
-          actconf.standbyFirmwareUpdateIntervalHours = clampConfigInt(toInteger(intervalValue), actconf.standbyFirmwareUpdateIntervalHours, 1, 168);
-        }
       }
       if (vname[i] == "mdsOtaUrl") {
         String normalizedMdsOtaUrl = normalizeMdsOtaUrlForStorage(value[i]);
@@ -1033,7 +1017,6 @@ void WebServerHandler()
     content.replace("%devname%", htmlEscape(String(actconf.devname)));
     content.replace("%crights%", htmlEscape(String(actconf.crights)));
     content.replace("%fversion%", String(actconf.fversion));
-    content.replace("%wificonfig%", wificonfig_html);
     content.replace("%cssid1%", htmlEscape(String(actconf.cssid1)));
     content.replace("%cpassword1%", "");
     content.replace("%cpassword1Masked%", maskSecret(String(actconf.cpassword1)));
@@ -1047,11 +1030,11 @@ void WebServerHandler()
     content.replace("%csrfToken%", getCsrfToken());
     //content.replace("%tabelle%", getMyDirAsString(LittleFS, "/", 0));
 
-    content.replace("%FREESPIFFS%", humanReadableSize((LittleFS.totalBytes() - LittleFS.usedBytes())));
-    content.replace("%USEDSPIFFS%", humanReadableSize(LittleFS.usedBytes()));
-    content.replace("%TOTALSPIFFS%", humanReadableSize(LittleFS.totalBytes()));
-    content.replace("%USEDSPIFFSvalue%", String(LittleFS.usedBytes()));
-    content.replace("%TOTALSPIFFSvalue%", String(LittleFS.totalBytes()));
+    content.replace("%FREE_FILESYSTEM%", humanReadableSize((LittleFS.totalBytes() - LittleFS.usedBytes())));
+    content.replace("%USED_FILESYSTEM%", humanReadableSize(LittleFS.usedBytes()));
+    content.replace("%TOTAL_FILESYSTEM%", humanReadableSize(LittleFS.totalBytes()));
+    content.replace("%USED_FILESYSTEM_BYTES%", String(LittleFS.usedBytes()));
+    content.replace("%TOTAL_FILESYSTEM_BYTES%", String(LittleFS.totalBytes()));
 
     request->send(200, "text/html", content);
   });
@@ -1096,11 +1079,11 @@ void WebServerHandler()
     content.replace("%wificonfig%", "");
     //content.replace("%tabelle%", getMyDirAsString(LittleFS, "/", 0));
 
-    content.replace("%FREESPIFFS%", humanReadableSize((LittleFS.totalBytes() - LittleFS.usedBytes())));
-    content.replace("%USEDSPIFFS%", humanReadableSize(LittleFS.usedBytes()));
-    content.replace("%TOTALSPIFFS%", humanReadableSize(LittleFS.totalBytes()));
-    content.replace("%USEDSPIFFSvalue%", String(LittleFS.usedBytes()));
-    content.replace("%TOTALSPIFFSvalue%", String(LittleFS.totalBytes()));
+    content.replace("%FREE_FILESYSTEM%", humanReadableSize((LittleFS.totalBytes() - LittleFS.usedBytes())));
+    content.replace("%USED_FILESYSTEM%", humanReadableSize(LittleFS.usedBytes()));
+    content.replace("%TOTAL_FILESYSTEM%", humanReadableSize(LittleFS.totalBytes()));
+    content.replace("%USED_FILESYSTEM_BYTES%", String(LittleFS.usedBytes()));
+    content.replace("%TOTAL_FILESYSTEM_BYTES%", String(LittleFS.totalBytes()));
 
     request->send(200, "text/html", content);
   });
@@ -1893,43 +1876,9 @@ void WebServerHandler()
     handleOtaUpload
   );
 
-  // Backward-compatible alias for older firmware update pages that still post to /update.
-  httpServer.on("/update", HTTP_POST,
-    handleOtaPost,
-    handleOtaUpload
-  );
-
   #ifdef ESP32
     //Update.onProgress(printProgress);
   #endif
-
-  /*httpServer.on("/update", HTTP_POST, [](AsyncWebServerRequest *request) {
-  //httpServer.on("/update", HTTP_POST, []() {
-    //httpServer.sendHeader("Connection", "close");
-    //httpServer.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
-    request->send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
-    ESP.restart();
-  }, [](AsyncWebServerRequest *request) {*/
-  // Update routine
-  /*HTTPUpload& upload = httpServer.upload();
-      if (upload.status == UPLOAD_FILE_START) {
-        DebugPrint(3, "Update: " + String(upload.filename.c_str()) + "\n");
-        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { //start with max available size
-          Update.printError(Serial);
-        }
-      } else if (upload.status == UPLOAD_FILE_WRITE) {
-        /* flashing firmware to ESP*/
-  /*      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
-          Update.printError(Serial);
-        }
-      } else if (upload.status == UPLOAD_FILE_END) {
-        if (Update.end(true)) { //true to set the size to the current progress
-          DebugPrint(3, "Update Success: " + String(upload.totalSize) + "\nRebooting...\n");
-        } else {
-          Update.printError(Serial);
-        }*/
-      /*} */
-  //});
 
   // run handleUpload function when any file is uploaded
   httpServer.on("/upload", HTTP_POST,
@@ -2144,7 +2093,7 @@ void WebServerHandler()
   });
 
   httpServer.on("/logged-out", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/html", logout_html2);
+    request->send(200, "text/html", logout_html2);
   });
     
 }
@@ -2250,8 +2199,7 @@ static bool isFilesystemUpdateRequest(AsyncWebServerRequest *request, const Stri
     }
   }
 
-  return loweredFilename.indexOf("spiffs") > -1 ||
-         loweredFilename.indexOf("littlefs") > -1 ||
+  return loweredFilename.indexOf("littlefs") > -1 ||
          loweredFilename.indexOf("filesystem") > -1;
 }
 

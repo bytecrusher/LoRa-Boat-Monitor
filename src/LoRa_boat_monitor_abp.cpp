@@ -85,8 +85,6 @@ configData actconf;             // Actual configuration, Global variable
 int value;                      // Value from first byte in EEPROM
 int empty;                      // If EEPROM empty without configuration then set to 1 otherwise 0
 configData defconf;             // Definition of default configuration data
-configData oldconf;             // Configuration stucture for old config data in EEPROM
-configData newconf;             // Configuration stucture for new config data in EEPROM
 
 void Task1code( void *pvParameters );  //Initiates TaskCode1
 
@@ -162,7 +160,6 @@ const unsigned long AUTO_FIRMWARE_UPDATE_RETRY_MS = 1800000UL;
 const unsigned long AUTO_FIRMWARE_UPDATE_INTERVAL_MS = 21600000UL;
 unsigned long lastMdsUploadMillis = 0;
 unsigned long nextAutoFirmwareUpdateCheckMillis = 0;
-RTC_DATA_ATTR time_t lastStandbyFirmwareUpdateCheckEpoch = 0;
 bool pendingWakeMdsEvent = false;
 int pendingWakeReasonCode = 0;
 String pendingWakeReasonLabel = "unknown";
@@ -171,6 +168,226 @@ bool currentWakeMdsEventCaptured = false;
 
 long timezone = 1; 
 byte daysavetime = 1;
+
+namespace {
+struct LegacyConfigDataV16 {
+  int valid = 16;
+  int crypt = 1;
+  char username[31] = "admin";
+  char password[31] = "boatmonitor";
+  char devname[21] = "LoRa Boat Monitor";
+  char crights[29] = "NoWa (C) (mod by Gunni) 2023";
+  char fversion[7] = "V1.13m";
+  char license[12] = "GPL3";
+  int debug = 3;
+  int corder1 = 1;
+  char cssid1[31] = "";
+  char cpassword1[31] = "";
+  int corder2 = 2;
+  char cssid2[31] = "";
+  char cpassword2[31] = "";
+  int corder3 = 3;
+  char cssid3[31] = "";
+  char cpassword3[31] = "";
+  int timeout = 10;
+  char sssid[31] = "LoRaBoatMonitor";
+  char spassword[31] = "LoRaBoatMonitor";
+  int apchannel = 1;
+  int maxconnections = 2;
+  int mDNS = 1;
+  char hostname[31] = "boatmonitor";
+  int dataport = 6666;
+  int httpport = 80;
+  int serverMode = 0;
+  int serspeed = 115200;
+  int WebSerialDebug = 0;
+  char firmwareUpdateUrl[50] = "loraboatmonitorwebserverdata.derguntmar.de";
+  char autoFirmwareUpdate[8] = "No";
+  int skin = 0;
+  uint32_t devaddr = 0x00000000;
+  uint8_t nskey[16] = {0};
+  uint8_t appkey[16] = {0};
+  char lorafrequency[6] = "EU868";
+  int lchannel = 1;
+  int spreadf = 10;
+  int dynsf = 1;
+  unsigned int tinterval = 1;
+  uint32_t fcnt = 0;
+  int relay = 0;
+  int instrumentSize = 400;
+  int deviceID = 0;
+  int senddata = 1;
+  int sendubidots = 0;
+  float voffset = 6.47301;
+  float a1vslope = 0.02860676;
+  float a2vslope = 0;
+  int vaverage = 1;
+  float t1offset = 0;
+  float a1t1slope = 143.1974;
+  float a2t1slope = 0;
+  int t1average = 1;
+  float t2offset = 0;
+  float a1t2slope = 143.1974;
+  float a2t2slope = 0;
+  int t2average = 1;
+  char tempSensorType[10] = "Off";
+  char tempUnit[2] = "C";
+  char envSensor[20] = "Off";
+  char standbyMode[4] = "Off";
+  int standbySleepDuration = 15;
+  char loraOperationMode[8] = "Standby";
+  char WifiStandbyMode[8] = "No";
+  char SendDataViaWifi[8] = "No";
+  char MdsUrl[100] = "https://yourservername/ingest/receivejson.php";
+  char MdsApiKey[30] = "";
+  int MdsSensorIdBattery = 0;
+  int MdsSensorIdTanks = 0;
+  int MdsSensorIdStatus = 0;
+  int MdsSensorIdGps = 0;
+  int MdsSensorIdEnv = 0;
+  int MdsSensorIdDewpoint = 0;
+  int MdsSensorIdVedirect = 0;
+  int cssStyle = 0;
+  int OledDisplayRotation = 0;
+  char mdsOtaUrl[100] = "https://mds-git.derguntmar.de/ota/getupdate.php";
+  char mdsOtaSecret[65] = "";
+  char standbyFirmwareUpdateCheck[8] = "No";
+  int standbyFirmwareUpdateIntervalHours = 24;
+};
+
+void copyLegacyString(char *target, size_t targetSize, const char *source) {
+  if (target == nullptr || targetSize == 0 || source == nullptr) {
+    return;
+  }
+  strncpy(target, source, targetSize - 1);
+  target[targetSize - 1] = '\0';
+}
+
+configData migrateLegacyConfigV16ToCurrent(const LegacyConfigDataV16 &legacy) {
+  configData migrated = defconf;
+  migrated.valid = defconf.valid;
+  migrated.crypt = legacy.crypt;
+  copyLegacyString(migrated.username, sizeof(migrated.username), legacy.username);
+  copyLegacyString(migrated.password, sizeof(migrated.password), legacy.password);
+  copyLegacyString(migrated.devname, sizeof(migrated.devname), legacy.devname);
+  copyLegacyString(migrated.crights, sizeof(migrated.crights), legacy.crights);
+  copyLegacyString(migrated.fversion, sizeof(migrated.fversion), legacy.fversion);
+  copyLegacyString(migrated.license, sizeof(migrated.license), legacy.license);
+  migrated.debug = legacy.debug;
+  migrated.corder1 = legacy.corder1;
+  copyLegacyString(migrated.cssid1, sizeof(migrated.cssid1), legacy.cssid1);
+  copyLegacyString(migrated.cpassword1, sizeof(migrated.cpassword1), legacy.cpassword1);
+  migrated.corder2 = legacy.corder2;
+  copyLegacyString(migrated.cssid2, sizeof(migrated.cssid2), legacy.cssid2);
+  copyLegacyString(migrated.cpassword2, sizeof(migrated.cpassword2), legacy.cpassword2);
+  migrated.corder3 = legacy.corder3;
+  copyLegacyString(migrated.cssid3, sizeof(migrated.cssid3), legacy.cssid3);
+  copyLegacyString(migrated.cpassword3, sizeof(migrated.cpassword3), legacy.cpassword3);
+  migrated.timeout = legacy.timeout;
+  copyLegacyString(migrated.sssid, sizeof(migrated.sssid), legacy.sssid);
+  copyLegacyString(migrated.spassword, sizeof(migrated.spassword), legacy.spassword);
+  migrated.apchannel = legacy.apchannel;
+  migrated.maxconnections = legacy.maxconnections;
+  migrated.mDNS = legacy.mDNS;
+  copyLegacyString(migrated.hostname, sizeof(migrated.hostname), legacy.hostname);
+  migrated.dataport = legacy.dataport;
+  migrated.httpport = legacy.httpport;
+  migrated.serverMode = legacy.serverMode;
+  migrated.serspeed = legacy.serspeed;
+  migrated.WebSerialDebug = legacy.WebSerialDebug;
+  copyLegacyString(migrated.firmwareUpdateUrl, sizeof(migrated.firmwareUpdateUrl), legacy.firmwareUpdateUrl);
+  migrated.skin = legacy.skin;
+  migrated.devaddr = legacy.devaddr;
+  memcpy(migrated.nskey, legacy.nskey, sizeof(migrated.nskey));
+  memcpy(migrated.appkey, legacy.appkey, sizeof(migrated.appkey));
+  copyLegacyString(migrated.lorafrequency, sizeof(migrated.lorafrequency), legacy.lorafrequency);
+  migrated.lchannel = legacy.lchannel;
+  migrated.spreadf = legacy.spreadf;
+  migrated.dynsf = legacy.dynsf;
+  migrated.tinterval = legacy.tinterval;
+  migrated.fcnt = legacy.fcnt;
+  migrated.relay = legacy.relay;
+  migrated.instrumentSize = legacy.instrumentSize;
+  migrated.deviceID = legacy.deviceID;
+  migrated.senddata = legacy.senddata;
+  migrated.voffset = legacy.voffset;
+  migrated.a1vslope = legacy.a1vslope;
+  migrated.a2vslope = legacy.a2vslope;
+  migrated.vaverage = legacy.vaverage;
+  migrated.t1offset = legacy.t1offset;
+  migrated.a1t1slope = legacy.a1t1slope;
+  migrated.a2t1slope = legacy.a2t1slope;
+  migrated.t1average = legacy.t1average;
+  migrated.t2offset = legacy.t2offset;
+  migrated.a1t2slope = legacy.a1t2slope;
+  migrated.a2t2slope = legacy.a2t2slope;
+  migrated.t2average = legacy.t2average;
+  copyLegacyString(migrated.tempSensorType, sizeof(migrated.tempSensorType), legacy.tempSensorType);
+  copyLegacyString(migrated.tempUnit, sizeof(migrated.tempUnit), legacy.tempUnit);
+  copyLegacyString(migrated.envSensor, sizeof(migrated.envSensor), legacy.envSensor);
+  copyLegacyString(migrated.standbyMode, sizeof(migrated.standbyMode), legacy.standbyMode);
+  migrated.standbySleepDuration = legacy.standbySleepDuration;
+  copyLegacyString(migrated.loraOperationMode, sizeof(migrated.loraOperationMode), legacy.loraOperationMode);
+  copyLegacyString(migrated.WifiStandbyMode, sizeof(migrated.WifiStandbyMode), legacy.WifiStandbyMode);
+  copyLegacyString(migrated.SendDataViaWifi, sizeof(migrated.SendDataViaWifi), legacy.SendDataViaWifi);
+  copyLegacyString(migrated.MdsUrl, sizeof(migrated.MdsUrl), legacy.MdsUrl);
+  copyLegacyString(migrated.MdsApiKey, sizeof(migrated.MdsApiKey), legacy.MdsApiKey);
+  migrated.MdsSensorIdBattery = legacy.MdsSensorIdBattery;
+  migrated.MdsSensorIdTanks = legacy.MdsSensorIdTanks;
+  migrated.MdsSensorIdStatus = legacy.MdsSensorIdStatus;
+  migrated.MdsSensorIdGps = legacy.MdsSensorIdGps;
+  migrated.MdsSensorIdEnv = legacy.MdsSensorIdEnv;
+  migrated.MdsSensorIdDewpoint = legacy.MdsSensorIdDewpoint;
+  migrated.MdsSensorIdVedirect = legacy.MdsSensorIdVedirect;
+  migrated.cssStyle = legacy.cssStyle;
+  migrated.OledDisplayRotation = legacy.OledDisplayRotation;
+  copyLegacyString(migrated.mdsOtaUrl, sizeof(migrated.mdsOtaUrl), legacy.mdsOtaUrl);
+  copyLegacyString(migrated.mdsOtaSecret, sizeof(migrated.mdsOtaSecret), legacy.mdsOtaSecret);
+  return migrated;
+}
+
+bool readLegacyConfigFromEeprom(LegacyConfigDataV16 &legacy) {
+  EEPROM.begin(sizeEEPROM);
+  EEPROM.get(cfgStart, legacy);
+  EEPROM.end();
+  return legacy.valid >= 11 && legacy.valid <= 16;
+}
+
+bool repairLegacyConfigV15(LegacyConfigDataV16 &legacy) {
+  if (legacy.valid != 15) {
+    return false;
+  }
+
+  constexpr size_t insertedOffset = offsetof(LegacyConfigDataV16, skin);
+  constexpr size_t insertedLength = 8 + sizeof(int);
+  constexpr size_t appendedOffset = offsetof(LegacyConfigDataV16, standbyFirmwareUpdateCheck);
+  if (insertedOffset + insertedLength >= appendedOffset || appendedOffset >= sizeof(LegacyConfigDataV16)) {
+    return false;
+  }
+
+  uint8_t rawConfig[sizeof(LegacyConfigDataV16)] = {0};
+  EEPROM.begin(sizeEEPROM);
+  for (size_t i = 0; i < sizeof(rawConfig); i++) {
+    rawConfig[i] = EEPROM.read(cfgStart + i);
+  }
+  EEPROM.end();
+
+  LegacyConfigDataV16 repaired = LegacyConfigDataV16();
+  uint8_t *repairedBytes = reinterpret_cast<uint8_t*>(&repaired);
+  memcpy(repairedBytes, rawConfig, insertedOffset);
+
+  const size_t shiftedLength = appendedOffset - insertedOffset;
+  memcpy(repairedBytes + insertedOffset, rawConfig + insertedOffset + insertedLength, shiftedLength);
+  memcpy(repaired.standbyFirmwareUpdateCheck, rawConfig + insertedOffset, sizeof(repaired.standbyFirmwareUpdateCheck));
+  memcpy(&repaired.standbyFirmwareUpdateIntervalHours,
+         rawConfig + insertedOffset + sizeof(repaired.standbyFirmwareUpdateCheck),
+         sizeof(repaired.standbyFirmwareUpdateIntervalHours));
+
+  repaired.valid = 16;
+  legacy = repaired;
+  return true;
+}
+}  // namespace
 
 File root;
 
@@ -1245,42 +1462,6 @@ bool isValidHttpsUrlString(const char *value, size_t maxLength) {
   return url.startsWith("https://") && url.length() > 8 && url.length() < maxLength;
 }
 
-void repairConfigFromV15InsertedFieldLayout() {
-  if (actconf.valid != 15) {
-    return;
-  }
-
-  constexpr size_t insertedOffset = offsetof(configData, skin);
-  constexpr size_t insertedLength = 8 + sizeof(int);
-  constexpr size_t appendedOffset = offsetof(configData, standbyFirmwareUpdateCheck);
-  if (insertedOffset + insertedLength >= appendedOffset || appendedOffset >= sizeof(configData)) {
-    return;
-  }
-
-  uint8_t rawConfig[sizeof(configData)] = {0};
-  EEPROM.begin(sizeEEPROM);
-  for (size_t i = 0; i < sizeof(rawConfig); i++) {
-    rawConfig[i] = EEPROM.read(cfgStart + i);
-  }
-  EEPROM.end();
-
-  configData repaired = defconf;
-  uint8_t *repairedBytes = reinterpret_cast<uint8_t*>(&repaired);
-  memcpy(repairedBytes, rawConfig, insertedOffset);
-
-  const size_t shiftedLength = appendedOffset - insertedOffset;
-  memcpy(repairedBytes + insertedOffset, rawConfig + insertedOffset + insertedLength, shiftedLength);
-  memcpy(repaired.standbyFirmwareUpdateCheck, rawConfig + insertedOffset, sizeof(repaired.standbyFirmwareUpdateCheck));
-  memcpy(&repaired.standbyFirmwareUpdateIntervalHours,
-         rawConfig + insertedOffset + sizeof(repaired.standbyFirmwareUpdateCheck),
-         sizeof(repaired.standbyFirmwareUpdateIntervalHours));
-
-  repaired.valid = defconf.valid;
-  actconf = repaired;
-  DebugPrintln(2, "Repaired config layout from version 15");
-  saveEEPROMConfig(actconf);
-}
-
 bool copyConfigString(char *target, size_t targetLength, const char *source) {
   if (target == nullptr || targetLength == 0 || source == nullptr) {
     return false;
@@ -1343,7 +1524,6 @@ void sanitizeNewConfigFields() {
   changed = sanitizeConfigRange(actconf.relay, defconf.relay, 0, 2) || changed;
   changed = sanitizeConfigRange(actconf.instrumentSize, defconf.instrumentSize, 200, 600) || changed;
   changed = sanitizeConfigRange(actconf.standbySleepDuration, defconf.standbySleepDuration, 1, 1440) || changed;
-  changed = sanitizeConfigRange(actconf.standbyFirmwareUpdateIntervalHours, defconf.standbyFirmwareUpdateIntervalHours, 1, 168) || changed;
   changed = sanitizeConfigRange(actconf.MdsSensorIdBattery, defconf.MdsSensorIdBattery, 0, 1) || changed;
   changed = sanitizeConfigRange(actconf.MdsSensorIdTanks, defconf.MdsSensorIdTanks, 0, 1) || changed;
   changed = sanitizeConfigRange(actconf.MdsSensorIdStatus, defconf.MdsSensorIdStatus, 0, 1) || changed;
@@ -1370,8 +1550,6 @@ void sanitizeNewConfigFields() {
   const char *loraModeValues[] = {"Off", "Standby", "PowerOn", "Always"};
   const char *loraFrequencyValues[] = {"EU868", "US915"};
 
-  changed = sanitizeConfigOption(actconf.autoFirmwareUpdate, sizeof(actconf.autoFirmwareUpdate), defconf.autoFirmwareUpdate, yesNoValues, 2) || changed;
-  changed = sanitizeConfigOption(actconf.standbyFirmwareUpdateCheck, sizeof(actconf.standbyFirmwareUpdateCheck), defconf.standbyFirmwareUpdateCheck, yesNoValues, 2) || changed;
   changed = sanitizeConfigOption(actconf.SendDataViaWifi, sizeof(actconf.SendDataViaWifi), defconf.SendDataViaWifi, yesNoValues, 2) || changed;
   changed = sanitizeConfigOption(actconf.WifiStandbyMode, sizeof(actconf.WifiStandbyMode), defconf.WifiStandbyMode, yesNoValues, 2) || changed;
   changed = sanitizeConfigOption(actconf.tempSensorType, sizeof(actconf.tempSensorType), defconf.tempSensorType, tempSensorValues, 2) || changed;
@@ -1417,28 +1595,22 @@ void sanitizeNewConfigFields() {
 }
 
 void setup() {
-  // Loading EEPROM configuration
-  actconf = loadEEPROMConfig(); // Overload with old EEPROM configuration by start. It is necessarry for serspeed
-  repairConfigFromV15InsertedFieldLayout();
+  LegacyConfigDataV16 legacyConfig;
+  const bool hasLegacyConfig = readLegacyConfigFromEeprom(legacyConfig);
+  if (hasLegacyConfig) {
+    if (repairLegacyConfigV15(legacyConfig)) {
+      DebugPrintln(2, "Repaired config layout from version 15");
+    }
+    actconf = migrateLegacyConfigV16ToCurrent(legacyConfig);
+    saveEEPROMConfig(actconf);
+    empty = 0;
+  } else {
+    actconf = loadEEPROMConfig(); // Overload with old EEPROM configuration by start. It is necessarry for serspeed
+  }
 
-  if (actconf.valid == defconf.valid || actconf.valid == 14 || actconf.valid == 13 || actconf.valid == 12 || actconf.valid == 11) {
+  if (actconf.valid == defconf.valid) {
     empty = 0;                  // Marker for configuration is present
-    if (actconf.valid != defconf.valid) {
-      actconf.valid = defconf.valid;
-      String autoUpdateDefault = String(defconf.autoFirmwareUpdate);
-      autoUpdateDefault.toCharArray(actconf.autoFirmwareUpdate, sizeof(actconf.autoFirmwareUpdate));
-      String standbyUpdateDefault = String(defconf.standbyFirmwareUpdateCheck);
-      standbyUpdateDefault.toCharArray(actconf.standbyFirmwareUpdateCheck, sizeof(actconf.standbyFirmwareUpdateCheck));
-      actconf.standbyFirmwareUpdateIntervalHours = defconf.standbyFirmwareUpdateIntervalHours;
-      if (!isValidHttpsUrlString(actconf.mdsOtaUrl, sizeof(actconf.mdsOtaUrl))) {
-        String mdsOtaUrlDefault = String(defconf.mdsOtaUrl);
-        mdsOtaUrlDefault.toCharArray(actconf.mdsOtaUrl, sizeof(actconf.mdsOtaUrl));
-      }
-      if (!isPrintableConfigString(actconf.mdsOtaSecret, sizeof(actconf.mdsOtaSecret))) {
-        actconf.mdsOtaSecret[0] = '\0';
-      }
-      saveEEPROMConfig(actconf); // Migrate config layout while preserving existing settings.
-    } else if (!hasEEPROMConfigHeader()) {
+    if (!hasEEPROMConfigHeader()) {
       saveEEPROMConfig(actconf); // Migrate legacy raw layout to headered layout
     }
   }
