@@ -560,6 +560,7 @@ bool DownloadFilesFromWeb()
   if (!fetchFirmwareManifest(manifest)) {
     DebugPrintln(1, "Unable to fetch firmware manifest for web file hash validation");
     webFilesDownloadStatusMessage = "Unable to fetch firmware manifest.";
+    writeDisplayStatusScreen("Web files", "Manifest failed", "Check WiFi/TLS");
     return false;
   }
 
@@ -571,6 +572,11 @@ bool DownloadFilesFromWeb()
   for (size_t i = 0; i < webFilesDownloadTotal; ++i) {
     webFilesDownloadCurrentName = String(webFiles[i]);
     webFilesDownloadStatusMessage = "Checking " + webFilesDownloadCurrentName + ".";
+    writeDisplayProgressScreen("Web files",
+                               "Checking file",
+                               webFilesDownloadCompleted,
+                               webFilesDownloadTotal,
+                               webFilesDownloadCurrentName);
     const String expectedSha256 = getExpectedWebFileSha256(manifest, fversion, webFiles[i]);
     if (expectedSha256.length() == 0) {
       DebugPrint(1, "Missing manifest hash for web file: ");
@@ -583,10 +589,20 @@ bool DownloadFilesFromWeb()
         DebugPrintln(3, webFiles[i]);
       } else {
         webFilesDownloadStatusMessage = "Downloading " + webFilesDownloadCurrentName + ".";
+        writeDisplayProgressScreen("Web files",
+                                   "Downloading",
+                                   webFilesDownloadCompleted,
+                                   webFilesDownloadTotal,
+                                   webFilesDownloadCurrentName);
         allFilesUpdated = DownloadFile(webFiles[i], fversion, expectedSha256) && allFilesUpdated;
       }
     }
     webFilesDownloadCompleted = i + 1;
+    writeDisplayProgressScreen("Web files",
+                               allFilesUpdated ? "Processed file" : "File error",
+                               webFilesDownloadCompleted,
+                               webFilesDownloadTotal,
+                               webFilesDownloadCurrentName);
   }
 
   webFilesDownloadCurrentName = "";
@@ -594,6 +610,9 @@ bool DownloadFilesFromWeb()
   if (allFilesUpdated) {
     saveWebFilesVersion(fversion);
     webFilesDownloadStatusMessage = "Web files updated successfully.";
+    writeDisplayStatusScreen("Web files", "Update done", String(fversion));
+  } else {
+    writeDisplayStatusScreen("Web files", "Update failed", webFilesDownloadStatusMessage);
   }
 
   return allFilesUpdated;

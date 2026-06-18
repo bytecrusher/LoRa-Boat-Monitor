@@ -488,7 +488,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Relay Behavior <span class="infoBadge" tabindex="0">i<span class="infoPopover">"Control GPS Module" nutzt das Relais zum Ein- und Ausschalten des GPS-Moduls. "On" haelt das Relais dauerhaft aktiv.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Relay Behavior <span class="infoBadge" tabindex="0">i<span class="infoPopover">"Control GPS Module" nutzt den Relaisausgang zum Ein- und Ausschalten des GPS-Moduls. Auf der aktuellen Hardware teilt sich dieser Ausgang GPIO25 mit der Heltec-Board-LED, daher folgt die LED dem Relaiszustand.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='relay' size='1'>
                             <option value='0'>Off</option>
@@ -655,7 +655,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Environment Sensor Source <span class="infoBadge" tabindex="0">i<span class="infoPopover">Waehlt aus, ob Umgebungswerte vom BME280 oder von der VE.Direct-Schnittstelle kommen. "Off" deaktiviert diese Quelle.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Environment Sensor Source <span class="infoBadge" tabindex="0">i<span class="infoPopover">Waehlt aus, ob Umgebungswerte vom optionalen BME280 oder von der VE.Direct-Schnittstelle kommen. Beide Varianten teilen sich die Pins GPIO17 und GPIO22 und koennen deshalb nicht gleichzeitig genutzt werden. "Off" deaktiviert diese Quelle.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='envSensor' size='1'>
                             <option value='Off'>Off</option>
@@ -675,7 +675,7 @@
             <div class="collapsible initially-hidden" id="StandbyModeSettingsPage" >
                 <div class="section-note">Power-saving behavior while the device is waiting in standby. Keep Wi-Fi off here unless you explicitly need web access or MDS uploads during standby.</div>
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Enable Standby Mode <span class="infoBadge" tabindex="0">i<span class="infoPopover">Im Standby-Modus kann das Geraet schlafen und bei Alarmzustand wieder aufwachen. Der Alarm-Eingang X1-3 steuert dabei Wake und Sleep.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Enable Standby Mode <span class="infoBadge" tabindex="0">i<span class="infoPopover">Im Standby-Modus kann das Geraet schlafen und bei Alarmzustand wieder aufwachen. Der Alarm-Eingang an GPIO39 ist dabei zugleich der Standby-/Wakeup-Eingang und arbeitet active-low.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='standbyMode' size='1' onchange='check_alarmState(event)'>
                             <option value='Off'>Off</option>

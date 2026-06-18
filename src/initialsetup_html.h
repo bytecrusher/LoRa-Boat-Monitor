@@ -184,13 +184,23 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
         if (info.busy) {
             button.textContent = 'Downloading Files from Server...';
             button.disabled = true;
-            status.textContent = info.message || ('Web files are currently being downloaded for firmware ' + info.firmwareVersion + '.');
+            var busyMessage = info.message || ('Web files are currently being downloaded for firmware ' + info.firmwareVersion + '.');
+            if (info.currentFile && info.currentFile.length > 0 && info.total > 0) {
+                busyMessage += ' Current file: ' + info.currentFile + ' (' + info.completed + '/' + info.total + ').';
+            } else if (info.total > 0) {
+                busyMessage += ' Progress: ' + info.completed + '/' + info.total + ' files.';
+            }
+            status.textContent = busyMessage;
             if (progressText && progressWrap && progressFill) {
                 progressWrap.style.display = 'block';
                 progressFill.style.width = (info.percent || 0) + '%';
                 progressText.textContent = (info.percent || 0) + '%';
                 if (info.currentFile && info.currentFile.length > 0) {
                     progressText.textContent += ' - ' + info.currentFile + ' (' + info.completed + '/' + info.total + ')';
+                } else if (info.total > 0) {
+                    progressText.textContent += ' - ' + info.completed + ' of ' + info.total + ' files';
+                } else if (busyMessage) {
+                    progressText.textContent += ' - ' + busyMessage;
                 }
             }
             return;

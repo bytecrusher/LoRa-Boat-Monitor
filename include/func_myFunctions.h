@@ -148,6 +148,20 @@ bool CheckNMEA(String NMEAstring);
 void readValues(configData myactconf);
 void writeDisplay();
 void writeDisplayValues(configData myactconf);
+void writeDisplayStatusScreen(const String &title,
+                             const String &line1 = "",
+                             const String &line2 = "",
+                             const String &line3 = "",
+                             const String &line4 = "",
+                             const String &line5 = "",
+                             const String &line6 = "",
+                             const String &line7 = "");
+void writeDisplayProgressScreen(const String &title,
+                               const String &message,
+                               size_t current,
+                               size_t total,
+                               const String &detail = "",
+                               const String &footer = "");
 void readGPSValuesFlag();
 void readGPSValues(configData myactconf);
 void relayTimerInterrupt();

@@ -1137,6 +1137,71 @@ void writeDisplayValues(configData myactconf) {
   u8x8.refreshDisplay();    // Only required for SSD1606/7
 }
 
+namespace {
+String fitDisplayLine(const String &value) {
+  String line = value;
+  line.trim();
+  if (line.length() > 16) {
+    line = line.substring(0, 16);
+  }
+  return line;
+}
+}
+
+void writeDisplayStatusScreen(const String &title,
+                             const String &line1,
+                             const String &line2,
+                             const String &line3,
+                             const String &line4,
+                             const String &line5,
+                             const String &line6,
+                             const String &line7) {
+  const String lines[] = {
+    fitDisplayLine(title),
+    fitDisplayLine(line1),
+    fitDisplayLine(line2),
+    fitDisplayLine(line3),
+    fitDisplayLine(line4),
+    fitDisplayLine(line5),
+    fitDisplayLine(line6),
+    fitDisplayLine(line7)
+  };
+
+  u8x8.setPowerSave(0);
+  u8x8.clearDisplay();
+  u8x8.setFont(u8x8_font_chroma48medium8_r);
+  for (uint8_t index = 0; index < 8; index++) {
+    if (lines[index].length() > 0) {
+      u8x8.drawString(0, index, lines[index].c_str());
+    }
+  }
+  u8x8.refreshDisplay();
+}
+
+void writeDisplayProgressScreen(const String &title,
+                               const String &message,
+                               size_t current,
+                               size_t total,
+                               const String &detail,
+                               const String &footer) {
+  String percentLine = "Progress";
+  String countLine = "";
+  if (total > 0) {
+    const size_t percent = (current * 100U) / total;
+    percentLine = String(percent) + "%";
+    countLine = String(current) + "/" + String(total);
+  } else if (current > 0) {
+    countLine = String(current) + " bytes";
+  }
+
+  writeDisplayStatusScreen(title,
+                           fitDisplayLine(message),
+                           countLine,
+                           percentLine,
+                           fitDisplayLine(detail),
+                           fitDisplayLine(footer));
+}
+
 // Timer 1 interrupt Read and print GPS values
 void readGPSValuesFlag() {
   flag2 = true;

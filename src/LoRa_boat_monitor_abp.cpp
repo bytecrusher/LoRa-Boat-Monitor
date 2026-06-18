@@ -157,6 +157,7 @@ bool remoteOtaUseMdsEndpoint = false;
 bool remoteOtaRebootRequired = false;
 bool wifiServicesInitialized = false;
 bool mdnsInitialized = false;
+bool standbyWakeDisplayActive = false;
 
 const unsigned long MDS_UPLOAD_INTERVAL_MS = 300000UL;
 const unsigned long WAKE_MDS_RETRY_INTERVAL_MS = 30000UL;
@@ -608,27 +609,48 @@ void maybeSendDataViaWifi() {
   const unsigned long now = millis();
 
   if (pendingWakeMdsEvent && !currentWakeMdsEventCaptured && hasValidWakeSleepTime()) {
+    if (standbyWakeDisplayActive) {
+      writeDisplayStatusScreen("Standby wake", "Capture event", pendingWakeReasonLabel, "for MDS");
+    }
     capturePendingMdsDeviceEvent(pendingWakeReasonLabel.c_str());
     pendingWakeMdsEvent = false;
   }
 
   if (now >= nextWakeMdsRetryMillis && loadNextQueuedMdsDeviceEvent()) {
+    if (standbyWakeDisplayActive) {
+      writeDisplayStatusScreen("Standby wake", "Send wake log", pendingWakeReasonLabel, "to MDS");
+    }
     if (sendMdsDeviceEvent(actconf, pendingWakeReasonLabel.c_str())) {
       lastSentMdsStandbyEventEpoch = pendingMdsStandbyEventEpoch;
       lastSentMdsWakeupEventEpoch = pendingMdsWakeupEventEpoch;
       pendingMdsDeviceEventStored = false;
       currentWakeMdsEventCaptured = false;
       nextWakeMdsRetryMillis = 0;
+      if (standbyWakeDisplayActive) {
+        writeDisplayStatusScreen("Standby wake", "Wake log sent", pendingWakeReasonLabel);
+      }
     } else {
       nextWakeMdsRetryMillis = now + WAKE_MDS_RETRY_INTERVAL_MS;
+      if (standbyWakeDisplayActive) {
+        writeDisplayStatusScreen("Standby wake", "Wake log failed", "Retry pending");
+      }
     }
   }
 
   if ((lastMdsUploadMillis == 0) || (now - lastMdsUploadMillis >= MDS_UPLOAD_INTERVAL_MS)) {
+    if (standbyWakeDisplayActive) {
+      writeDisplayStatusScreen("Standby wake", "Send sensors", "via WiFi");
+    }
     if (sendToMDS(actconf)) {
       lastMdsUploadMillis = now;
+      if (standbyWakeDisplayActive) {
+        writeDisplayStatusScreen("Standby wake", "Sensor data sent", "Back to sleep");
+      }
     } else {
       nextWakeMdsRetryMillis = now + WAKE_MDS_RETRY_INTERVAL_MS;
+      if (standbyWakeDisplayActive) {
+        writeDisplayStatusScreen("Standby wake", "Sensor upload", "failed");
+      }
     }
   }
 }
@@ -676,6 +698,10 @@ void disableWiFiForSleep() {
 
 void prepareForStandbySleep() {
   DebugPrintln(3, "Prepare standby sleep");
+  if (standbyWakeDisplayActive) {
+    writeDisplayStatusScreen("Standby wake", "Prepare sleep", pendingWakeReasonLabel);
+    delay(700);
+  }
 
   if (pendingWakeMdsEvent && !currentWakeMdsEventCaptured && hasValidWakeSleepTime()) {
     capturePendingMdsDeviceEvent(pendingWakeReasonLabel.c_str());
@@ -706,6 +732,7 @@ void prepareForStandbySleep() {
   digitalWrite(relayPin, LOW);
   u8x8.clearDisplay();
   u8x8.setPowerSave(1);
+  standbyWakeDisplayActive = false;
 }
 
 void enableWiFi(bool startNetworkServices = true){
@@ -1107,12 +1134,14 @@ void state0(){
     DebugPrintln(3, " ");
     DebugPrintln(3, "state0 once");
 
-    u8x8.clearDisplay();
-    u8x8.setFont(u8x8_font_chroma48medium8_r);
-    u8x8.drawString(0,0,"State 0   ");
-    u8x8.drawString(0,1,"Batt switch off");
-    u8x8.drawString(0,2,"Lora mode");
-    u8x8.refreshDisplay();    // Only required for SSD1606/7
+    if (standbyWakeDisplayActive) {
+      writeDisplayStatusScreen("Standby wake",
+                               pendingWakeReasonLabel,
+                               String(actconf.SendDataViaWifi) == "Yes" ? "WiFi/MDS send" : "LoRa send",
+                               "Batt switch off");
+    } else {
+      writeDisplayStatusScreen("State 0", "Batt switch off", "LoRa mode");
+    }
 
     const bool loraEnabledInStandby = (String(actconf.loraOperationMode) == "Standby" || String(actconf.loraOperationMode) == "Always");
     if (loraEnabledInStandby) {
@@ -1161,12 +1190,20 @@ void state0(){
       prepareForStandbySleep();
       GoDeepSleep();
     } else if (lastPrintTime + 2000 < millis()) {
-      if (toggleDisplayStatus) {
-        u8x8.drawString(0,4,".");
-        toggleDisplayStatus = false;
+      if (standbyWakeDisplayActive) {
+        writeDisplayStatusScreen("Standby wake",
+                                 "LoRa sending",
+                                 pendingWakeReasonLabel,
+                                 toggleDisplayStatus ? "." : " ");
+        toggleDisplayStatus = !toggleDisplayStatus;
       } else {
-        u8x8.drawString(0,4," ");
-        toggleDisplayStatus = true;
+        if (toggleDisplayStatus) {
+          u8x8.drawString(0,4,".");
+          toggleDisplayStatus = false;
+        } else {
+          u8x8.drawString(0,4," ");
+          toggleDisplayStatus = true;
+        }
       }
 
       lastPrintTime = millis();
@@ -1201,13 +1238,17 @@ void state1(){
     DebugPrintln(3, "state1 once");
     enableWiFi();
     delay(2000);    // to be able to read the displayed infos.
-    u8x8.setPowerSave(0);
-    u8x8.clearDisplay();
-    u8x8.setFont(u8x8_font_chroma48medium8_r);
-    //u8x8.drawString(0,0,"State 1   ");
-    //u8x8.drawString(0,1,"Batt switch on");
-    //u8x8.drawString(0,2,"WiFI mode");
-    u8x8.refreshDisplay();    // Only required for SSD1606/7
+    if (standbyWakeDisplayActive) {
+      writeDisplayStatusScreen("Standby wake",
+                               pendingWakeReasonLabel,
+                               "WiFi active",
+                               "Data transfer");
+    } else {
+      u8x8.setPowerSave(0);
+      u8x8.clearDisplay();
+      u8x8.setFont(u8x8_font_chroma48medium8_r);
+      u8x8.refreshDisplay();
+    }
 
     if (actconf.relay == 1) {
       digitalWrite(relayPin, HIGH); // Relay on
@@ -1372,11 +1413,13 @@ void state1(){
   static unsigned long nextWebFilesDownloadAttempt = 0;
   if (runDownloadingFiles && WiFi.status() != WL_CONNECTED) {
     webFilesDownloadStatusMessage = "Waiting for WiFi connection before downloading web files.";
+    writeDisplayStatusScreen("Web files", "Waiting WiFi", "before download");
     if (webFilesDownloadStartedMillis > 0 && millis() - webFilesDownloadStartedMillis > 60000UL) {
       runDownloadingFiles = false;
       runDownloadingFilesStatus = false;
       webFilesDownloadError = true;
       webFilesDownloadStatusMessage = "Web files download cancelled because WiFi is not connected.";
+      writeDisplayStatusScreen("Web files", "Download cancel", "No WiFi");
     }
   }
 
@@ -1389,6 +1432,7 @@ void state1(){
       runDownloadingFiles = false;
       webFilesDownloadRetryCount = 0;
       webFilesDownloadStatusMessage = "Web files updated successfully.";
+      writeDisplayStatusScreen("Web files", "Update done", String(actconf.fversion));
       nextWebFilesDownloadAttempt = 0;
     } else {
       webFilesDownloadRetryCount++;
@@ -1396,9 +1440,11 @@ void state1(){
         runDownloadingFiles = false;
         webFilesDownloadError = true;
         webFilesDownloadStatusMessage = "Web files download failed. Please retry.";
+        writeDisplayStatusScreen("Web files", "Download failed", "Retry manual");
         nextWebFilesDownloadAttempt = 0;
       } else {
         webFilesDownloadStatusMessage = "Web files download failed. Retrying shortly.";
+        writeDisplayStatusScreen("Web files", "Retry shortly", webFilesDownloadCurrentName);
         nextWebFilesDownloadAttempt = millis() + 30000UL;
       }
     }
@@ -1452,6 +1498,7 @@ void print_wakeup_reason(){
   pendingWakeReasonCode = static_cast<int>(wakeup_reason);
   pendingWakeReasonLabel = wakeupReasonToLabel(wakeup_reason);
   pendingWakeMdsEvent = isDeepSleepWakeup(wakeup_reason);
+  standbyWakeDisplayActive = pendingWakeMdsEvent;
   currentWakeMdsEventCaptured = false;
   nextWakeMdsRetryMillis = 0;
   switch(wakeup_reason)

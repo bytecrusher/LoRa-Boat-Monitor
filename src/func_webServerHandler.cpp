@@ -2022,28 +2022,7 @@ void WebServerHandler()
         return request->requestAuthentication();
       }
     }
-
-    const String firmwareVersion = String(actconf.fversion);
-    const String storedWebFilesVersion = getStoredWebFilesVersion();
-    const bool busy = runDownloadingFilesStatus || runDownloadingFiles;
-    const bool upToDate = areWebFilesCurrent(actconf.fversion);
-
-    String response = "{\"busy\":";
-    response += busy ? "true" : "false";
-    response += ",\"firmwareVersion\":\"";
-    response += firmwareVersion;
-    response += "\",\"storedWebFilesVersion\":\"";
-    response += storedWebFilesVersion;
-    response += "\",\"upToDate\":";
-    response += upToDate ? "true" : "false";
-    response += ",\"error\":";
-    response += webFilesDownloadError ? "true" : "false";
-    response += ",\"message\":\"";
-    response += jsonEscape(webFilesDownloadStatusMessage);
-    response += "\"";
-    response += "}";
-
-    request->send(200, "application/json", response);
+    request->send(200, "application/json", buildUpdateFilesProgressJson());
   });
 
   httpServer.on("/otaprogress", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -2168,6 +2147,8 @@ void startOtaProgress(const String &phase, size_t totalBytes, const String &mess
   otaProgressTotal = totalBytes;
   otaProgressPhase = phase;
   otaProgressMessage = message;
+  const String title = phase.indexOf("filesystem") >= 0 ? "FS Update" : "OTA Update";
+  writeDisplayProgressScreen(title, message, 0, totalBytes, phase);
 }
 
 void updateOtaProgress(const String &phase, size_t currentBytes, size_t totalBytes, const String &message) {
@@ -2178,6 +2159,8 @@ void updateOtaProgress(const String &phase, size_t currentBytes, size_t totalByt
   }
   otaProgressPhase = phase;
   otaProgressMessage = message;
+  const String title = phase.indexOf("filesystem") >= 0 ? "FS Update" : "OTA Update";
+  writeDisplayProgressScreen(title, message, otaProgressCurrent, otaProgressTotal, phase);
 }
 
 void finishOtaProgress(bool success, const String &message) {
@@ -2188,6 +2171,10 @@ void finishOtaProgress(bool success, const String &message) {
   }
   otaProgressPhase = success ? "complete" : "error";
   otaProgressMessage = message;
+  writeDisplayStatusScreen(success ? "Update done" : "Update error",
+                           message,
+                           otaProgressTotal > 0 ? (String(otaProgressTotal) + " bytes") : "",
+                           success ? "Reboot pending" : "See WebSerial");
 }
 
 String buildOtaProgressJson() {
@@ -2302,6 +2289,7 @@ bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &er
     otaProgressTotal = 0;
     otaProgressPhase = "no-update";
     otaProgressMessage = "MDS reports no newer firmware available.";
+    writeDisplayStatusScreen("OTA Status", "No new update", "MDS current");
     http.end();
     return true;
   }

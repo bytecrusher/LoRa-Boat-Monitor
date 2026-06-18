@@ -89,8 +89,12 @@ int TANK1_IN = 37;      // Analog input GPIO37 Tank 1
 int TANK2_IN = 38;      // Analog input GPIO38 Tank 2
 
 // Output Pins
-int ledPin = 25;        // Pin GPIO25, LED is high activ
-int relayPin = 25;      // Pin GPIO25, Relay is high activ
+// GPIO25 is intentionally shared on the current hardware:
+// - Heltec on-board LED
+// - external relay driver output
+// Any LED activity on this pin also toggles the relay signal.
+int ledPin = 25;        // Pin GPIO25, shared board LED / relay signal, high active
+int relayPin = 25;      // Pin GPIO25, shared board LED / relay signal, high active
 
 // Input Pins
 int alarmPin = 39;      // Pin GPI39, Alarm input
@@ -113,6 +117,7 @@ int start = 0;                // Marker for found telegram RMC
 int c_counter = 0;            // Number of commata in RMC telegram
 
 // BME280 environment sensor (temperature, humidity, pressure)
+// Shares the same pins as VE.Direct and must not be used at the same time.
 #define SEALEVELPRESSURE_HPA (1023.0) // Adjustment for altitude calculation
 #define I2C_SDA 17            // SDA changed from GPIO21 to GPIO17
 #define I2C_SCL 22            // SCL standard GPIO22
