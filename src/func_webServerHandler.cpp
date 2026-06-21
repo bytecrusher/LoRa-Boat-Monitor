@@ -56,6 +56,7 @@ String maskSecret(const String &secret) {
 }
 
 namespace {
+String buildOtaResponse(const char *status, const String &message, bool rebooting, bool checkWebFiles, bool backupSaved);
 String buildOtaProgressJson();
 String buildUpdateFilesProgressJson();
 void startOtaProgress(const String &phase, size_t totalBytes, const String &message);
@@ -69,6 +70,25 @@ struct PendingWebBundleFile {
   String tempPath;
   String targetPath;
 };
+
+int webBundleUploadStatusCode = 500;
+String webBundleUploadResponse = "";
+bool webBundleUploadFinished = false;
+bool webBundleUploadFailed = false;
+
+void resetWebBundleUploadState() {
+  webBundleUploadStatusCode = 500;
+  webBundleUploadResponse = buildOtaResponse("error", "Web package upload did not complete.", false, false, false);
+  webBundleUploadFinished = false;
+  webBundleUploadFailed = false;
+}
+
+void setWebBundleUploadResult(int statusCode, const char *status, const String &message, bool backupSaved) {
+  webBundleUploadStatusCode = statusCode;
+  webBundleUploadResponse = buildOtaResponse(status, message, false, false, backupSaved);
+  webBundleUploadFinished = true;
+  webBundleUploadFailed = statusCode < 200 || statusCode >= 300;
+}
 
 String htmlEscape(const String &value) {
   String escaped;
@@ -2344,10 +2364,7 @@ void WebServerHandler()
       if (!requireCsrfToken(request)) {
         return;
       }
-      if (!requireNonDefaultWebPassword(request)) {
-        return;
-      }
-      request->send(200);
+      request->redirect("/filesystem");
     },
     [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data,
                   size_t len, bool final) {
@@ -2357,9 +2374,6 @@ void WebServerHandler()
                       }
                     }
                     if (!isCsrfTokenValid(request)) {
-                      return;
-                    }
-                    if (isDefaultWebPasswordActive()) {
                       return;
                     }
                     handleUpload(request, filename, index, data, len, final);
@@ -2376,9 +2390,13 @@ void WebServerHandler()
       if (!requireCsrfToken(request)) {
         return;
       }
-      if (!requireNonDefaultWebPassword(request)) {
-        return;
+      if (!webBundleUploadFinished) {
+        setWebBundleUploadResult(500, "error", "Web package upload did not complete.", false);
       }
+      const int responseStatusCode = webBundleUploadStatusCode;
+      const String responseBody = webBundleUploadResponse;
+      resetWebBundleUploadState();
+      request->send(responseStatusCode, "application/json", responseBody);
     },
     [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data,
                   size_t len, bool final) {
@@ -2387,16 +2405,20 @@ void WebServerHandler()
                         return;
                       }
                     }
-                    if (!isCsrfTokenValid(request) || isDefaultWebPasswordActive()) {
+                    if (!isCsrfTokenValid(request)) {
+                      return;
+                    }
+                    if (!index) {
+                      resetWebBundleUploadState();
+                    }
+                    if (webBundleUploadFailed) {
                       return;
                     }
 
                     String loweredFilename = filename;
                     loweredFilename.toLowerCase();
                     if (filename.length() == 0 || !loweredFilename.endsWith(".tar")) {
-                      if (final) {
-                        request->send(400, "application/json", buildOtaResponse("error", "Please upload a .tar web package.", false, false, false));
-                      }
+                      setWebBundleUploadResult(400, "error", "Please upload a .tar web package.", false);
                       return;
                     }
 
@@ -2405,9 +2427,7 @@ void WebServerHandler()
                         request->_tempFile.close();
                       }
                       LittleFS.remove(WEB_BUNDLE_UPLOAD_PATH);
-                      if (final) {
-                        request->send(413, "application/json", buildOtaResponse("error", "Web package is too large.", false, false, false));
-                      }
+                      setWebBundleUploadResult(413, "error", "Web package is too large.", false);
                       return;
                     }
 
@@ -2422,7 +2442,7 @@ void WebServerHandler()
                       if (!request->_tempFile) {
                         localOtaInProgress = false;
                         finishOtaProgress(false, "Could not open temporary web package file.");
-                        request->send(500, "application/json", buildOtaResponse("error", "Could not open temporary web package file.", false, false, false));
+                        setWebBundleUploadResult(500, "error", "Could not open temporary web package file.", false);
                         return;
                       }
                     }
@@ -2434,7 +2454,7 @@ void WebServerHandler()
                       LittleFS.remove(WEB_BUNDLE_UPLOAD_PATH);
                       localOtaInProgress = false;
                       finishOtaProgress(false, "Web package upload write failed.");
-                      request->send(500, "application/json", buildOtaResponse("error", "Web package upload write failed.", false, false, false));
+                      setWebBundleUploadResult(500, "error", "Web package upload write failed.", false);
                       return;
                     }
 
@@ -2457,14 +2477,14 @@ void WebServerHandler()
                       if (!success) {
                         localOtaInProgress = false;
                         finishOtaProgress(false, errorMessage.length() ? errorMessage : "Web package installation failed.");
-                        request->send(500, "application/json", buildOtaResponse("error", errorMessage.length() ? errorMessage : "Web package installation failed.", false, false, false));
+                        setWebBundleUploadResult(500, "error", errorMessage.length() ? errorMessage : "Web package installation failed.", false);
                         return;
                       }
 
                       localOtaInProgress = false;
                       const String successMessage = "Web package installed successfully. Stored web file version: " + getStoredWebFilesVersion() + ".";
                       finishOtaProgress(true, successMessage);
-                      request->send(200, "application/json", buildOtaResponse("ok", successMessage, false, false, true));
+                      setWebBundleUploadResult(200, "ok", successMessage, true);
                     }
                   }
   );
@@ -2514,9 +2534,6 @@ void WebServerHandler()
       }
     }
     if (!requireCsrfToken(request)) {
-      return;
-    }
-    if (!requireNonDefaultWebPassword(request)) {
       return;
     }
     if (WiFi.status() != WL_CONNECTED) {

@@ -484,7 +484,7 @@ function uploadLocalWebBundle() {
         fieldName: 'webbundle',
         progressMessage: 'Uploading web package...',
         installMessage: 'Installing web package on device...',
-        confirmMessage: 'Upload and install this web package? Only known web files will be replaced and the device will reboot afterwards.',
+        confirmMessage: 'Upload and install this web package? Only known web files will be replaced.',
         failureMessage: 'Web package upload failed.',
         endpoint: '/uploadWebBundle'
     });

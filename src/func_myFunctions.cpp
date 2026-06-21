@@ -1596,7 +1596,6 @@ void handleUpload(AsyncWebServerRequest *request, String filename, size_t index,
       return;
     }
     Serial.println(logmessage);
-    request->redirect("/");
   }
 }
 
