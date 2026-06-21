@@ -162,7 +162,6 @@ function applyBatteryCalibration() {
     var currentVoltage = currentField
         ? parseFloat(String(currentField.value).replace("V", "").replace(",", "."))
         : NaN;
-    var currentOffset = parseFloat(String(form.voffset.value).replace(",", "."));
 
     if (!isFinite(measuredVoltage) || measuredVoltage <= 0) {
         setCalibrationFeedback("Please enter a valid measured battery voltage in volts.", "error");
@@ -174,22 +173,25 @@ function applyBatteryCalibration() {
         return;
     }
 
-    if (!isFinite(currentVoltage) || currentVoltage <= 0) {
-        setCalibrationFeedback("Please read live values first so the current battery voltage is available.", "error");
+    var newSlope = measuredVoltage / rawAdc;
+    if (!isFinite(newSlope) || newSlope <= 0) {
+        setCalibrationFeedback("The measured voltage and ADC value did not produce a valid calibration.", "error");
         return;
     }
 
-    if (!isFinite(currentOffset)) {
-        currentOffset = 0;
+    form.a2vslope.value = "0";
+    form.a1vslope.value = trimCalibrationNumber(newSlope, 8);
+    form.voffset.value = "0";
+
+    var deviationInfo = "";
+    if (isFinite(currentVoltage) && currentVoltage > 0) {
+        deviationInfo = " Previous live reading was " + trimCalibrationNumber(currentVoltage, 3) + " V.";
     }
 
-    var correction = measuredVoltage - currentVoltage;
-    var newOffset = currentOffset + correction;
-    form.voffset.value = trimCalibrationNumber(newOffset, 6);
     setCalibrationFeedback(
-        "Calibration applied. Offset changed by " + trimCalibrationNumber(correction, 4) +
-        " V and is now " + form.voffset.value +
-        " V. Save settings to keep it.",
+        "Calibration applied. The helper rebuilt the battery curve as a simple linear mapping from the live ADC value. " +
+        "A2 was reset to 0, A1 is now " + form.a1vslope.value + " and Offset is 0 V." +
+        deviationInfo + " Save settings to keep it.",
         "success"
     );
 }

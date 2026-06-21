@@ -62,7 +62,6 @@
 #include <time.h>               // Time lib
 #include <new>
 #include <stddef.h>
-#include "func_ftpclient.h"     // my lib for FTP connection (getting files for webserver)
 #include "func_webclient.h"     // my lib for webclient connection (getting files for webserver)
 #include <stdint.h>
 #include "Configuration.h"      // Configuration
@@ -1645,12 +1644,9 @@ void sanitizeNewConfigFields() {
   changed = sanitizeConfigRange(actconf.cssStyle, defconf.cssStyle, 0, 2) || changed;
   changed = sanitizeConfigRange(actconf.OledDisplayRotation, defconf.OledDisplayRotation, 0, 1) || changed;
 
-  if (actconf.voffset == 0.0f && actconf.a1vslope == 0.0f && actconf.a2vslope == 0.0f) {
-    actconf.voffset = defconf.voffset;
-    actconf.a1vslope = defconf.a1vslope;
-    actconf.a2vslope = defconf.a2vslope;
+  if (sanitizeBatteryCalibration(actconf, defconf)) {
     changed = true;
-    DebugPrintln(2, "Invalid battery calibration reset to defaults");
+    DebugPrintln(2, "Battery calibration reset to safe defaults");
   }
 
   const char *yesNoValues[] = {"Yes", "No"};

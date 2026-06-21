@@ -614,10 +614,6 @@ uint16_t sampleBatteryAdcRaw(size_t samples = 8) {
   return uint16_t(total / samples);
 }
 
-float calculateBatteryVoltageFromAdc(const configData &cfg, uint16_t rawAdc) {
-  return cfg.a2vslope * rawAdc * rawAdc + cfg.a1vslope * rawAdc + cfg.voffset;
-}
-
 bool fetchMdsOtaVersionMetadata(String &version, String *errorMessage = nullptr) {
   version = "";
 
@@ -1369,6 +1365,10 @@ void WebServerHandler()
       }
     }
 
+    if (sanitizeBatteryCalibration(actconf, defconf)) {
+      DebugPrintln(2, "Battery calibration reset to safe defaults while saving settings");
+    }
+
     if(num > 0) {  
       saveEEPROMConfig(actconf);
       standbySleepBlockedUntilMillis = millis() + 30000UL;
@@ -1627,16 +1627,22 @@ void WebServerHandler()
               data["CalibrationAvailable"] = false;
               data["CalibrationMessage"] = "Battery calibration for the analog input is not available while VEdirect-Read is active.";
             } else {
+              configData batteryCalibrationConfig = actconf;
+              const bool calibrationWasSanitized = sanitizeBatteryCalibration(batteryCalibrationConfig, defconf);
               const uint16_t rawBatteryAdc = sampleBatteryAdcRaw(size_t(max(1, actconf.vaverage)));
-              const float liveBatteryVoltage = calculateBatteryVoltageFromAdc(actconf, rawBatteryAdc);
+              const float liveBatteryVoltage = calculateBatteryVoltageFromAdc(batteryCalibrationConfig, rawBatteryAdc);
               const float liveBatteryCapacity = constrain((liveBatteryVoltage * 100 / 2.2) - 477.27, 0.0f, 100.0f);
               data["BatteryVoltage"] = String(liveBatteryVoltage, 3);
               data["BatteryAdc"] = String(rawBatteryAdc);
               data["BatteryCapacity"] = String(liveBatteryCapacity, 0);
               data["CalibrationAvailable"] = rawBatteryAdc > 0;
-              data["CalibrationMessage"] = rawBatteryAdc > 0
-                ? "Live battery calibration values read successfully."
-                : "Battery ADC returned 0. Check the wiring or sensor source before calibrating.";
+              if (rawBatteryAdc > 0) {
+                data["CalibrationMessage"] = calibrationWasSanitized
+                  ? "Stored battery calibration looked unsafe. Safe defaults were used for this live reading. Save settings to persist the corrected values."
+                  : "Live battery calibration values read successfully.";
+              } else {
+                data["CalibrationMessage"] = "Battery ADC returned 0. Check the wiring or sensor source before calibrating.";
+              }
             }
           }
         }
@@ -2959,7 +2965,6 @@ bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &er
   return true;
 }
 
-// TODO create new function for downloading beta file and run this funciton (from beta)
 void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
   const bool filesystemUpdate = isFilesystemUpdateRequest(request, filename);
 

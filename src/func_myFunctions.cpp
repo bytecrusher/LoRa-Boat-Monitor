@@ -450,6 +450,43 @@ bool areWebFilesCurrent(const char *version) {
   return storedVersion == String(version);
 }
 
+float calculateBatteryVoltageFromAdc(const configData &cfg, uint16_t rawAdc) {
+  return cfg.a2vslope * rawAdc * rawAdc + cfg.a1vslope * rawAdc + cfg.voffset;
+}
+
+bool sanitizeBatteryCalibration(configData &cfg, const configData &defaults) {
+  const bool finiteCoefficients = isfinite(cfg.voffset) && isfinite(cfg.a1vslope) && isfinite(cfg.a2vslope);
+  const float voltageAt0 = cfg.voffset;
+  const float voltageAt512 = (cfg.a2vslope * 512.0f * 512.0f) + (cfg.a1vslope * 512.0f) + cfg.voffset;
+  const float voltageAt1024 = (cfg.a2vslope * 1024.0f * 1024.0f) + (cfg.a1vslope * 1024.0f) + cfg.voffset;
+  const bool plausibleCurve =
+    finiteCoefficients &&
+    cfg.a1vslope > 0.0f &&
+    cfg.a1vslope < 0.20f &&
+    cfg.a2vslope > -0.001f &&
+    cfg.a2vslope < 0.001f &&
+    cfg.voffset > -50.0f &&
+    cfg.voffset < 50.0f &&
+    isfinite(voltageAt0) &&
+    isfinite(voltageAt512) &&
+    isfinite(voltageAt1024) &&
+    voltageAt0 > -5.0f &&
+    voltageAt0 < 20.0f &&
+    voltageAt512 > 0.0f &&
+    voltageAt512 < 80.0f &&
+    voltageAt1024 > 0.0f &&
+    voltageAt1024 < 120.0f;
+
+  if (plausibleCurve) {
+    return false;
+  }
+
+  cfg.voffset = defaults.voffset;
+  cfg.a1vslope = defaults.a1vslope;
+  cfg.a2vslope = defaults.a2vslope;
+  return true;
+}
+
 //**************************************************************************************
 // Converting bool to int
 int boolToInt(bool value){
@@ -856,7 +893,7 @@ void readValues(configData myactconf) {
       if (debugVEdirect) {
         DebugPrint(3, "Voltage = ");
       }
-      voltage = myactconf.a2vslope * analogVoltageRaw * analogVoltageRaw + myactconf.a1vslope * analogVoltageRaw + myactconf.voffset;
+      voltage = calculateBatteryVoltageFromAdc(myactconf, analogVoltageRaw);
       if (debugVEdirect) {
         DebugPrint(3, analogVoltageRaw);
         DebugPrintln(3, " dig");

@@ -123,6 +123,8 @@ bool hasConfigBackupInLittleFS();
 bool saveWebFilesVersion(const char *version);
 String getStoredWebFilesVersion();
 bool areWebFilesCurrent(const char *version);
+float calculateBatteryVoltageFromAdc(const configData &cfg, uint16_t rawAdc);
+bool sanitizeBatteryCalibration(configData &cfg, const configData &defaults);
 int boolToInt(bool value);
 int toInteger(String settingValue);
 float toFloat(String settingValue);
