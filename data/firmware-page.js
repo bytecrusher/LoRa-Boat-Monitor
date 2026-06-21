@@ -536,6 +536,11 @@ function renderMdsOtaInfo(info) {
         if (info.status === 'current' && !info.version && info.installedVersion) {
             detail += ' Installed version on device: ' + info.installedVersion + '.';
         }
+        if (info.versionMismatchMessage) {
+            detail += ' ' + info.versionMismatchMessage;
+        } else if (info.versionSource === 'metadata' && info.headerVersion && info.headerVersion !== info.version) {
+            detail += ' OTA header still reports ' + info.headerVersion + '.';
+        }
         elements.mdsOtaDetail.textContent = detail;
     }
 

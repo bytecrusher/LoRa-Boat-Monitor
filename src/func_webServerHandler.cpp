@@ -863,11 +863,11 @@ bool fetchMdsOtaInfo(JsonDocument &response) {
   const int httpCode = http.GET();
   response["httpStatus"] = httpCode;
 
-  String version = http.header("x-Firmware-Version");
-  if (version.length() == 0) {
-    version = http.header("X-Firmware-Version");
+  String headerVersion = http.header("x-Firmware-Version");
+  if (headerVersion.length() == 0) {
+    headerVersion = http.header("X-Firmware-Version");
   }
-  version.trim();
+  headerVersion.trim();
 
   String sha256 = normalizeSha256(http.header("x-SHA256"));
   if (sha256.length() == 0) {
@@ -875,18 +875,40 @@ bool fetchMdsOtaInfo(JsonDocument &response) {
   }
   response["sha256Available"] = sha256.length() == 64;
 
+  String version = headerVersion;
+  bool hasVersionSource = false;
+  String metadataVersion;
   String metadataError;
-  if (version.length() == 0 && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_NOT_MODIFIED)) {
-    String metadataVersion;
+  if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_NOT_MODIFIED) {
     if (fetchMdsOtaVersionMetadata(metadataVersion, &metadataError)) {
-      version = metadataVersion;
-      response["versionSource"] = "metadata";
+      metadataVersion.trim();
+      response["metadataVersion"] = metadataVersion;
+      if (metadataVersion.length() > 0) {
+        version = metadataVersion;
+        response["versionSource"] = "metadata";
+        hasVersionSource = true;
+      }
     } else if (metadataError.length() > 0) {
-      response["versionSource"] = "missing";
       response["versionMetadataError"] = metadataError;
     }
-  } else if (version.length() > 0) {
-    response["versionSource"] = "header";
+  }
+
+  if (headerVersion.length() > 0) {
+    response["headerVersion"] = headerVersion;
+    if (!hasVersionSource) {
+      response["versionSource"] = "header";
+      hasVersionSource = true;
+    }
+  }
+
+  if (!hasVersionSource) {
+    response["versionSource"] = "missing";
+  }
+
+  if (headerVersion.length() > 0 && metadataVersion.length() > 0 && headerVersion != metadataVersion) {
+    response["versionMismatch"] = true;
+    response["versionMismatchMessage"] =
+      "MDS OTA header reports " + headerVersion + ", but public metadata reports " + metadataVersion + ".";
   }
 
   response["version"] = version;
