@@ -1456,12 +1456,13 @@ void state1(){
       writeDisplayStatusScreen("Web files", "Update done", String(actconf.fversion));
       nextWebFilesDownloadAttempt = 0;
     } else {
+      const String lastFailureReason = webFilesDownloadStatusMessage;
       webFilesDownloadRetryCount++;
       if (webFilesDownloadFatalError || webFilesDownloadRetryCount >= 3) {
         runDownloadingFiles = false;
         webFilesDownloadError = true;
         if (!webFilesDownloadFatalError) {
-          webFilesDownloadStatusMessage = "Web files download failed. Please retry.";
+          webFilesDownloadStatusMessage = "Web files download failed. Last error: " + lastFailureReason;
         }
         writeDisplayStatusScreen("Web files", "Download failed", "Retry manual");
         nextWebFilesDownloadAttempt = 0;
@@ -1469,7 +1470,7 @@ void state1(){
         webFilesDownloadCompleted = 0;
         webFilesDownloadTotal = 0;
         webFilesDownloadCurrentName = "";
-        webFilesDownloadStatusMessage = "Web files download failed. Retrying shortly.";
+        webFilesDownloadStatusMessage = "Web files download failed. Retrying shortly. Last error: " + lastFailureReason;
         writeDisplayStatusScreen("Web files", "Retry shortly", webFilesDownloadCurrentName);
         nextWebFilesDownloadAttempt = millis() + 30000UL;
       }

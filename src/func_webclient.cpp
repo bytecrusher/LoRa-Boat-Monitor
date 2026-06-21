@@ -661,7 +661,7 @@ bool DownloadFilesFromWeb()
   }
 
   DebugPrintln(1, "Web bundle install failed, falling back to single-file download: " + bundleError);
-  webFilesDownloadStatusMessage = "Bundle install failed. Trying single files.";
+  webFilesDownloadStatusMessage = "Bundle install failed: " + bundleError + " Trying single files.";
   webFilesDownloadCompleted = 0;
   webFilesDownloadTotal = 0;
   webFilesDownloadCurrentName = "";
