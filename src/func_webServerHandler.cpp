@@ -212,7 +212,7 @@ void cleanupPendingWebBundleFiles(PendingWebBundleFile *files, size_t count) {
   }
 }
 
-bool installWebBundleFromTar(const String &bundlePath, String &installedVersion, String &errorMessage) {
+bool installWebBundleFromTarInternal(const String &bundlePath, String &installedVersion, String &errorMessage) {
   DebugPrintln(3, "Installing local web package from TAR");
   File bundleFile = LittleFS.open(bundlePath, FILE_READ);
   if (!bundleFile) {
@@ -1105,6 +1105,10 @@ String buildOtaResponse(const char *status, const String &message, bool rebootin
   return response;
 }
 }  // namespace
+
+bool installWebBundleFromTar(const String &bundlePath, String &installedVersion, String &errorMessage) {
+  return installWebBundleFromTarInternal(bundlePath, installedVersion, errorMessage);
+}
 
 //const int relayPin = 25;      // Pin GPIO25, Relay is high activ
 

@@ -12,6 +12,7 @@
 #include <time.h>
 #include <Configuration.h>
 #include "func_myFunctions.h"
+#include "func_webServerHandler.h"
 
 extern const uint8_t cert_cacert_pem_start[] asm("_binary_cert_cacert_pem_start");
 extern size_t webFilesDownloadCompleted;
@@ -38,6 +39,8 @@ String getLastMdsStatus()
 
 namespace {
 const size_t MAX_WEB_FILE_DOWNLOAD_SIZE = 262144;
+const size_t MAX_WEB_BUNDLE_DOWNLOAD_SIZE = 1048576;
+const char WEB_BUNDLE_DOWNLOAD_PATH[] = "/webbundle-server.tar";
 const char MDS_GIT_CERT_FINGERPRINT[] = "BB:B9:F7:5F:FD:F1:DB:03:EE:DC:3E:DF:46:B0:0A:97:27:43:F7:FF:A6:B3:62:A1:B8:8D:C5:E2:95:DD:A3:38";
 
 bool isStandbyEnabledForMds(const configData &config)
@@ -149,6 +152,102 @@ String normalizeFirmwareUpdateBaseUrl(const char *configuredValue)
   }
 
   return endpoint.substring(0, lastSlash) + "/bin/web";
+}
+
+bool downloadAndInstallWebBundle(String &errorMessage) {
+  const String baseUrl = normalizeFirmwareUpdateBaseUrl(actconf.mdsOtaUrl);
+  if (baseUrl.length() == 0) {
+    errorMessage = "MDS OTA endpoint is not configured.";
+    return false;
+  }
+
+  const String bundleUrl = baseUrl + "/webui-package.tar";
+  WiFiClientSecure client;
+  HTTPClient http;
+
+  client.setCACert(reinterpret_cast<const char*>(cert_cacert_pem_start));
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.setTimeout(15000);
+
+  if (!http.begin(client, bundleUrl)) {
+    errorMessage = "Could not initialize web bundle download.";
+    return false;
+  }
+
+  const int httpCode = http.GET();
+  if (httpCode != HTTP_CODE_OK) {
+    errorMessage = "Web bundle download failed with HTTP " + String(httpCode) + ".";
+    http.end();
+    return false;
+  }
+
+  const int contentLength = http.getSize();
+  if (contentLength <= 0 || static_cast<size_t>(contentLength) > MAX_WEB_BUNDLE_DOWNLOAD_SIZE) {
+    errorMessage = "Web bundle has an invalid size.";
+    http.end();
+    return false;
+  }
+
+  if (LittleFS.exists(WEB_BUNDLE_DOWNLOAD_PATH)) {
+    LittleFS.remove(WEB_BUNDLE_DOWNLOAD_PATH);
+  }
+
+  File targetFile = LittleFS.open(WEB_BUNDLE_DOWNLOAD_PATH, FILE_WRITE);
+  if (!targetFile) {
+    errorMessage = "Could not create temporary web bundle file.";
+    http.end();
+    return false;
+  }
+
+  WiFiClient *stream = http.getStreamPtr();
+  uint8_t buffer[1024];
+  size_t written = 0;
+  while (http.connected() && written < static_cast<size_t>(contentLength)) {
+    const size_t availableBytes = stream->available();
+    if (availableBytes == 0) {
+      delay(1);
+      continue;
+    }
+
+    const size_t remainingBytes = static_cast<size_t>(contentLength) - written;
+    const size_t toRead = min(sizeof(buffer), min(availableBytes, remainingBytes));
+    const size_t bytesRead = stream->readBytes(buffer, toRead);
+    if (bytesRead == 0) {
+      delay(1);
+      continue;
+    }
+
+    if (targetFile.write(buffer, bytesRead) != bytesRead) {
+      targetFile.close();
+      LittleFS.remove(WEB_BUNDLE_DOWNLOAD_PATH);
+      http.end();
+      errorMessage = "Could not write downloaded web bundle.";
+      return false;
+    }
+    written += bytesRead;
+  }
+
+  targetFile.close();
+  http.end();
+
+  if (written != static_cast<size_t>(contentLength)) {
+    LittleFS.remove(WEB_BUNDLE_DOWNLOAD_PATH);
+    errorMessage = "Downloaded web bundle is incomplete.";
+    return false;
+  }
+
+  String installedVersion;
+  const bool success = installWebBundleFromTar(WEB_BUNDLE_DOWNLOAD_PATH, installedVersion, errorMessage);
+  LittleFS.remove(WEB_BUNDLE_DOWNLOAD_PATH);
+  if (!success) {
+    return false;
+  }
+
+  webFilesDownloadTotal = 1;
+  webFilesDownloadCompleted = 1;
+  webFilesDownloadCurrentName = "";
+  webFilesDownloadStatusMessage = "Web package installed successfully.";
+  return true;
 }
 
 bool fetchTextFromUpdateServer(const String &url, String &payload) {
@@ -546,8 +645,26 @@ bool DownloadFilesFromWeb()
 {
   const char *fversion = actconf.fversion;
   DebugPrintln(3, "Downloading web files for installed firmware version: " + String(fversion));
-  webFilesDownloadStatusMessage = "Fetching firmware manifest.";
+  webFilesDownloadStatusMessage = "Downloading web package.";
   webFilesDownloadFatalError = false;
+  webFilesDownloadCompleted = 0;
+  webFilesDownloadTotal = 1;
+  webFilesDownloadCurrentName = "webui-package.tar";
+
+  String bundleError;
+  writeDisplayProgressScreen("Web files", "Downloading bundle", 0, 1, webFilesDownloadCurrentName);
+  if (downloadAndInstallWebBundle(bundleError)) {
+    saveWebFilesVersion(fversion);
+    webFilesDownloadStatusMessage = "Web files updated successfully.";
+    writeDisplayStatusScreen("Web files", "Update done", String(fversion));
+    return true;
+  }
+
+  DebugPrintln(1, "Web bundle install failed, falling back to single-file download: " + bundleError);
+  webFilesDownloadStatusMessage = "Bundle install failed. Trying single files.";
+  webFilesDownloadCompleted = 0;
+  webFilesDownloadTotal = 0;
+  webFilesDownloadCurrentName = "";
 
   const char *webFiles[] = {
     "css_black.css",

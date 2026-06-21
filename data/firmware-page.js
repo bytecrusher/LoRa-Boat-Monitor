@@ -2,6 +2,10 @@ let otaProgressTimer = null;
 let otaRebootWaitStarted = false;
 let webFilesProgressTimer = null;
 let lastOtaProgress = null;
+let lastRenderedOtaPercent = 0;
+let lastRenderedWebFilesPercent = 0;
+let localUploadProgressActive = false;
+let localUploadProgressPercent = 0;
 
 function firmwareById(id) {
     return typeof byId === 'function' ? byId(id) : document.getElementById(id);
@@ -172,7 +176,19 @@ function renderOtaProgress(progress) {
         elements.progressWrapper.style.display = 'block';
     }
 
-    const percent = clampPercent(progress.percent);
+    let percent = clampPercent(progress.percent);
+    const phase = progress.phase || '';
+    const uploadLikePhase = phase.indexOf('upload-') === 0 || phase === 'queued' || phase === 'idle';
+
+    if (localUploadProgressActive && uploadLikePhase) {
+        percent = Math.max(percent, localUploadProgressPercent);
+    }
+
+    if (shouldShow && percent < lastRenderedOtaPercent && phase !== 'error' && phase !== 'complete') {
+        percent = lastRenderedOtaPercent;
+    }
+
+    lastRenderedOtaPercent = shouldShow ? percent : 0;
     elements.progressBar.style.width = percent + '%';
     elements.progressText.textContent = progress.message
         ? progress.message + ' (' + percent + '%)'
@@ -191,6 +207,9 @@ function hideOtaProgressDialog() {
     if (elements.progressDialog) {
         elements.progressDialog.classList.add('hidden');
     }
+    lastRenderedOtaPercent = 0;
+    localUploadProgressActive = false;
+    localUploadProgressPercent = 0;
 }
 
 function stopOtaProgressPolling() {
@@ -232,7 +251,7 @@ async function pollOtaProgress() {
 function startOtaProgressPolling() {
     stopOtaProgressPolling();
     pollOtaProgress();
-    otaProgressTimer = setInterval(pollOtaProgress, 500);
+    otaProgressTimer = setInterval(pollOtaProgress, 800);
 }
 
 async function waitForReboot() {
@@ -298,6 +317,11 @@ async function handleOtaResponseResult(result) {
             showFirmwareMessage('success', response.message);
         }
         refreshWebFilesInfo();
+        if (response && response.message && response.message.indexOf('Web package installed successfully') >= 0) {
+            firmwareDelay(1200).then(function () {
+                window.location.reload();
+            });
+        }
     }
 }
 
@@ -370,26 +394,34 @@ function uploadLocalPackage(options) {
         }
 
         const percent = Math.round((event.loaded / event.total) * 100);
+        localUploadProgressActive = true;
+        localUploadProgressPercent = Math.max(localUploadProgressPercent, percent);
         renderOtaProgress({
             active: true,
             percent: percent,
+            phase: 'upload-local',
             message: progressMessage
         });
 
         if (event.loaded >= event.total) {
             uploadFinished = true;
+            localUploadProgressPercent = 100;
             renderOtaProgress({
                 active: true,
                 percent: 100,
+                phase: 'upload-local',
                 message: installMessage
             });
         }
     };
     xhr.upload.onload = function () {
         uploadFinished = true;
+        localUploadProgressActive = true;
+        localUploadProgressPercent = 100;
         renderOtaProgress({
             active: true,
             percent: 100,
+            phase: 'upload-local',
             message: installMessage
         });
     };
@@ -599,7 +631,11 @@ function renderWebFilesProgress(progress) {
         return;
     }
 
-    const percent = clampPercent(progress.percent);
+    let percent = clampPercent(progress.percent);
+    if ((progress.busy || progress.retrying) && percent < lastRenderedWebFilesPercent) {
+        percent = lastRenderedWebFilesPercent;
+    }
+    lastRenderedWebFilesPercent = (progress.busy || progress.retrying || percent > 0) ? percent : 0;
     elements.webFilesProgressWrapper.style.display = progress.busy || percent > 0 || progress.message ? 'block' : 'none';
     elements.webFilesProgressBar.style.width = percent + '%';
     const showPercent = Number(progress.total) > 0 && !progress.retrying;
@@ -615,6 +651,7 @@ function stopWebFilesProgressPolling() {
 
     clearInterval(webFilesProgressTimer);
     webFilesProgressTimer = null;
+    lastRenderedWebFilesPercent = 0;
 }
 
 async function pollWebFilesProgress() {
@@ -626,6 +663,11 @@ async function pollWebFilesProgress() {
         if (!progress.busy && (progress.error || progress.percent >= 100)) {
             stopWebFilesProgressPolling();
             showFirmwareMessage(progress.error ? 'error' : 'success', progress.message || 'Web interface files updated.');
+            if (!progress.error && progress.percent >= 100) {
+                firmwareDelay(1200).then(function () {
+                    window.location.reload();
+                });
+            }
         }
     } catch (error) {
     }

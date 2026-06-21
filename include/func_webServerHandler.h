@@ -72,6 +72,7 @@ extern uint32_t getLMICseqnoUp();
 
 void WebServerHandler();
 void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final);
+bool installWebBundleFromTar(const String &bundlePath, String &installedVersion, String &errorMessage);
 bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &errorMessage);
 bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &errorMessage, const String &expectedSha256);
 bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &errorMessage, const String &expectedSha256, bool useMdsOtaEndpoint);

@@ -1274,9 +1274,11 @@ void writeDisplayProgressScreen(const String &title,
                               normalizedDetail != lastDisplayProgressDetail ||
                               normalizedFooter != lastDisplayProgressFooter;
   const bool percentChanged = percent != lastDisplayProgressPercent;
+  const int previousBucket = lastDisplayProgressPercent >= 0 ? (lastDisplayProgressPercent / 10) : -1;
+  const int currentBucket = percent >= 0 ? (percent / 10) : -1;
   const bool shouldRefresh = contentChanged ||
-                             (percent >= 0 && (percent == 0 || percent == 100 || (percentChanged && percent / 5 != lastDisplayProgressPercent / 5))) ||
-                             (now - lastDisplayProgressRefreshMillis >= 250);
+                             (percent >= 0 && (percent == 0 || percent == 100 || (percentChanged && currentBucket != previousBucket))) ||
+                             (now - lastDisplayProgressRefreshMillis >= 700);
 
   if (!shouldRefresh) {
     return;
