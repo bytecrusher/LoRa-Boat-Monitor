@@ -2744,8 +2744,34 @@ String buildUpdateFilesProgressJson() {
   const bool busy = runDownloadingFilesStatus || runDownloadingFiles;
   const bool sourceConfigured = getConfiguredFirmwareBaseUrl().length() > 0;
   const bool retrying = runDownloadingFiles && !runDownloadingFilesStatus && webFilesDownloadRetryCount > 0;
-  String serverCompatibilityError = "";
-  const bool serverSupportsInstalledFirmware = sourceConfigured && manifestHasInstalledWebFiles(&serverCompatibilityError);
+
+  static unsigned long lastServerSupportCheckMillis = 0;
+  static String cachedServerSupportFirmwareVersion = "";
+  static bool cachedServerSupportsInstalledFirmware = true;
+  static String cachedServerCompatibilityMessage = "";
+
+  String serverCompatibilityMessage = cachedServerCompatibilityMessage;
+  bool serverSupportsInstalledFirmware = sourceConfigured ? cachedServerSupportsInstalledFirmware : false;
+  const bool cacheExpired = lastServerSupportCheckMillis == 0 || millis() - lastServerSupportCheckMillis > 60000UL;
+  const bool firmwareChanged = cachedServerSupportFirmwareVersion != String(actconf.fversion);
+
+  if (sourceConfigured && !busy && (cacheExpired || firmwareChanged)) {
+    String checkMessage = "";
+    const bool manifestHasFirmware = manifestHasInstalledWebFiles(&checkMessage);
+    cachedServerSupportFirmwareVersion = String(actconf.fversion);
+    cachedServerSupportsInstalledFirmware = manifestHasFirmware || !checkMessage.startsWith("Update server has no web files");
+    cachedServerCompatibilityMessage = manifestHasFirmware
+      ? ""
+      : (cachedServerSupportsInstalledFirmware ? "Could not verify update server: " + checkMessage : checkMessage);
+    lastServerSupportCheckMillis = millis();
+
+    serverSupportsInstalledFirmware = cachedServerSupportsInstalledFirmware;
+    serverCompatibilityMessage = cachedServerCompatibilityMessage;
+  } else if (sourceConfigured && busy) {
+    serverSupportsInstalledFirmware = true;
+    serverCompatibilityMessage = "";
+  }
+
   json["busy"] = busy;
   json["configured"] = sourceConfigured;
   json["retrying"] = retrying;
@@ -2757,7 +2783,7 @@ String buildUpdateFilesProgressJson() {
   json["total"] = webFilesDownloadTotal;
   json["currentFile"] = webFilesDownloadCurrentName;
   json["message"] = sourceConfigured
-    ? (serverSupportsInstalledFirmware ? webFilesDownloadStatusMessage : serverCompatibilityError)
+    ? (serverSupportsInstalledFirmware ? (webFilesDownloadStatusMessage.length() > 0 ? webFilesDownloadStatusMessage : serverCompatibilityMessage) : serverCompatibilityMessage)
     : "MDS OTA endpoint is not configured.";
   json["error"] = webFilesDownloadError;
   json["retryCount"] = webFilesDownloadRetryCount;
