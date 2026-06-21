@@ -21,6 +21,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT_ROOT / "data"
 FIRMWARE_BIN = PROJECT_ROOT / "firmware.bin"
+WEBUI_PACKAGE = PROJECT_ROOT / "webui-package.tar"
 CONFIGURATION_H = PROJECT_ROOT / "src" / "Configuration.h"
 DEFAULT_ENV_FILE = PROJECT_ROOT / ".env"
 
@@ -32,6 +33,7 @@ STABLE_MARKERS = ("latestVersion.txt", "latestStableVersion.txt", "ActualVersion
 BETA_MARKERS = ("latestBetaVersion.txt",)
 MANIFEST_FILE = "firmware-manifest.json"
 DEFAULT_MDS_OTA_SSH_TARGET = "hosting157867@derguntmar.de:httpdocs/mds-git.derguntmar.de/var/ota/bin"
+DEFAULT_MDS_PUBLIC_OTA_SSH_TARGET = "hosting157867@derguntmar.de:httpdocs/mds-git.derguntmar.de/public/ota/bin"
 
 
 def load_project_env() -> None:
@@ -106,6 +108,11 @@ def parse_args() -> argparse.Namespace:
         help="Optional SSH/SCP target for MDS OTA firmware files, e.g. user@host:path/to/var/ota/bin.",
     )
     parser.add_argument(
+        "--mds-public-target",
+        default=os.environ.get("MDS_PUBLIC_OTA_SSH_TARGET", DEFAULT_MDS_PUBLIC_OTA_SSH_TARGET),
+        help="Optional SSH/SCP target for public MDS OTA web files and metadata, e.g. user@host:path/to/public/ota/bin.",
+    )
+    parser.add_argument(
         "--skip-mds-ota",
         action="store_true",
         default=os.environ.get("SKIP_MDS_OTA_UPLOAD", "").lower() in {"1", "true", "yes"},
@@ -128,6 +135,10 @@ def collect_web_files() -> list[Path]:
         for path in DATA_DIR.rglob("*")
         if path.is_file() and path.name not in EXCLUDED_DATA_FILES
     )
+
+
+def has_ftp_config(args: argparse.Namespace) -> bool:
+    return bool(args.host and args.user and args.password and args.remote_dir)
 
 
 def ensure_ftp_config(args: argparse.Namespace) -> None:
@@ -319,10 +330,24 @@ def run_command(command: list[str], dry_run: bool) -> None:
     subprocess.run(command, check=True)
 
 
+def download_text_ssh(target: str, remote_path: str) -> str:
+    host, remote_dir = split_scp_target(target)
+    full_path = f"{remote_dir.rstrip('/')}/{remote_path.lstrip('/')}"
+    result = subprocess.run(
+        ["ssh", host, "cat", full_path],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout
+
+
 def upload_mds_ota_files_ssh(
     target: str,
+    public_target: str,
     version: str,
     firmware_sha256: str,
+    manifest_text: str,
     dry_run: bool,
 ) -> None:
     if not target:
@@ -330,7 +355,9 @@ def upload_mds_ota_files_ssh(
         return
 
     host, remote_dir = split_scp_target(target)
+    public_host, public_remote_dir = split_scp_target(public_target or target)
     print(f"Preparing MDS OTA firmware files via SSH in {host}:{remote_dir}")
+    print(f"Preparing public MDS OTA web files via SSH in {public_host}:{public_remote_dir}")
     run_command(["ssh", host, "mkdir", "-p", remote_dir], dry_run)
     run_command(["scp", str(FIRMWARE_BIN), f"{host}:{remote_dir}/firmware.bin"], dry_run)
     run_command(["scp", str(FIRMWARE_BIN), f"{host}:{remote_dir}/{version}.bin"], dry_run)
@@ -339,10 +366,29 @@ def upload_mds_ota_files_ssh(
         temp_dir = Path(temp_dir_name)
         version_file = temp_dir / "firmware.version"
         sha256_file = temp_dir / "firmware.sha256"
+        manifest_file = temp_dir / MANIFEST_FILE
         version_file.write_text(version + "\n", encoding="utf-8")
         sha256_file.write_text(firmware_sha256 + "\n", encoding="utf-8")
+        manifest_file.write_text(manifest_text, encoding="utf-8")
         run_command(["scp", str(version_file), f"{host}:{remote_dir}/firmware.version"], dry_run)
         run_command(["scp", str(sha256_file), f"{host}:{remote_dir}/firmware.sha256"], dry_run)
+        run_command(["ssh", public_host, "mkdir", "-p", public_remote_dir], dry_run)
+        run_command(["scp", str(version_file), f"{public_host}:{public_remote_dir}/firmware.version"], dry_run)
+        run_command(["scp", str(sha256_file), f"{public_host}:{public_remote_dir}/firmware.sha256"], dry_run)
+        run_command(["scp", str(FIRMWARE_BIN), f"{public_host}:{public_remote_dir}/firmware.bin"], dry_run)
+        run_command(["scp", str(FIRMWARE_BIN), f"{public_host}:{public_remote_dir}/{version}.bin"], dry_run)
+        run_command(["ssh", public_host, "mkdir", "-p", f"{public_remote_dir}/web/{version}"], dry_run)
+        run_command(["scp", str(manifest_file), f"{public_host}:{public_remote_dir}/web/{MANIFEST_FILE}"], dry_run)
+
+        for web_file in collect_web_files():
+            remote_web_path = f"{public_host}:{public_remote_dir}/web/{version}/{web_file.relative_to(DATA_DIR).as_posix()}"
+            run_command(["scp", str(web_file), remote_web_path], dry_run)
+
+        if WEBUI_PACKAGE.exists():
+            run_command(["scp", str(WEBUI_PACKAGE), f"{public_host}:{public_remote_dir}/web/{version}/webui-package.tar"], dry_run)
+            run_command(["scp", str(WEBUI_PACKAGE), f"{public_host}:{public_remote_dir}/web/webui-package.tar"], dry_run)
+        else:
+            print(f"Warning: {WEBUI_PACKAGE} does not exist. Skipping MDS web package upload.")
 
 
 def collect_release_files(version: str) -> list[tuple[Path, str]]:
@@ -361,53 +407,60 @@ def collect_release_files(version: str) -> list[tuple[Path, str]]:
 def main() -> int:
     load_project_env()
     args = parse_args()
-    ensure_ftp_config(args)
     version = args.version or read_version()
     firmware_sha256 = file_sha256(FIRMWARE_BIN)
     marker_files = STABLE_MARKERS if args.channel == "stable" else BETA_MARKERS
     remote_root = args.remote_dir.strip("/")
     release_files = collect_release_files(version)
     web_file_hashes = build_web_file_hashes(release_files, version)
+    manifest_text = build_manifest("", args.channel, version, firmware_sha256, web_file_hashes)
 
     print(f"Preparing release {version} for channel '{args.channel}'")
-    print(f"FTP target: {args.host}:{args.port}/{remote_root}")
-    print(f"Files to upload: {len(release_files)}")
+    if has_ftp_config(args):
+        print(f"FTP target: {args.host}:{args.port}/{remote_root}")
+        print(f"Files to upload: {len(release_files)}")
+    else:
+        print("Legacy FTP target not configured. Skipping legacy web root deployment.")
 
     ftp = None
-    if not args.dry_run:
+    if has_ftp_config(args):
+        ensure_ftp_config(args)
+    if not args.dry_run and has_ftp_config(args):
         ftp = connect_ftp(args)
 
     try:
-        for local_file, remote_relative_path in release_files:
-            upload_file(
-                ftp,  # type: ignore[arg-type]
-                local_file,
-                posixpath.join(remote_root, remote_relative_path),
-                args.dry_run,
-            )
+        if has_ftp_config(args):
+            for local_file, remote_relative_path in release_files:
+                upload_file(
+                    ftp,  # type: ignore[arg-type]
+                    local_file,
+                    posixpath.join(remote_root, remote_relative_path),
+                    args.dry_run,
+                )
 
-        for marker in marker_files:
+            for marker in marker_files:
+                upload_text(
+                    ftp,  # type: ignore[arg-type]
+                    version + "\n",
+                    posixpath.join(remote_root, marker),
+                    args.dry_run,
+                )
+
+            manifest_remote_path = posixpath.join(remote_root, MANIFEST_FILE)
+            existing_manifest = ""
+            if not args.dry_run and ftp is not None:
+                try:
+                    existing_manifest = download_text(ftp, manifest_remote_path)
+                except error_perm:
+                    existing_manifest = ""
+
+            manifest_text = build_manifest(existing_manifest, args.channel, version, firmware_sha256, web_file_hashes)
             upload_text(
                 ftp,  # type: ignore[arg-type]
-                version + "\n",
-                posixpath.join(remote_root, marker),
+                manifest_text,
+                manifest_remote_path,
                 args.dry_run,
             )
-
-        manifest_remote_path = posixpath.join(remote_root, MANIFEST_FILE)
-        existing_manifest = ""
-        if not args.dry_run and ftp is not None:
-            try:
-                existing_manifest = download_text(ftp, manifest_remote_path)
-            except error_perm:
-                existing_manifest = ""
-
-        upload_text(
-            ftp,  # type: ignore[arg-type]
-            build_manifest(existing_manifest, args.channel, version, firmware_sha256, web_file_hashes),
-            manifest_remote_path,
-            args.dry_run,
-        )
 
         if args.skip_mds_ota:
             print("MDS OTA upload skipped by --skip-mds-ota.")
@@ -420,10 +473,18 @@ def main() -> int:
                 args.dry_run,
             )
         else:
+            if not has_ftp_config(args) and not args.dry_run:
+                try:
+                    existing_mds_manifest = download_text_ssh(args.mds_ota_target, f"web/{MANIFEST_FILE}")
+                except Exception:
+                    existing_mds_manifest = ""
+                manifest_text = build_manifest(existing_mds_manifest, args.channel, version, firmware_sha256, web_file_hashes)
             upload_mds_ota_files_ssh(
                 args.mds_ota_target,
+                args.mds_public_target,
                 version,
                 firmware_sha256,
+                manifest_text,
                 args.dry_run,
             )
     finally:

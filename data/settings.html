@@ -52,8 +52,8 @@
 
 <body class="settings-page">
     %header%
-    <div id="loader"></div>
-    <div id="myDiv" class="animate-bottom initially-hidden">
+    <div id="loader" style="display:none;"></div>
+    <div id="myDiv" class="animate-bottom" style="display:block;">
     <section class="settings-overview">
         <h2>Settings</h2>
         <p>Configure network, MDS upload, standby behavior and LoRa transmission. Empty password and secret fields keep their currently stored value.</p>
@@ -364,22 +364,13 @@
                     </div>
                 </div>
 
-                <div class="row section-subtitle">
-                    <h5 class="section-heading">Beta Firmware and Web Interface Update Source</h5>
-                </div>
-                <div class="section-note">Used for beta firmware manifests and web interface files. The firmware page uses the same configured update source for beta installs and file downloads.</div>
-                <div class="row">
-                    <div class="firstColumn"><span class="labelText">Web Update Hostname <span class="infoBadge" tabindex="0">i<span class="infoPopover">Nur der Hostname des Update-Servers, ohne <code>http://</code> oder <code>https://</code>. Darueber werden neue Webdateien und Update-Infos abgefragt.</span></span></span></div>
-                    <div class="secondColumn">
-                        <input type='text' required name='firmwareUpdateUrl' size='40' value='%firmwareUpdateUrl%' maxlength='120' onchange=''>
-                    </div>
-                </div>
                 <div class="row">
                     <div class="firstColumn"><span class="labelText">MDS OTA Endpoint <span class="infoBadge" tabindex="0">i<span class="infoPopover">Optionaler MDS-Endpunkt fuer Firmware-Pull. Beispiel: <code>https://mds-git.derguntmar.de/ota/getupdate.php</code>.</span></span></span></div>
                     <div class="secondColumn">
                         <input type='text' name='mdsOtaUrl' size='50' value='%mdsOtaUrl%' maxlength='99' onchange='check_mds_ota_url("mdsOtaUrl")'>
                     </div>
                 </div>
+                <div class="section-note">Web interface files are derived automatically from the MDS OTA endpoint. The ESP uses the matching web release below <code>/ota/bin/web/</code>, so no separate web update host is required.</div>
                 <div class="row">
                     <div class="firstColumn"><span class="labelText">MDS OTA Secret <span class="infoBadge" tabindex="0">i<span class="infoPopover">Shared Secret fuer den Header <code>X-MDS-OTA-Secret</code>. Leer lassen, um den gespeicherten Wert beizubehalten.</span></span></span></div>
                     <div class="secondColumn">
@@ -710,13 +701,40 @@
             <div class="collapsible initially-hidden" id="CalibrationSettingsPage" >
                 <div class="section-note">Curve coefficients and offsets used to convert ADC values into voltage and tank readings.</div>
                 <div class="calibration-help">
-                    <h5>Battery voltage curve</h5>
+                    <h5>Easy battery calibration</h5>
+                    <p>Use the helper below for a simple one-point correction. Measure the real battery voltage with a multimeter, enter that value, and the firmware will adjust the offset automatically.</p>
+                    <p>This helper is meant for the analog battery input. If you use <code>VEdirect-Read</code>, the battery value comes from the external device and should not be calibrated here.</p>
+                </div>
+                <div class="calibration-tool">
+                    <div class="row">
+                        <div class="firstColumn">Current Battery Reading</div>
+                        <div class="secondColumn">
+                            <input type='text' id='batteryCalibrationCurrentVoltage' value='-' readonly>
+                            <span class="settingHint">Live value from the device</span>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="firstColumn">Current Battery ADC Raw</div>
+                        <div class="secondColumn">
+                            <input type='text' id='batteryCalibrationRawAdc' value='-' readonly>
+                            <span class="settingHint">Used internally for the correction</span>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="firstColumn">Measured Battery Voltage [V]</div>
+                        <div class="secondColumn">
+                            <input type='text' id='batteryCalibrationMeasuredVoltage' size='20' value='' placeholder='e.g. 12.64'>
+                            <button type='button' id='batteryCalibrationReadButton'>Read Live Values</button>
+                            <button type='button' id='batteryCalibrationApplyButton'>Apply Calibration</button>
+                        </div>
+                    </div>
+                    <div class="calibration-feedback" id="batteryCalibrationFeedback">Read the current live values, measure the battery with a multimeter, then apply the correction.</div>
+                </div>
+                <div class="calibration-help">
+                    <h5>Advanced battery curve</h5>
                     <p>The firmware calculates battery voltage with this formula:</p>
                     <code>Voltage = A2 * ADC * ADC + A1 * ADC + Offset</code>
-                    <p>For the default linear setup, keep <code>A2 = 0</code>. Then use two measured points from a multimeter and the displayed ADC raw value:</p>
-                    <code>A1 = (Voltage2 - Voltage1) / (ADC2 - ADC1)</code>
-                    <code>Offset = Voltage1 - A1 * ADC1</code>
-                    <p>Example workflow: measure battery voltage with a multimeter, note the matching ADC value from Sensor Values, repeat with a second voltage level, then calculate A1 and Offset. Use A2 only if the voltage divider or sensor is clearly non-linear.</p>
+                    <p>For the default linear setup, keep <code>A2 = 0</code>. Only change the coefficients manually if you deliberately want a custom curve.</p>
                 </div>
                 <div class="row">
                     <div class="firstColumn"><span class="labelText">Battery Voltage Curve A2 <span class="infoBadge" tabindex="0">i<span class="infoPopover">Quadratic calibration coefficient for the battery voltage input. Usually only changed when you use a custom calibration formula.</span></span></span></div>

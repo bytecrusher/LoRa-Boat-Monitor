@@ -1,6 +1,7 @@
 let otaProgressTimer = null;
 let otaRebootWaitStarted = false;
 let webFilesProgressTimer = null;
+let lastOtaProgress = null;
 
 function firmwareById(id) {
     return typeof byId === 'function' ? byId(id) : document.getElementById(id);
@@ -112,7 +113,8 @@ function otaElements() {
         progressDialogPercent: firmwareById('otaProgressDialogPercent'),
         localFileInput: firmwareById('localFirmwareFile'),
         localInstallButton: firmwareById('localFirmwareButton'),
-        betaInstallButton: firmwareById('betaFirmwareButton'),
+        localWebBundleFileInput: firmwareById('localWebBundleFile'),
+        localWebBundleButton: firmwareById('localWebBundleButton'),
         mdsOtaInstallButton: firmwareById('mdsOtaFirmwareButton'),
         mdsOtaVersion: firmwareById('mdsOtaVersion'),
         mdsOtaStatus: firmwareById('mdsOtaStatus'),
@@ -203,6 +205,7 @@ function stopOtaProgressPolling() {
 async function pollOtaProgress() {
     try {
         const progress = await firmwareRequestJson('/otaprogress?ts=' + Date.now());
+        lastOtaProgress = progress;
         renderOtaProgress(progress);
 
         if (!progress.active && progress.success && progress.phase === 'complete') {
@@ -290,53 +293,104 @@ async function handleOtaResponseResult(result) {
         beginWaitForRebootWithMessage(response.message || 'Firmware update complete. Device restarts now...');
     } else {
         setLoadingState(false);
+        hideOtaProgressDialog();
+        if (response && response.message) {
+            showFirmwareMessage('success', response.message);
+        }
+        refreshWebFilesInfo();
     }
 }
 
-function updateLocalFileButtonState() {
-    const elements = otaElements();
-    if (!elements.localFileInput || !elements.localInstallButton) {
+function updateFileButtonState(fileInput, button, validatorMessage, allowedExtensions) {
+    if (!fileInput || !button) {
         return;
     }
 
-    const file = elements.localFileInput.files[0];
+    const file = fileInput.files[0];
     const fileName = file ? file.name : '';
     const extension = fileName.split('.').pop().toLowerCase();
-    const isAllowed = fileName && (extension === 'bin' || extension === 'bmb');
+    const isAllowed = fileName && allowedExtensions.indexOf(extension) >= 0;
 
-    elements.localInstallButton.disabled = !isAllowed;
+    button.disabled = !isAllowed;
     if (fileName && !isAllowed) {
-        showFirmwareMessage('error', 'Wrong file type. Please select a .bin or .bmb firmware file.');
+        showFirmwareMessage('error', validatorMessage);
     }
 }
 
-function uploadLocalFirmware() {
+function updateLocalFirmwareButtonState() {
     const elements = otaElements();
-    const file = elements.localFileInput ? elements.localFileInput.files[0] : null;
+    updateFileButtonState(
+        elements.localFileInput,
+        elements.localInstallButton,
+        'Wrong file type. Please select a .bin or .bmb firmware file.',
+        ['bin', 'bmb']
+    );
+}
+
+function updateLocalWebBundleButtonState() {
+    const elements = otaElements();
+    updateFileButtonState(
+        elements.localWebBundleFileInput,
+        elements.localWebBundleButton,
+        'Wrong file type. Please select a web package .tar file.',
+        ['tar']
+    );
+}
+
+function uploadLocalPackage(options) {
+    const elements = otaElements();
+    const fileInput = options && options.fileInput;
+    const fieldName = options && options.fieldName ? options.fieldName : 'firmware';
+    const progressMessage = options && options.progressMessage ? options.progressMessage : 'Uploading update...';
+    const confirmMessage = options && options.confirmMessage ? options.confirmMessage : 'Upload and install this update file?';
+    const failureMessage = options && options.failureMessage ? options.failureMessage : 'Upload failed.';
+    const endpoint = options && options.endpoint ? options.endpoint : '/doUpdate';
+    const installMessage = options && options.installMessage ? options.installMessage : 'Installing update on device...';
+    const file = fileInput ? fileInput.files[0] : null;
+    let uploadFinished = false;
     if (!file) {
         return;
     }
 
-    if (!confirm('Upload and install this firmware file?')) {
+    if (!confirm(confirmMessage)) {
         return;
     }
 
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
-    formData.append('firmware', file, file.name);
+    formData.append(fieldName, file, file.name);
     formData.append('csrf', firmwareCsrfToken());
 
-    xhr.open('POST', '/doUpdate', true);
+    xhr.open('POST', endpoint, true);
+    xhr.timeout = 180000;
     xhr.setRequestHeader('X-CSRF-Token', firmwareCsrfToken());
     xhr.upload.onprogress = function (event) {
         if (!event.lengthComputable) {
             return;
         }
 
+        const percent = Math.round((event.loaded / event.total) * 100);
         renderOtaProgress({
             active: true,
-            percent: Math.round((event.loaded / event.total) * 100),
-            message: 'Uploading firmware...'
+            percent: percent,
+            message: progressMessage
+        });
+
+        if (event.loaded >= event.total) {
+            uploadFinished = true;
+            renderOtaProgress({
+                active: true,
+                percent: 100,
+                message: installMessage
+            });
+        }
+    };
+    xhr.upload.onload = function () {
+        uploadFinished = true;
+        renderOtaProgress({
+            active: true,
+            percent: 100,
+            message: installMessage
         });
     };
     xhr.onload = function () {
@@ -352,17 +406,56 @@ function uploadLocalFirmware() {
             json: responseJson
         });
     };
-    xhr.onerror = function () {
+    function handleInterruptedUpload() {
+        const progress = lastOtaProgress || {};
+        const likelyDeviceRestart =
+            uploadFinished ||
+            progress.phase === 'install-web-package' ||
+            progress.phase === 'finalizing' ||
+            (progress.success && progress.phase === 'complete');
+
+        if (likelyDeviceRestart) {
+            beginWaitForRebootWithMessage((progress && progress.message) || 'Update transferred. Waiting for device restart...');
+            return;
+        }
+
         stopOtaProgressPolling();
         otaRebootWaitStarted = false;
         setLoadingState(false);
         hideOtaProgressDialog();
-        showFirmwareMessage('error', 'Firmware upload failed.');
-    };
+        showFirmwareMessage('error', failureMessage);
+    }
+    xhr.onerror = handleInterruptedUpload;
+    xhr.ontimeout = handleInterruptedUpload;
+    xhr.onabort = handleInterruptedUpload;
 
     setLoadingState(true, { showLoader: false });
     startOtaProgressPolling();
     xhr.send(formData);
+}
+
+function uploadLocalFirmware() {
+    const elements = otaElements();
+    uploadLocalPackage({
+        fileInput: elements.localFileInput,
+        fieldName: 'firmware',
+        progressMessage: 'Uploading firmware...',
+        confirmMessage: 'Upload and install this firmware file?',
+        failureMessage: 'Firmware upload failed.'
+    });
+}
+
+function uploadLocalWebBundle() {
+    const elements = otaElements();
+    uploadLocalPackage({
+        fileInput: elements.localWebBundleFileInput,
+        fieldName: 'webbundle',
+        progressMessage: 'Uploading web package...',
+        installMessage: 'Installing web package on device...',
+        confirmMessage: 'Upload and install this web package? Only known web files will be replaced and the device will reboot afterwards.',
+        failureMessage: 'Web package upload failed.',
+        endpoint: '/uploadWebBundle'
+    });
 }
 
 async function startRemoteUpdate(source, promptText) {
@@ -419,7 +512,7 @@ function renderMdsOtaInfo(info) {
         return;
     }
 
-    const version = info.version || (info.status === 'current' ? info.installedVersion : '-');
+    const version = info.version || '-';
     setText('mdsOtaVersion', version || '-');
 
     let label = 'Unknown';
@@ -439,7 +532,11 @@ function renderMdsOtaInfo(info) {
     setText('mdsOtaStatus', label);
 
     if (elements.mdsOtaDetail) {
-        elements.mdsOtaDetail.textContent = info.message || 'The device asks MDS for an update and sends the configured OTA secret as a request header.';
+        let detail = info.message || 'The device asks MDS for an update and sends the configured OTA secret as a request header.';
+        if (info.status === 'current' && !info.version && info.installedVersion) {
+            detail += ' Installed version on device: ' + info.installedVersion + '.';
+        }
+        elements.mdsOtaDetail.textContent = detail;
     }
 
     if (elements.mdsOtaInstallButton) {
@@ -465,13 +562,20 @@ function renderWebFilesInfo(info) {
 
     setText('webFilesInstalledVersion', info.storedWebFilesVersion || '-');
     setText('webFilesFirmwareVersion', info.firmwareVersion || '-');
-    setText('webFilesStatus', info.error ? 'Error' : (info.busy ? 'Updating...' : (info.upToDate ? 'Up to date' : 'Update available')));
+    setText('webFilesStatus', info.error ? 'Error' : (info.retrying ? 'Retrying...' : (info.busy ? 'Updating...' : (info.upToDate ? 'Up to date' : 'Update available'))));
 
     if (elements.webFilesUpdateButton) {
+        const serverUnavailableForVersion = info.configured && info.serverSupportsInstalledFirmware === false;
+        const localPackageMode = serverUnavailableForVersion || !info.configured;
         elements.webFilesUpdateButton.disabled = info.busy;
-        elements.webFilesUpdateButton.textContent = info.error
-            ? 'Retry Web Files Download'
-            : (info.upToDate ? 'Reinstall Web Files' : 'Get Files from Server');
+        elements.webFilesUpdateButton.textContent = serverUnavailableForVersion
+            ? 'Use Local Web Package'
+            : (!info.configured
+                ? 'MDS OTA Missing'
+                : (info.error
+                    ? 'Retry Web Files Download'
+                    : (info.upToDate ? 'Reinstall Web Files' : 'Get Files from Server')));
+        elements.webFilesUpdateButton.dataset.mode = localPackageMode ? 'local-package' : 'server-download';
     }
 }
 
@@ -493,9 +597,10 @@ function renderWebFilesProgress(progress) {
     const percent = clampPercent(progress.percent);
     elements.webFilesProgressWrapper.style.display = progress.busy || percent > 0 || progress.message ? 'block' : 'none';
     elements.webFilesProgressBar.style.width = percent + '%';
+    const showPercent = Number(progress.total) > 0 && !progress.retrying;
     elements.webFilesProgressText.textContent = progress.message
-        ? progress.message + ' (' + percent + '%)'
-        : percent + '%';
+        ? (showPercent ? progress.message + ' (' + percent + '%)' : progress.message)
+        : (showPercent ? percent + '%' : '');
 }
 
 function stopWebFilesProgressPolling() {
@@ -528,7 +633,21 @@ function startWebFilesProgressPolling() {
 }
 
 async function startWebFilesUpdate() {
-    if (!confirm('Download web interface files for the installed firmware from the configured update server?')) {
+    const elements = otaElements();
+    const buttonMode = elements.webFilesUpdateButton ? elements.webFilesUpdateButton.dataset.mode : '';
+
+    if (buttonMode === 'local-package') {
+        if (elements.localWebBundleFileInput) {
+            showFirmwareMessage('info', 'Please choose the local web package (.tar) above and install it.');
+            elements.localWebBundleFileInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            elements.localWebBundleFileInput.click();
+        } else {
+            showFirmwareMessage('error', 'Local web package upload is not available on this page.');
+        }
+        return;
+    }
+
+    if (!confirm('Download web interface files for the installed firmware from the MDS OTA web release?')) {
         return;
     }
 
@@ -555,15 +674,16 @@ document.addEventListener('DOMContentLoaded', function () {
     setLoadingState(false);
 
     if (elements.localFileInput) {
-        elements.localFileInput.addEventListener('change', updateLocalFileButtonState);
+        elements.localFileInput.addEventListener('change', updateLocalFirmwareButtonState);
     }
     if (elements.localInstallButton) {
         elements.localInstallButton.addEventListener('click', uploadLocalFirmware);
     }
-    if (elements.betaInstallButton) {
-        elements.betaInstallButton.addEventListener('click', function () {
-            startRemoteUpdate('beta', 'Please download your config before updating the firmware. The device will download and install the beta firmware. Continue?');
-        });
+    if (elements.localWebBundleFileInput) {
+        elements.localWebBundleFileInput.addEventListener('change', updateLocalWebBundleButtonState);
+    }
+    if (elements.localWebBundleButton) {
+        elements.localWebBundleButton.addEventListener('click', uploadLocalWebBundle);
     }
     if (elements.mdsOtaInstallButton) {
         elements.mdsOtaInstallButton.addEventListener('click', function () {

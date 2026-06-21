@@ -4,6 +4,7 @@ document.addEventListener("DOMContentLoaded", function () {
     fileInput = byId("file");
     applySettingsSelections();
     bindSettingsPageEvents();
+    refreshBatteryCalibrationReference();
     setTimeout(showPage, 10);
 });
 
@@ -43,6 +44,16 @@ function bindSettingsPageEvents() {
         restoreButton.addEventListener("click", restoreConfigBackup);
     }
 
+    var batteryReadButton = byId("batteryCalibrationReadButton");
+    if (batteryReadButton) {
+        batteryReadButton.addEventListener("click", refreshBatteryCalibrationReference);
+    }
+
+    var batteryApplyButton = byId("batteryCalibrationApplyButton");
+    if (batteryApplyButton) {
+        batteryApplyButton.addEventListener("click", applyBatteryCalibration);
+    }
+
     if (fileInput) {
         fileInput.addEventListener("change", uploadConfig);
     }
@@ -77,6 +88,110 @@ function applySettingsSelections() {
 function showPage() {
     byId("loader").style.display = "none";
     byId("myDiv").style.display = "block";
+}
+
+function setCalibrationFeedback(message, type) {
+    var feedback = byId("batteryCalibrationFeedback");
+    if (!feedback) return;
+
+    feedback.textContent = message || "";
+    feedback.classList.remove("is-error", "is-success");
+    if (type === "error") {
+        feedback.classList.add("is-error");
+    } else if (type === "success") {
+        feedback.classList.add("is-success");
+    }
+}
+
+function trimCalibrationNumber(value, digits) {
+    var number = Number(value);
+    if (!isFinite(number)) {
+        return "";
+    }
+
+    var fixed = number.toFixed(typeof digits === "number" ? digits : 6);
+    fixed = fixed.replace(/\.?0+$/, "");
+    return fixed === "-0" ? "0" : fixed;
+}
+
+async function refreshBatteryCalibrationReference() {
+    var currentField = byId("batteryCalibrationCurrentVoltage");
+    var rawField = byId("batteryCalibrationRawAdc");
+    if (!currentField || !rawField) {
+        return;
+    }
+
+    try {
+        var response = await requestJson("/getdata?data=Battery&ts=" + Date.now());
+        var voltageValue = response && response.BatteryVoltage !== undefined && response.BatteryVoltage !== null
+            ? response.BatteryVoltage
+            : "";
+        var rawValue = response && response.BatteryAdc !== undefined && response.BatteryAdc !== null
+            ? response.BatteryAdc
+            : "";
+        var calibrationAvailable = !response || response.CalibrationAvailable !== false;
+        var calibrationMessage = response && response.CalibrationMessage ? response.CalibrationMessage : "";
+
+        currentField.value = voltageValue !== "" ? voltageValue + " V" : "-";
+        rawField.value = rawValue !== "" ? rawValue : "-";
+
+        if (voltageValue !== "" && rawValue !== "" && calibrationAvailable) {
+            setCalibrationFeedback(calibrationMessage || "Live values loaded. Now enter the multimeter value and apply the correction.", "");
+        } else {
+            setCalibrationFeedback(calibrationMessage || "The device did not return usable battery calibration values.", "error");
+        }
+    } catch (error) {
+        setCalibrationFeedback("Live battery values could not be read from the device.", "error");
+    }
+}
+
+function applyBatteryCalibration() {
+    var form = document.forms.SetForm;
+    if (!form) return;
+
+    if (form.envSensor && form.envSensor.value === "VEdirect-Read") {
+        setCalibrationFeedback("Battery calibration is disabled while VEdirect-Read is active.", "error");
+        return;
+    }
+
+    var measuredField = byId("batteryCalibrationMeasuredVoltage");
+    var rawField = byId("batteryCalibrationRawAdc");
+    var currentField = byId("batteryCalibrationCurrentVoltage");
+    var measuredVoltage = measuredField ? parseFloat(String(measuredField.value).replace(",", ".")) : NaN;
+    var rawAdc = rawField ? parseFloat(rawField.value) : NaN;
+    var currentVoltage = currentField
+        ? parseFloat(String(currentField.value).replace("V", "").replace(",", "."))
+        : NaN;
+    var currentOffset = parseFloat(String(form.voffset.value).replace(",", "."));
+
+    if (!isFinite(measuredVoltage) || measuredVoltage <= 0) {
+        setCalibrationFeedback("Please enter a valid measured battery voltage in volts.", "error");
+        return;
+    }
+
+    if (!isFinite(rawAdc) || rawAdc <= 0) {
+        setCalibrationFeedback("Please read live values first so the current ADC raw value is available.", "error");
+        return;
+    }
+
+    if (!isFinite(currentVoltage) || currentVoltage <= 0) {
+        setCalibrationFeedback("Please read live values first so the current battery voltage is available.", "error");
+        return;
+    }
+
+    if (!isFinite(currentOffset)) {
+        currentOffset = 0;
+    }
+
+    var correction = measuredVoltage - currentVoltage;
+    var newOffset = currentOffset + correction;
+    form.voffset.value = trimCalibrationNumber(newOffset, 6);
+    setCalibrationFeedback(
+        "Calibration applied. Offset changed by " + trimCalibrationNumber(correction, 4) +
+        " V and is now " + form.voffset.value +
+        " V. Save settings to keep it.",
+        "success"
+    );
 }
 
 function settingsCsrfToken(form) {

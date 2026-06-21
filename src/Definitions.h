@@ -41,6 +41,7 @@ float humidity;                     // Himidity in [%]
 float dewp;                         // Dewpoint in [°C]
 float voltage;                      // Battery voltage in [V]
 float capacity;                     // Battery capacity in [%]
+uint16_t voltageadc;                // Battery ADC raw value
 float tank1;                        // Tank 1 level [V]
 float tank2;                        // Tank 1 level [V]
 float tank1p;                       // Tank 2 level [%]

@@ -240,6 +240,39 @@
   </div><br>
   <hr>
 
+  <h3>Signal Diagnostics</h3>
+  <div class="sensor-values-section diagnostics-panel">
+    <table class="data-table">
+      <tr>
+        <td>Battery ADC Raw</td>
+        <td><data id='batteryAdc'></data></td>
+        <td class='muted-text'>GPIO 36 raw value</td>
+      </tr>
+      <tr>
+        <td>Battery Voltage</td>
+        <td><data id='batteryVoltageDiag'></data> V</td>
+        <td class='muted-text'>Calculated from ADC curve</td>
+      </tr>
+      <tr>
+        <td>Standby Mode</td>
+        <td><data id='standbyModeDiag'></data></td>
+        <td class='muted-text'>Configured mode</td>
+      </tr>
+      <tr>
+        <td>Standby Input Raw</td>
+        <td>GPIO <data id='standbyInputPinDiag'></data>: <data id='standbyInputLevelDiag'></data></td>
+        <td class='muted-text'>Physical input level</td>
+      </tr>
+      <tr>
+        <td>Interpreted State</td>
+        <td><data id='standbyInputStateDiag'></data></td>
+        <td class='muted-text'>Active LOW logic</td>
+      </tr>
+    </table>
+    <p class="diagnostics-note">Expected behavior: <code>LOW</code> means the standby input is active and the device stays awake. <code>HIGH</code> means standby is allowed when standby mode is enabled.</p>
+  </div><br>
+  <hr>
+
   <h3>Tank Levels</h3>
   <div class="sensor-values-section">
     <table class="data-table">

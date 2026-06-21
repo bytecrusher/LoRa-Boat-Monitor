@@ -62,6 +62,8 @@ function updateSensorPage(myObj) {
     setElementValue('speed', myObj.Device.MeasuringValues.Speed.Value);
     setElementValue('course', myObj.Device.MeasuringValues.Course.Value);
     setElementValue('voltage', myObj.Device.MeasuringValues.BatteryVoltage.Value);
+    setElementValue('batteryAdc', myObj.Device.MeasuringValues.BatteryAdc.Value);
+    setElementValue('batteryVoltageDiag', myObj.Device.MeasuringValues.BatteryVoltage.Value);
     setElementValue('capacity', myObj.Device.MeasuringValues.BatteryCapacity.Value);
     setElementValue('1wtemp', myObj.Device.MeasuringValues.Temp1Wire.Value);
     setElementValue('1wunit', myObj.Device.MeasuringValues.Temp1Wire.Unit);
@@ -74,6 +76,10 @@ function updateSensorPage(myObj) {
     setElementValue('standbyInputState', myObj.Device.MeasuringValues.StandbyInputState.Value);
     setElementValue('standbyInputPin', myObj.Device.MeasuringValues.StandbyInputPin.Value);
     setElementValue('standbyInputLevel', myObj.Device.MeasuringValues.StandbyInputLevel.Value);
+    setElementValue('standbyModeDiag', myObj.Device.MeasuringValues.standbyMode.Value);
+    setElementValue('standbyInputStateDiag', myObj.Device.MeasuringValues.StandbyInputState.Value);
+    setElementValue('standbyInputPinDiag', myObj.Device.MeasuringValues.StandbyInputPin.Value);
+    setElementValue('standbyInputLevelDiag', myObj.Device.MeasuringValues.StandbyInputLevel.Value);
 
     updateSensorIndicators(myObj);
     updateGauge(tank1Gauge, myObj.Device.MeasuringValues.Tank1.Value, myObj.Device.MeasuringValues.Tank1adc.Value);

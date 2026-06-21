@@ -112,6 +112,7 @@ struct MdsDeviceEventSnapshot {
 };
 
 const uint8_t MDS_DEVICE_EVENT_QUEUE_SIZE = 4;
+const time_t MIN_RELIABLE_EVENT_TIME = 1777852800; // 2026-05-04 00:00:00 UTC
 RTC_DATA_ATTR int bootCount = 0;
 RTC_DATA_ATTR uint loraCount = 0;
 RTC_DATA_ATTR time_t lastStandbyEventEpoch = 0;
@@ -146,6 +147,7 @@ size_t webFilesDownloadTotal = 0;
 String webFilesDownloadCurrentName = "";
 String webFilesDownloadStatusMessage = "";
 bool webFilesDownloadError = false;
+bool webFilesDownloadFatalError = false;
 uint8_t webFilesDownloadRetryCount = 0;
 unsigned long webFilesDownloadStartedMillis = 0;
 bool remoteOtaPending = false;
@@ -206,7 +208,7 @@ struct LegacyConfigDataV16 {
   int serverMode = 0;
   int serspeed = 115200;
   int WebSerialDebug = 0;
-  char firmwareUpdateUrl[50] = "loraboatmonitorwebserverdata.derguntmar.de";
+  char firmwareUpdateUrl[50] = "";
   char autoFirmwareUpdate[8] = "No";
   int skin = 0;
   uint32_t devaddr = 0x00000000;
@@ -507,7 +509,11 @@ bool capturePendingMdsDeviceEvent(const char *eventCause) {
     return false;
   }
 
-  registerWakeupEvent(eventCause);
+  if (lastWakeupEventEpoch <= 0) {
+    registerWakeupEvent(eventCause);
+  } else if ((eventCause != nullptr) && lastWakeupEventCause[0] == '\0') {
+    copyEventCause(lastWakeupEventCause, sizeof(lastWakeupEventCause), eventCause);
+  }
 
   if (lastStandbyEventEpoch == lastSentMdsStandbyEventEpoch && lastWakeupEventEpoch == lastSentMdsWakeupEventEpoch) {
     DebugPrintln(2, "Skipping duplicate MDS wakeup event");
@@ -527,15 +533,15 @@ bool capturePendingMdsDeviceEvent(const char *eventCause) {
 bool waitForValidSystemTime(uint32_t timeoutMs) {
   const uint32_t start = millis();
   time_t now = time(nullptr);
-  while (now < 1704067200 && (millis() - start) < timeoutMs) {
+  while (now < MIN_RELIABLE_EVENT_TIME && (millis() - start) < timeoutMs) {
     delay(250);
     now = time(nullptr);
   }
-  return now >= 1704067200;
+  return now >= MIN_RELIABLE_EVENT_TIME;
 }
 
 bool hasValidWakeSleepTime() {
-  return time(nullptr) >= 1704067200; // 2024-01-01 00:00:00 UTC
+  return time(nullptr) >= MIN_RELIABLE_EVENT_TIME;
 }
 
 void stopMdnsService() {
@@ -694,6 +700,22 @@ void disableWiFiForSleep() {
   stopMdnsService();
   WiFi.disconnect(true, true);
   WiFi.mode(WIFI_OFF);
+}
+
+void configureAnalogInputs() {
+  analogReadResolution(12);
+  analogSetPinAttenuation(uint8_t(ANALOG_IN), ADC_11db);
+  analogSetPinAttenuation(uint8_t(TANK1_IN), ADC_11db);
+  analogSetPinAttenuation(uint8_t(TANK2_IN), ADC_11db);
+
+  pinMode(ANALOG_IN, INPUT);
+  pinMode(TANK1_IN, INPUT);
+  pinMode(TANK2_IN, INPUT);
+
+  // Discard the first sample after reconfiguring the ADC path.
+  analogRead(ANALOG_IN);
+  analogRead(TANK1_IN);
+  analogRead(TANK2_IN);
 }
 
 void prepareForStandbySleep() {
@@ -1436,13 +1458,18 @@ void state1(){
       nextWebFilesDownloadAttempt = 0;
     } else {
       webFilesDownloadRetryCount++;
-      if (webFilesDownloadRetryCount >= 3) {
+      if (webFilesDownloadFatalError || webFilesDownloadRetryCount >= 3) {
         runDownloadingFiles = false;
         webFilesDownloadError = true;
-        webFilesDownloadStatusMessage = "Web files download failed. Please retry.";
+        if (!webFilesDownloadFatalError) {
+          webFilesDownloadStatusMessage = "Web files download failed. Please retry.";
+        }
         writeDisplayStatusScreen("Web files", "Download failed", "Retry manual");
         nextWebFilesDownloadAttempt = 0;
       } else {
+        webFilesDownloadCompleted = 0;
+        webFilesDownloadTotal = 0;
+        webFilesDownloadCurrentName = "";
         webFilesDownloadStatusMessage = "Web files download failed. Retrying shortly.";
         writeDisplayStatusScreen("Web files", "Retry shortly", webFilesDownloadCurrentName);
         nextWebFilesDownloadAttempt = millis() + 30000UL;
@@ -1501,6 +1528,12 @@ void print_wakeup_reason(){
   standbyWakeDisplayActive = pendingWakeMdsEvent;
   currentWakeMdsEventCaptured = false;
   nextWakeMdsRetryMillis = 0;
+  if (pendingWakeMdsEvent && hasValidWakeSleepTime()) {
+    registerWakeupEvent(pendingWakeReasonLabel.c_str());
+    DebugPrintln(3, "Wakeup timestamp captured immediately at boot: " + String(static_cast<unsigned long>(lastWakeupEventEpoch)));
+  } else if (pendingWakeMdsEvent) {
+    DebugPrintln(2, "Wakeup detected, but reliable system time is not available yet. Timestamp capture will be retried later.");
+  }
   switch(wakeup_reason)
   {
     case ESP_SLEEP_WAKEUP_EXT0 : DebugPrintln(3, "Wakeup caused by external signal using RTC_IO"); break;
@@ -1650,8 +1683,10 @@ void sanitizeNewConfigFields() {
     }
   }
 
-  if (!isPrintableConfigString(actconf.firmwareUpdateUrl, sizeof(actconf.firmwareUpdateUrl)) || strlen(actconf.firmwareUpdateUrl) == 0) {
-    changed = copyConfigString(actconf.firmwareUpdateUrl, sizeof(actconf.firmwareUpdateUrl), defconf.firmwareUpdateUrl) || changed;
+  if (actconf.firmwareUpdateUrl[0] != '\0') {
+    actconf.firmwareUpdateUrl[0] = '\0';
+    changed = true;
+    DebugPrintln(2, "Legacy web update host cleared; web files now derive from the MDS OTA endpoint");
   }
 
   if (!isValidHttpsUrlString(actconf.mdsOtaUrl, sizeof(actconf.mdsOtaUrl))) {
@@ -1876,7 +1911,8 @@ void setup() {
   //##### Pin Settings #####
   pinMode(ledPin, OUTPUT);          // LED Pin output
   pinMode(relayPin, OUTPUT);        // Relay Pin output
-  pinMode(alarmPin, INPUT_PULLUP);  // Alarm Pin input
+  pinMode(alarmPin, INPUT);         // Alarm Pin input (external circuit provides the level)
+  configureAnalogInputs();
 
   //##### Start 1Wire sensors #####
   if (String(actconf.tempSensorType) == "DS18B20") {
@@ -1977,15 +2013,10 @@ void setup() {
   ++bootCount;
   //Print the wakeup reason for ESP32
   print_wakeup_reason();
-  /*
-  First we configure the wake up source
-  We set our ESP32 to wake up every 5 seconds
-  */
-  if (String(actconf.standbyMode) == "On") {
-    esp_sleep_enable_timer_wakeup((TIME_TO_SLEEP * 60) * uS_TO_S_FACTOR);
-    rtc_gpio_pullup_en(GPIO_NUM_39);
-    esp_sleep_enable_ext0_wakeup(GPIO_NUM_39,0);
-  }
+
+  // Return the standby wake pin to normal runtime mode after boot.
+  // The RTC wake configuration is armed again right before deep sleep.
+  rtc_gpio_deinit(GPIO_NUM_39);
 
   readValues(actconf);     // initial read after boot, to get the status of alarm pin.
   DebugPrintln(3, "Standby input GPIO " + String(alarmPin) + " raw: " + String(digitalRead(alarmPin) == LOW ? "LOW" : "HIGH") + ", state: " + String(alarm1 ? "Active" : "Inactive") + " (active LOW)");

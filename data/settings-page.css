@@ -133,6 +133,38 @@
     overflow-x: auto;
 }
 
+.settings-page .calibration-tool {
+    margin: 10px 0 14px;
+    padding: 12px;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.16));
+    border-radius: var(--radius-sm, 10px);
+    background: rgba(82, 197, 240, 0.08);
+}
+
+.settings-page .calibration-tool .row:first-child {
+    padding-top: 0;
+}
+
+.settings-page .calibration-tool .row:last-of-type {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+.settings-page .calibration-feedback {
+    margin-top: 10px;
+    color: var(--muted, #8a8f98);
+    font-size: 0.9em;
+    line-height: 1.45;
+}
+
+.settings-page .calibration-feedback.is-error {
+    color: #ff9d9d;
+}
+
+.settings-page .calibration-feedback.is-success {
+    color: #9fe7b0;
+}
+
 .settings-page .row {
     display: grid;
     grid-template-columns: var(--settings-grid-label) var(--settings-grid-control);

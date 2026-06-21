@@ -39,19 +39,6 @@
       </div>
     </div>
     <div class="firmware-card-grid">
-    <form class="page-section firmware-card" name='upform2' action='/doUpdate' method='post' enctype='multipart/form-data'>
-      <h4>Beta Server Firmware</h4>
-      <input type='hidden' name='csrf' value='%csrfToken%'>
-      <div class="form-stack">
-        <div class="status-line"><span>Version</span><strong>%version2%</strong></div>
-        <div class="status-line"><span>Server</span><strong>%serverAvailable%</strong></div>
-        <input class="readonly-field" type='text' name='firmware2' size='50' value='%betaFirmwareUrl%' readonly>
-        <span class="status-text muted-text">Resolved base URL: %configuredFirmwareBaseUrl%</span>
-        <span class="status-text muted-text">Beta status: %betaStatusDetail%</span>
-        <button type='button' id='betaFirmwareButton'>Install Beta Firmware</button>
-      </div>
-    </form>
-
     <form class="page-section firmware-card" name='upform3' action='/doUpdate' method='post' enctype='multipart/form-data'>
       <h4>MDS OTA Firmware</h4>
       <input type='hidden' name='csrf' value='%csrfToken%'>
@@ -75,11 +62,22 @@
         <button type='button' id='localFirmwareButton' disabled>Install Local Firmware</button>
       </div>
     </form>
+
+    <form class="page-section firmware-card" name='webbundleform' action='/uploadWebBundle' method='post' enctype='multipart/form-data'>
+      <h4>Manual Local Web Package</h4>
+      <input type='hidden' name='csrf' value='%csrfToken%'>
+      <div class="form-stack">
+        <span class="muted-text">Upload a web package that replaces only the known web interface files and keeps the LittleFS config backup untouched.</span>
+        <input type='file' required name='webbundle' id='localWebBundleFile'>
+        <span class="status-text muted-text">Recommended file: <code>webui-package.tar</code></span>
+        <button type='button' id='localWebBundleButton' disabled>Install Local Web Package</button>
+      </div>
+    </form>
     </div>
 
     <section class="page-section">
       <h4>Web Interface Files</h4>
-      <p class="muted-text">Downloads the HTML, CSS and JavaScript files that match the installed firmware version.</p>
+      <p class="muted-text">Downloads the HTML, CSS and JavaScript files that match the installed firmware version. The source is derived automatically from the configured MDS OTA endpoint. If MDS OTA is not configured, use the local web package upload above.</p>
       <div class="status-grid compact-status-grid">
         <article class="status-card">
           <span class="status-label">Installed Web Files</span>

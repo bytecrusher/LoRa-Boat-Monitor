@@ -18,6 +18,7 @@ extern size_t webFilesDownloadCompleted;
 extern size_t webFilesDownloadTotal;
 extern String webFilesDownloadCurrentName;
 extern String webFilesDownloadStatusMessage;
+extern bool webFilesDownloadFatalError;
 extern time_t lastStandbyEventEpoch;
 extern time_t lastWakeupEventEpoch;
 extern char lastStandbyEventCause[24];
@@ -131,25 +132,23 @@ bool isWebFileCurrent(const char *fileName, const String &expectedSha256) {
 
 String normalizeFirmwareUpdateBaseUrl(const char *configuredValue)
 {
-  String normalized = String(configuredValue == nullptr ? "" : configuredValue);
-  normalized.trim();
-
-  if (normalized.startsWith("https://")) {
-    normalized.remove(0, 8);
-  } else if (normalized.startsWith("http://")) {
-    normalized.remove(0, 7);
+  String endpoint = String(configuredValue == nullptr ? "" : configuredValue);
+  endpoint.trim();
+  if (!endpoint.startsWith("https://")) {
+    return "";
   }
 
-  while (normalized.endsWith("/")) {
-    normalized.remove(normalized.length() - 1);
+  const int queryStart = endpoint.indexOf('?');
+  if (queryStart >= 0) {
+    endpoint = endpoint.substring(0, queryStart);
   }
 
-  const String suffix = "/files_for_esp_webserver";
-  if (normalized.endsWith(suffix)) {
-    normalized.remove(normalized.length() - suffix.length());
+  const int lastSlash = endpoint.lastIndexOf('/');
+  if (lastSlash <= 8) {
+    return "";
   }
 
-  return "https://" + normalized + suffix;
+  return endpoint.substring(0, lastSlash) + "/bin/web";
 }
 
 bool fetchTextFromUpdateServer(const String &url, String &payload) {
@@ -180,7 +179,11 @@ bool fetchTextFromUpdateServer(const String &url, String &payload) {
 }
 
 bool fetchFirmwareManifest(JsonDocument &manifest) {
-  const String baseUrl = normalizeFirmwareUpdateBaseUrl(actconf.firmwareUpdateUrl);
+  const String baseUrl = normalizeFirmwareUpdateBaseUrl(actconf.mdsOtaUrl);
+  if (baseUrl.length() == 0) {
+    DebugPrintln(1, "MDS OTA endpoint is not configured");
+    return false;
+  }
   const String manifestUrl = baseUrl + "/firmware-manifest.json";
   String manifestPayload;
   if (!fetchTextFromUpdateServer(manifestUrl, manifestPayload)) {
@@ -213,6 +216,26 @@ String getExpectedWebFileSha256(JsonDocument &manifest, const char *fversion, co
   }
 
   return "";
+}
+
+bool hasManifestReleaseForVersion(JsonDocument &manifest, const char *fversion) {
+  if (fversion == nullptr || fversion[0] == '\0') {
+    return false;
+  }
+
+  const char *channels[] = {"stable", "beta"};
+  for (const char *channel : channels) {
+    JsonObject entry = manifest[channel].as<JsonObject>();
+    if (entry.isNull()) {
+      continue;
+    }
+    const char *version = entry["version"] | "";
+    if (String(version) == String(fversion)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 String normalizeSecureUrl(const String &configuredValue)
@@ -524,6 +547,7 @@ bool DownloadFilesFromWeb()
   const char *fversion = actconf.fversion;
   DebugPrintln(3, "Downloading web files for installed firmware version: " + String(fversion));
   webFilesDownloadStatusMessage = "Fetching firmware manifest.";
+  webFilesDownloadFatalError = false;
 
   const char *webFiles[] = {
     "css_black.css",
@@ -564,6 +588,14 @@ bool DownloadFilesFromWeb()
     return false;
   }
 
+  if (!hasManifestReleaseForVersion(manifest, fversion)) {
+    webFilesDownloadStatusMessage = "Update server has no web files for " + String(fversion) + ". Use the local web package instead.";
+    webFilesDownloadFatalError = true;
+    DebugPrintln(1, webFilesDownloadStatusMessage);
+    writeDisplayStatusScreen("Web files", "No server files", String(fversion), "Use local pkg");
+    return false;
+  }
+
   webFilesDownloadCompleted = 0;
   webFilesDownloadTotal = sizeof(webFiles) / sizeof(webFiles[0]);
   webFilesDownloadCurrentName = "";
@@ -581,8 +613,10 @@ bool DownloadFilesFromWeb()
     if (expectedSha256.length() == 0) {
       DebugPrint(1, "Missing manifest hash for web file: ");
       DebugPrintln(1, webFiles[i]);
-      webFilesDownloadStatusMessage = "Missing manifest hash for " + webFilesDownloadCurrentName + ".";
+      webFilesDownloadStatusMessage = "Update server is incomplete for " + String(fversion) + ". Missing hash for " + webFilesDownloadCurrentName + ".";
+      webFilesDownloadFatalError = true;
       allFilesUpdated = false;
+      break;
     } else {
       if (isWebFileCurrent(webFiles[i], expectedSha256)) {
         DebugPrint(3, "Web file already current, skipping download: ");
@@ -627,7 +661,7 @@ bool DownloadFile(const char *fileName, const char *fversion, const String &expe
     return false;
   }
 
-  const String baseUrl = normalizeFirmwareUpdateBaseUrl(actconf.firmwareUpdateUrl);
+  const String baseUrl = normalizeFirmwareUpdateBaseUrl(actconf.mdsOtaUrl);
   const String myurl = baseUrl + "/" + String(fversion) + "/" + String(fileName);
   WiFiClientSecure client;
   HTTPClient http;

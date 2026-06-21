@@ -8,21 +8,10 @@ log() {
   printf '[pre-push] %s\n' "$1"
 }
 
-if [[ ! -f "${PROJECT_DIR}/.env" ]]; then
-  log "Skipping auto-deploy because ${PROJECT_DIR}/.env is missing."
-  exit 0
-fi
-
 log "Building firmware..."
 if ! env PLATFORMIO_CORE_DIR=/tmp/pio-core pio run -d "${PROJECT_DIR}"; then
   log "Build failed. Push aborted."
   exit 1
 fi
 
-log "Deploying firmware and web files to update server..."
-if ! "${PROJECT_DIR}/scripts/deploy_stable.sh" --allow-insecure-ftp; then
-  log "Deploy failed. Push aborted."
-  exit 1
-fi
-
-log "Auto-deploy finished successfully."
+log "Build finished successfully. Auto-deploy is disabled."

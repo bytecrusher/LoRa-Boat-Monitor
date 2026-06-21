@@ -7,4 +7,4 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 git -C "${PROJECT_DIR}" config core.hooksPath .githooks
 chmod +x "${PROJECT_DIR}/.githooks/pre-push"
 
-echo "Git hooks installed. pre-push will now build and deploy automatically."
+echo "Git hooks installed. pre-push will now build automatically without deploying."

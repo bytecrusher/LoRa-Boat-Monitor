@@ -1,166 +1,96 @@
-# Update Server Deployment
+# MDS OTA Deployment
 
-Diese Datei beschreibt den empfohlenen Ablauf, um Firmware und Webdateien auf den OTA-Update-Server zu veröffentlichen.
+Diese Datei beschreibt den aktuellen Deploy-Ablauf fuer Firmware und Webdateien.
 
-## Voraussetzungen
+## Zielbild
 
-- FTP-Zugang zum Zielserver
-- Zugriff auf das Zielverzeichnis des Webservers
-- eine gebaute Firmware-Datei unter [firmware.bin](/Users/guntmar/Documents/PlatformIO/Projects/LoRa-Boat-Monitor/firmware.bin)
+Der ESP nutzt nur noch den konfigurierten MDS-OTA-Endpunkt:
 
-## Zielstruktur auf dem Server
+- Firmware OTA:
+  - `https://mds-git.derguntmar.de/ota/getupdate.php`
+- daraus automatisch abgeleitete Web-Dateien:
+  - `https://mds-git.derguntmar.de/ota/bin/web/`
 
-Der ESP erwartet Inhalte unter:
+Es gibt keine separate Web-Update-Host-Konfiguration mehr auf dem ESP.
+
+## Erwartete Serverstruktur
+
+Private OTA-Dateien fuer `getupdate.php`:
 
 ```text
-https://<firmwareUpdateUrl>/files_for_esp_webserver/
+httpdocs/mds-git.derguntmar.de/var/ota/bin/
+  firmware.bin
+  V1.14l.bin
+  firmware.version
+  firmware.sha256
 ```
 
-Beispiel:
+Oeffentliche OTA-Metadaten und Web-Dateien:
 
 ```text
-files_for_esp_webserver/
-  latestVersion.txt
-  latestStableVersion.txt
-  ActualVersion.txt
-  latestBetaVersion.txt
-  V1.08o/
-    firmware.bin
-    index.html
-    settings.html
-    firmware_ota.html
-    ...
+httpdocs/mds-git.derguntmar.de/public/ota/bin/
+  firmware.bin
+  V1.14l.bin
+  firmware.version
+  firmware.sha256
+  web/
+    firmware-manifest.json
+    webui-package.tar
+    V1.14l/
+      index.html
+      settings.html
+      firmware.html
+      ...
+      webui-package.tar
 ```
 
-## Stable deployen
+## Build
 
 ```bash
-./scripts/deploy_stable.sh \
-  --host ftp.example.com \
-  --user deploy-user \
-  --password 'secret' \
-  --remote-dir /var/www/html/files_for_esp_webserver
+pio run
+python3 scripts/build_web_bundle.py
+```
+
+Artefakte:
+
+- [firmware.bin](/Users/guntmar/Documents/PlatformIO/Projects/LoRa-Boat-Monitor/firmware.bin)
+- [webui-package.tar](/Users/guntmar/Documents/PlatformIO/Projects/LoRa-Boat-Monitor/webui-package.tar)
+
+## Deploy
+
+Standard:
+
+```bash
+./scripts/deploy_stable.sh
 ```
 
 Das Script:
 
-- liest die aktuelle `fversion` aus [src/Configuration.h](/Users/guntmar/Documents/PlatformIO/Projects/LoRa-Boat-Monitor/src/Configuration.h)
-- kopiert `firmware.bin`
-- kopiert alle Webdateien aus [data](/Users/guntmar/Documents/PlatformIO/Projects/LoRa-Boat-Monitor/data)
-- aktualisiert:
-  - `latestVersion.txt`
-  - `latestStableVersion.txt`
-  - `ActualVersion.txt`
-
-## Beta deployen
-
-```bash
-./scripts/deploy_beta.sh \
-  --host ftp.example.com \
-  --user deploy-user \
-  --password 'secret' \
-  --remote-dir /var/www/html/files_for_esp_webserver
-```
-
-Das Script aktualisiert:
-
-- `latestBetaVersion.txt`
-
-## Komfort per Umgebungsvariablen
-
-```bash
-export UPDATE_SERVER_FTP_HOST='ftp.example.com'
-export UPDATE_SERVER_FTP_USER='deploy-user'
-export UPDATE_SERVER_FTP_PASSWORD='secret'
-export UPDATE_SERVER_FTP_DIR='/var/www/html/files_for_esp_webserver'
-export UPDATE_SERVER_FTP_PORT='21'
-```
-
-Dann reichen:
-
-```bash
-./scripts/deploy_stable.sh
-./scripts/deploy_beta.sh
-```
-
-Du kannst dafuer auch die Vorlage [ .env.example ](/Users/guntmar/Documents/PlatformIO/Projects/LoRa-Boat-Monitor/.env.example) als Ausgangspunkt verwenden und die Werte in deine Shell-Umgebung uebernehmen.
-
-Bequemes Laden:
-
-```bash
-cp .env.example .env
-source ./scripts/source_env.sh
-```
-
-Optional mit anderem Dateinamen:
-
-```bash
-source ./scripts/source_env.sh ./deploy.env
-```
-
-## Automatisches Deploy vor Push
-
-Git bietet lokal keinen nativen `post-push`-Hook. Der naechstbeste und zuverlaessige Weg ist deshalb ein `pre-push`-Hook.
-
-Wenn du vor jedem `git push` automatisch bauen und deployen willst:
-
-```bash
-./scripts/install_git_hooks.sh
-```
-
-Danach fuehrt Git vor jedem Push automatisch aus:
-
-- `env PLATFORMIO_CORE_DIR=/tmp/pio-core pio run`
-- `./scripts/deploy_stable.sh`
-
-Ziel des Deployments:
-
-```text
-https://loraboatmonitorwebserverdata.derguntmar.de/files_for_esp_webserver
-```
-
-Voraussetzung:
-
-- eine gültige `.env` im Projektverzeichnis
-
-Wenn `.env` fehlt, wird das Auto-Deploy uebersprungen. Wenn Build oder Deploy fehlschlagen, wird der Push abgebrochen.
-
-## Nützliche Optionen
+- liest `fversion` aus [src/Configuration.h](/Users/guntmar/Documents/PlatformIO/Projects/LoRa-Boat-Monitor/src/Configuration.h)
+- laedt die Firmware nach `var/ota/bin/`
+- laedt `firmware.version` und `firmware.sha256` nach:
+  - `var/ota/bin/`
+  - `public/ota/bin/`
+- laedt das Web-Manifest nach:
+  - `public/ota/bin/web/firmware-manifest.json`
+- laedt alle Webdateien nach:
+  - `public/ota/bin/web/<version>/`
+- laedt das Web-Paket nach:
+  - `public/ota/bin/web/webui-package.tar`
+  - `public/ota/bin/web/<version>/webui-package.tar`
 
 Dry run:
 
 ```bash
-./scripts/deploy_stable.sh --dry-run
+UPDATE_SERVER_FTP_HOST='' \
+UPDATE_SERVER_FTP_USER='' \
+UPDATE_SERVER_FTP_PASSWORD='' \
+UPDATE_SERVER_FTP_DIR='' \
+python3 scripts/deploy_update_server.py --dry-run
 ```
 
-Alternativer FTP-Port:
+## Hinweise
 
-```bash
-./scripts/deploy_stable.sh --port 2121
-```
-
-FTP über TLS:
-
-```bash
-./scripts/deploy_stable.sh --tls
-```
-
-## Verhalten auf dem ESP
-
-- Die Firmware-Seite im Browser lädt keine Fremdserver-Dateien mehr direkt.
-- Der Browser stößt nur einen lokalen Request an den ESP an.
-- Der ESP löst die Stable- oder Beta-Version serverseitig auf und lädt die Firmware selbst per HTTPS.
-- Stable akzeptiert aktuell diese Markerdateien:
-  - `latestVersion.txt`
-  - `latestStableVersion.txt`
-  - `latestFirmwareVersion.txt`
-  - `ActualVersion.txt`
-- Der Inhalt darf entweder:
-  - nur die Versionsnummer sein, z. B. `V1.08o`
-  - oder direkt eine vollständige `https://.../firmware.bin`-URL
-
-## Empfehlung
-
-- Stable nur auf getestete Versionen zeigen lassen
-- Beta separat über `latestBetaVersion.txt` steuern
-- nach jedem Release zuerst `--dry-run` verwenden, wenn ein neues Serverziel eingerichtet wird
+- Der alte FTP-Webserver ist optional und kann komplett leer bleiben.
+- Wenn der ESP bei MDS OTA trotzdem `304 Not Modified` bekommt, liegt das nicht mehr an den Dateien, sondern an der MDS-Serverlogik oder am Board-Flag `performUpdate`.
+- Fuer die Anzeige der Server-Version im ESP muessen `public/ota/bin/firmware.version` und optional Header aus `getupdate.php` verfuegbar sein.

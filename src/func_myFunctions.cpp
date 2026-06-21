@@ -849,8 +849,10 @@ void readValues(configData myactconf) {
     }
     
     // Analog input 0...3.3V => 0...33V => 0...4096
+    voltageadc = 0;
     if (String(myactconf.envSensor) != "VEdirect-Read") {
       const int analogVoltageRaw = analogRead(ANALOG_IN);
+      voltageadc = analogVoltageRaw;
       if (debugVEdirect) {
         DebugPrint(3, "Voltage = ");
       }
@@ -1146,6 +1148,23 @@ String fitDisplayLine(const String &value) {
   }
   return line;
 }
+
+String lastDisplayLines[8];
+unsigned long lastDisplayProgressRefreshMillis = 0;
+int lastDisplayProgressPercent = -1;
+String lastDisplayProgressTitle = "";
+String lastDisplayProgressMessage = "";
+String lastDisplayProgressDetail = "";
+String lastDisplayProgressFooter = "";
+
+void resetDisplayProgressCache() {
+  lastDisplayProgressRefreshMillis = 0;
+  lastDisplayProgressPercent = -1;
+  lastDisplayProgressTitle = "";
+  lastDisplayProgressMessage = "";
+  lastDisplayProgressDetail = "";
+  lastDisplayProgressFooter = "";
+}
 }
 
 void writeDisplayStatusScreen(const String &title,
@@ -1167,6 +1186,18 @@ void writeDisplayStatusScreen(const String &title,
     fitDisplayLine(line7)
   };
 
+  bool displayChanged = false;
+  for (uint8_t index = 0; index < 8; index++) {
+    if (lastDisplayLines[index] != lines[index]) {
+      displayChanged = true;
+      break;
+    }
+  }
+
+  if (!displayChanged) {
+    return;
+  }
+
   u8x8.setPowerSave(0);
   u8x8.clearDisplay();
   u8x8.setFont(u8x8_font_chroma48medium8_r);
@@ -1174,6 +1205,7 @@ void writeDisplayStatusScreen(const String &title,
     if (lines[index].length() > 0) {
       u8x8.drawString(0, index, lines[index].c_str());
     }
+    lastDisplayLines[index] = lines[index];
   }
   u8x8.refreshDisplay();
 }
@@ -1186,20 +1218,46 @@ void writeDisplayProgressScreen(const String &title,
                                const String &footer) {
   String percentLine = "Progress";
   String countLine = "";
+  int percent = -1;
   if (total > 0) {
-    const size_t percent = (current * 100U) / total;
+    percent = int((current * 100U) / total);
     percentLine = String(percent) + "%";
     countLine = String(current) + "/" + String(total);
   } else if (current > 0) {
     countLine = String(current) + " bytes";
   }
 
+  const String normalizedTitle = fitDisplayLine(title);
+  const String normalizedMessage = fitDisplayLine(message);
+  const String normalizedDetail = fitDisplayLine(detail);
+  const String normalizedFooter = fitDisplayLine(footer);
+  const unsigned long now = millis();
+  const bool contentChanged = normalizedTitle != lastDisplayProgressTitle ||
+                              normalizedMessage != lastDisplayProgressMessage ||
+                              normalizedDetail != lastDisplayProgressDetail ||
+                              normalizedFooter != lastDisplayProgressFooter;
+  const bool percentChanged = percent != lastDisplayProgressPercent;
+  const bool shouldRefresh = contentChanged ||
+                             (percent >= 0 && (percent == 0 || percent == 100 || (percentChanged && percent / 5 != lastDisplayProgressPercent / 5))) ||
+                             (now - lastDisplayProgressRefreshMillis >= 250);
+
+  if (!shouldRefresh) {
+    return;
+  }
+
+  lastDisplayProgressTitle = normalizedTitle;
+  lastDisplayProgressMessage = normalizedMessage;
+  lastDisplayProgressDetail = normalizedDetail;
+  lastDisplayProgressFooter = normalizedFooter;
+  lastDisplayProgressPercent = percent;
+  lastDisplayProgressRefreshMillis = now;
+
   writeDisplayStatusScreen(title,
-                           fitDisplayLine(message),
+                           normalizedMessage,
                            countLine,
                            percentLine,
-                           fitDisplayLine(detail),
-                           fitDisplayLine(footer));
+                           normalizedDetail,
+                           normalizedFooter);
 }
 
 // Timer 1 interrupt Read and print GPS values

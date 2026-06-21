@@ -34,6 +34,7 @@ extern float vedirectVoltage;
 extern float vedirectCurrent;
 extern float vedirectTemp;
 extern float voltage;
+extern uint16_t voltageadc;
 extern float temp1wire;
 extern int ANALOG_IN;
 extern float capacity;
