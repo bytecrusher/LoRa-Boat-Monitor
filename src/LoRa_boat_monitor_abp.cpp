@@ -671,6 +671,47 @@ bool processPendingRemoteOta(const char *contextLabel, bool restartImmediately) 
     return false;
   }
 
+  // Prefer the channel manifest because it provides an explicit version and
+  // SHA256 before flash writing starts. Keep the authenticated MDS endpoint as
+  // a compatibility fallback when metadata cannot be resolved.
+  if (request.useMdsEndpoint && request.channel.length() > 0) {
+    String manifestUrl;
+    String manifestVersion;
+    String manifestSha256;
+    String manifestError;
+    if (resolveOtaFirmwareForChannel(request.channel,
+                                     manifestUrl,
+                                     manifestVersion,
+                                     &manifestError,
+                                     &manifestSha256,
+                                     nullptr)) {
+      const int versionComparison = compareOtaFirmwareVersions(manifestVersion, String(actconf.fversion));
+      if (versionComparison > 0 || (versionComparison == 0 && request.forceReinstall)) {
+        request.url = manifestUrl;
+        request.version = manifestVersion;
+        request.sha256 = manifestSha256;
+        request.useMdsEndpoint = false;
+        setRemoteOtaVersion(manifestVersion);
+        DebugPrintln(3, String(contextLabel) + " OTA resolved from manifest: " + manifestVersion);
+      } else {
+        const String statusMessage = versionComparison == 0
+          ? "Installed firmware already matches the selected channel."
+          : "Selected channel contains older firmware; update skipped.";
+        OtaProgressSnapshot state;
+        state.success = true;
+        state.phase = "no-update";
+        state.message = statusMessage;
+        setOtaProgressState(state);
+        finishRemoteOtaRequest(false);
+        releaseMaintenanceOperation(MaintenanceOperation::RemoteOta);
+        DebugPrintln(3, String(contextLabel) + " OTA: " + statusMessage);
+        return true;
+      }
+    } else {
+      DebugPrintln(2, String(contextLabel) + " OTA manifest resolution failed; using authenticated endpoint: " + manifestError);
+    }
+  }
+
   String remoteOtaError;
   const bool remoteOtaSuccess = performRemoteOtaUpdate(request.url, false, remoteOtaError, request.sha256, request.useMdsEndpoint);
   flushPendingRemoteOtaStatus();

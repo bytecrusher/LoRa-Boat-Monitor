@@ -323,6 +323,7 @@ bool downloadAndInstallWebBundle(String &errorMessage) {
   uint8_t buffer[1024];
   size_t written = 0;
   unsigned long lastProgressMillis = millis();
+  int lastDisplayProgressBucket = -1;
   while (http.connected() && written < static_cast<size_t>(contentLength)) {
     const size_t availableBytes = stream->available();
     if (availableBytes == 0) {
@@ -355,11 +356,16 @@ bool downloadAndInstallWebBundle(String &errorMessage) {
     written += bytesRead;
     lastProgressMillis = millis();
     setWebFilesUpdateProgress(written, static_cast<size_t>(contentLength), "webui-package.tar", "Downloading web package.");
-    writeDisplayProgressScreen("Web files",
-                               "Downloading bundle",
-                               written,
-                               static_cast<size_t>(contentLength),
-                               "webui-package.tar");
+    const int displayPercent = int((written * 100U) / static_cast<size_t>(contentLength));
+    const int displayBucket = displayPercent / 5;
+    if (displayBucket != lastDisplayProgressBucket || written == static_cast<size_t>(contentLength)) {
+      lastDisplayProgressBucket = displayBucket;
+      writeDisplayProgressScreen("Web files",
+                                 "Downloading bundle",
+                                 written,
+                                 static_cast<size_t>(contentLength),
+                                 "webui-package.tar");
+    }
   }
 
   targetFile.close();

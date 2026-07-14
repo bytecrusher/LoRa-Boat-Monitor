@@ -12,6 +12,10 @@ void registerApiRoutes() {
     json["firmwareVersion"] = String(actconf.fversion);
     json["uptimeMs"] = millis();
     json["freeHeap"] = ESP.getFreeHeap();
+    json["resetReason"] = static_cast<int>(esp_reset_reason());
+    json["webInstallCheckpoint"] = getWebBundleInstallCheckpoint();
+    json["webInstallFreeHeap"] = getWebBundleInstallFreeHeap();
+    json["webInstallStackWords"] = getWebBundleInstallStackWords();
     json["wifiConnected"] = WiFi.status() == WL_CONNECTED;
     json["ip"] = WiFi.localIP().toString();
     json["standbyInputPin"] = alarmPin;

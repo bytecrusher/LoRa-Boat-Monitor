@@ -2,6 +2,8 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <mbedtls/sha256.h>
+#include <memory>
+#include <new>
 #include "func_webclient.h"
 #include "updateRuntimeState.h"
 
@@ -96,14 +98,74 @@ bool singleFileUploadFinished = false;
 bool singleFileUploadSucceeded = false;
 String singleFileUploadMessage;
 TaskHandle_t webFilesDownloadTaskHandle = nullptr;
+TaskHandle_t webBundleInstallTaskHandle = nullptr;
 TaskHandle_t mdsTestTaskHandle = nullptr;
 TaskHandle_t otaDiagnosticsTaskHandle = nullptr;
 TaskHandle_t otaMetadataTaskHandle = nullptr;
 configData mdsTestConfig;
 String otaMetadataTaskChannel;
+String cachedStoredWebFilesVersion;
+String cachedStoredWebFilesChannel;
 unsigned long localOtaLastActivityMillis = 0;
 bool localOtaUpdateWriterActive = false;
 constexpr unsigned long LOCAL_OTA_STALL_TIMEOUT_MS = 30000UL;
+RTC_DATA_ATTR uint32_t webBundleInstallCheckpoint = 0;
+RTC_DATA_ATTR uint32_t webBundleInstallFreeHeap = 0;
+RTC_DATA_ATTR uint32_t webBundleInstallStackWords = 0;
+
+void noteWebBundleInstallCheckpoint(uint32_t checkpoint) {
+  webBundleInstallCheckpoint = checkpoint;
+  webBundleInstallFreeHeap = ESP.getFreeHeap();
+  webBundleInstallStackWords = uxTaskGetStackHighWaterMark(nullptr);
+}
+
+void webBundleInstallTask(void *parameter) {
+  (void)parameter;
+  String installedVersion;
+  String errorMessage;
+
+  localOtaLastActivityMillis = millis();
+  updateOtaProgress("install-web-package", 0, 1, "Installing web package in background...");
+  const bool success = installWebBundleFromTar(WEB_BUNDLE_UPLOAD_PATH, installedVersion, errorMessage);
+  LittleFS.remove(WEB_BUNDLE_UPLOAD_PATH);
+
+  localOtaInProgress = false;
+  localOtaLastActivityMillis = 0;
+  if (success) {
+    const String successMessage = "Web package installed successfully. Stored web file version: " + getStoredWebFilesVersion() + ".";
+    finishOtaProgress(true, successMessage);
+  } else {
+    const String failureMessage = errorMessage.length() > 0 ? errorMessage : "Web package installation failed.";
+    DebugPrintln(1, failureMessage);
+    finishOtaProgress(false, failureMessage);
+  }
+
+  releaseMaintenanceOperation(MaintenanceOperation::WebBundle);
+  webBundleInstallTaskHandle = nullptr;
+  vTaskDelete(nullptr);
+}
+
+bool queueWebBundleInstallTask(String &errorMessage) {
+  if (webBundleInstallTaskHandle != nullptr) {
+    errorMessage = "A web package installation is already running.";
+    return false;
+  }
+
+  const BaseType_t created = xTaskCreate(
+    webBundleInstallTask,
+    "webBundleInstall",
+    16384,
+    nullptr,
+    1,
+    &webBundleInstallTaskHandle
+  );
+  if (created != pdPASS) {
+    webBundleInstallTaskHandle = nullptr;
+    errorMessage = "Could not start web package installation task.";
+    return false;
+  }
+  return true;
+}
 
 void mdsTestTask(void *parameter) {
   (void)parameter;
@@ -551,6 +613,7 @@ String channelDisplayLabel(const String &channel) {
 
 bool installWebBundleFromTarInternal(const String &bundlePath, String &installedVersion, String &errorMessage) {
   DebugPrintln(3, "Installing local web package from TAR");
+  noteWebBundleInstallCheckpoint(10);
   cleanupStaleWebBundleArtifactsInternal(bundlePath);
   File bundleFile = LittleFS.open(bundlePath, FILE_READ);
   if (!bundleFile) {
@@ -558,12 +621,30 @@ bool installWebBundleFromTarInternal(const String &bundlePath, String &installed
     return false;
   }
 
-  PendingWebBundleFile pendingFiles[MAX_WEB_BUNDLE_FILE_COUNT];
+  const size_t availableBytes = LittleFS.totalBytes() - LittleFS.usedBytes();
+  const size_t requiredWorkingBytes = bundleFile.size() + 65536U;
+  if (availableBytes < requiredWorkingBytes) {
+    errorMessage = "Not enough free LittleFS space to install web package safely.";
+    bundleFile.close();
+    return false;
+  }
+
+  std::unique_ptr<PendingWebBundleFile[]> pendingStorage(
+    new (std::nothrow) PendingWebBundleFile[MAX_WEB_BUNDLE_FILE_COUNT]
+  );
+  if (!pendingStorage) {
+    errorMessage = "Not enough heap for web package installation metadata.";
+    bundleFile.close();
+    return false;
+  }
+  PendingWebBundleFile *pendingFiles = pendingStorage.get();
+  noteWebBundleInstallCheckpoint(20);
   size_t pendingCount = 0;
   installedVersion = "";
   uint8_t header[512];
   uint8_t buffer[512];
   bool foundSupportedFile = false;
+  const size_t bundleSize = bundleFile.size();
 
   while (true) {
     if (!readFileExactly(bundleFile, header, sizeof(header))) {
@@ -656,6 +737,7 @@ bool installWebBundleFromTarInternal(const String &bundlePath, String &installed
       }
 
       size_t remaining = fileSize;
+      size_t bytesSinceYield = 0;
       while (remaining > 0) {
         const size_t chunk = remaining > sizeof(buffer) ? sizeof(buffer) : remaining;
         if (bundleFile.read(buffer, chunk) != chunk) {
@@ -680,6 +762,14 @@ bool installWebBundleFromTarInternal(const String &bundlePath, String &installed
           }
         }
         remaining -= chunk;
+        bytesSinceYield += chunk;
+        localOtaLastActivityMillis = millis();
+        if (bytesSinceYield >= 4096U) {
+          bytesSinceYield = 0;
+          updateOtaProgress("install-web-package", bundleFile.position(), bundleSize,
+                            "Extracting " + fileName + "...");
+          vTaskDelay(1);
+        }
       }
       outputFile.close();
 
@@ -691,6 +781,10 @@ bool installWebBundleFromTarInternal(const String &bundlePath, String &installed
       pendingFiles[pendingCount].tempPath = tempPath;
       pendingFiles[pendingCount].targetPath = targetPath;
       pendingCount++;
+      noteWebBundleInstallCheckpoint(100 + pendingCount);
+      updateOtaProgress("install-web-package", bundleFile.position(), bundleSize,
+                        "Prepared " + fileName + ".");
+      vTaskDelay(1);
     }
 
     const size_t padding = (512 - (fileSize % 512)) % 512;
@@ -703,6 +797,7 @@ bool installWebBundleFromTarInternal(const String &bundlePath, String &installed
   }
 
   bundleFile.close();
+  noteWebBundleInstallCheckpoint(200);
 
   if (!foundSupportedFile || pendingCount == 0) {
     errorMessage = "Web package contains no supported web interface files.";
@@ -759,8 +854,11 @@ bool installWebBundleFromTarInternal(const String &bundlePath, String &installed
     pendingFiles[i].backupPath = pendingFiles[i].targetPath + ".rollback";
     pendingFiles[i].hadOriginal = LittleFS.exists(pendingFiles[i].targetPath);
     installJournal.println(String(pendingFiles[i].hadOriginal ? "1|" : "0|") + pendingFiles[i].targetPath);
+    localOtaLastActivityMillis = millis();
+    vTaskDelay(1);
   }
   installJournal.close();
+  noteWebBundleInstallCheckpoint(300);
 
   // Move existing files aside first. If any later rename fails, restore the
   // complete previous set instead of leaving a partially updated interface.
@@ -779,6 +877,9 @@ bool installWebBundleFromTarInternal(const String &bundlePath, String &installed
         return false;
       }
     }
+    localOtaLastActivityMillis = millis();
+    noteWebBundleInstallCheckpoint(400 + i);
+    vTaskDelay(1);
   }
 
   size_t installedCount = 0;
@@ -787,6 +888,11 @@ bool installWebBundleFromTarInternal(const String &bundlePath, String &installed
       errorMessage = "Failed to install extracted web package files; previous files restored.";
       break;
     }
+    localOtaLastActivityMillis = millis();
+    noteWebBundleInstallCheckpoint(500 + installedCount);
+    updateOtaProgress("install-web-package", installedCount + 1, pendingCount,
+                      "Installing web interface files...");
+    vTaskDelay(1);
   }
   if (installedCount != pendingCount) {
     for (size_t i = 0; i < installedCount; ++i) {
@@ -813,6 +919,7 @@ bool installWebBundleFromTarInternal(const String &bundlePath, String &installed
     LittleFS.remove(WEB_BUNDLE_JOURNAL_PATH);
     return false;
   }
+  noteWebBundleInstallCheckpoint(600);
 
   const String storedVersion = getStoredWebFilesVersion();
   if (storedVersion != expectedVersionTag) {
@@ -827,6 +934,7 @@ bool installWebBundleFromTarInternal(const String &bundlePath, String &installed
     LittleFS.remove(WEB_BUNDLE_JOURNAL_PATH);
     return false;
   }
+  noteWebBundleInstallCheckpoint(700);
 
   // Removing the journal is the atomic commit point. Any reset before this
   // line restores the complete previous generation on the next boot.
@@ -835,10 +943,15 @@ bool installWebBundleFromTarInternal(const String &bundlePath, String &installed
     if (pendingFiles[i].hadOriginal) {
       LittleFS.remove(pendingFiles[i].backupPath);
     }
+    vTaskDelay(1);
   }
 
   DebugPrintln(3, "Local web package installed successfully. Stored version: " + storedVersion);
   cleanupStaleWebBundleArtifactsInternal();
+  cachedStoredWebFilesVersion = packageVersion;
+  cachedStoredWebFilesChannel = packageChannel;
+  noteWebBundleInstallCheckpoint(800);
+  webBundleInstallCheckpoint = 0;
 
   return true;
 }
@@ -2642,27 +2755,18 @@ void registerMaintenanceRoutes() {
                         request->_tempFile.close();
                       }
 
-                      updateOtaProgress("install-web-package", request->contentLength(), request->contentLength(), "Installing web package...");
-                      String installedVersion;
-                      String errorMessage;
-                      const bool success = installWebBundleFromTar(WEB_BUNDLE_UPLOAD_PATH, installedVersion, errorMessage);
-                      LittleFS.remove(WEB_BUNDLE_UPLOAD_PATH);
-
-                      if (!success) {
+                      updateOtaProgress("install-web-package", 0, 1, "Queuing web package installation...");
+                      String queueError;
+                      if (!queueWebBundleInstallTask(queueError)) {
+                        LittleFS.remove(WEB_BUNDLE_UPLOAD_PATH);
                         localOtaInProgress = false;
                         localOtaLastActivityMillis = 0;
-                        finishOtaProgress(false, errorMessage.length() ? errorMessage : "Web package installation failed.");
-                        setWebBundleUploadResult(500, "error", errorMessage.length() ? errorMessage : "Web package installation failed.", false);
+                        finishOtaProgress(false, queueError);
+                        setWebBundleUploadResult(500, "error", queueError, false);
                         releaseMaintenanceOperation(MaintenanceOperation::WebBundle);
                         return;
                       }
-
-                      localOtaInProgress = false;
-                      localOtaLastActivityMillis = 0;
-                      const String successMessage = "Web package installed successfully. Stored web file version: " + getStoredWebFilesVersion() + ".";
-                      finishOtaProgress(true, successMessage);
-                      setWebBundleUploadResult(200, "ok", successMessage, true);
-                      releaseMaintenanceOperation(MaintenanceOperation::WebBundle);
+                      setWebBundleUploadResult(202, "queued", "Web package uploaded. Installation is running in background.", false);
                     }
                   }
   );
@@ -3010,6 +3114,11 @@ String buildUpdateFilesProgressJson() {
   JsonDocument json;
   const WebFilesUpdateSnapshot state = getWebFilesUpdateSnapshot();
   const bool busy = runDownloadingFilesStatus || runDownloadingFiles;
+  const MaintenanceOperation maintenance = getMaintenanceOperation();
+  const bool filesystemWriteActive = busy ||
+    maintenance == MaintenanceOperation::WebBundle ||
+    maintenance == MaintenanceOperation::FormatFilesystem ||
+    maintenance == MaintenanceOperation::SingleFileUpload;
   const bool sourceConfigured = getConfiguredFirmwareBaseUrl().length() > 0;
   const bool retrying = runDownloadingFiles && !runDownloadingFilesStatus && state.retryCount > 0;
 
@@ -3027,9 +3136,15 @@ String buildUpdateFilesProgressJson() {
     json["firmwareChannelLabel"] = getFirmwareReleaseLabel();
     json["standbyAutoUpdate"] = String(actconf.standbyAutoUpdate);
     json["standbyAutoUpdateIntervalHours"] = actconf.standbyAutoUpdateIntervalHours;
-  json["storedWebFilesVersion"] = getStoredWebFilesVersionOnly();
-  json["storedWebFilesChannel"] = getStoredWebFilesChannel();
-  json["upToDate"] = sourceConfigured ? areWebFilesCurrent(actconf.fversion, getFirmwareReleaseChannel().c_str()) : false;
+  if (!filesystemWriteActive) {
+    cachedStoredWebFilesVersion = getStoredWebFilesVersionOnly();
+    cachedStoredWebFilesChannel = getStoredWebFilesChannel();
+  }
+  json["storedWebFilesVersion"] = cachedStoredWebFilesVersion;
+  json["storedWebFilesChannel"] = cachedStoredWebFilesChannel;
+  json["upToDate"] = sourceConfigured && !filesystemWriteActive
+    ? areWebFilesCurrent(actconf.fversion, getFirmwareReleaseChannel().c_str())
+    : false;
   json["completed"] = state.completed;
   json["total"] = state.total;
   json["currentFile"] = state.currentName;
@@ -3045,6 +3160,18 @@ String buildUpdateFilesProgressJson() {
   serializeJson(json, response);
   return response;
 }
+}
+
+uint32_t getWebBundleInstallCheckpoint() {
+  return webBundleInstallCheckpoint;
+}
+
+uint32_t getWebBundleInstallFreeHeap() {
+  return webBundleInstallFreeHeap;
+}
+
+uint32_t getWebBundleInstallStackWords() {
+  return webBundleInstallStackWords;
 }
 
 void flushPendingRemoteOtaStatus() {

@@ -28,6 +28,9 @@ constexpr char CONFIG_BACKUP_PATH[] = "/config-backup.bin";
 constexpr char WEB_FILES_VERSION_PATH[] = "/webfiles-version.txt";
 StaticSemaphore_t configStorageMutexBuffer;
 SemaphoreHandle_t configStorageMutex = nullptr;
+StaticSemaphore_t displayMutexBuffer;
+SemaphoreHandle_t displayMutex = nullptr;
+portMUX_TYPE displayMutexInitMux = portMUX_INITIALIZER_UNLOCKED;
 
 class ConfigStorageGuard {
 public:
@@ -40,6 +43,19 @@ public:
 
   ~ConfigStorageGuard() {
     if (locked) xSemaphoreGive(configStorageMutex);
+  }
+
+  bool acquired() const { return locked; }
+
+private:
+  bool locked = false;
+};
+
+class DisplayGuard {
+public:
+  explicit DisplayGuard(uint32_t timeoutMs = UINT32_MAX) : locked(lockDisplay(timeoutMs)) {}
+  ~DisplayGuard() {
+    if (locked) unlockDisplay();
   }
 
   bool acquired() const { return locked; }
@@ -1357,6 +1373,9 @@ void readValues(configData myactconf) {
 
 // Display sensor values on OLED
 void writeDisplay() {
+  DisplayGuard displayGuard;
+  if (!displayGuard.acquired()) return;
+
   // Formating display data
   char cnt[10] = "";
   //dtostrf(int(counter16), 5, 0, cnt);
@@ -1427,6 +1446,9 @@ void writeDisplay() {
 
 // Display sensor values on OLED
 void writeDisplayValues(configData myactconf) {
+  DisplayGuard displayGuard;
+  if (!displayGuard.acquired()) return;
+
   //WebSerial.println("Update Display.");
   // Formating display data
   char cnt[10] = "";
@@ -1568,6 +1590,26 @@ void resetDisplayProgressCache() {
 }
 }
 
+bool lockDisplay(uint32_t timeoutMs) {
+  if (displayMutex == nullptr) {
+    taskENTER_CRITICAL(&displayMutexInitMux);
+    if (displayMutex == nullptr) {
+      displayMutex = xSemaphoreCreateRecursiveMutexStatic(&displayMutexBuffer);
+    }
+    taskEXIT_CRITICAL(&displayMutexInitMux);
+  }
+
+  if (displayMutex == nullptr) return false;
+  const TickType_t timeoutTicks = timeoutMs == UINT32_MAX ? portMAX_DELAY : pdMS_TO_TICKS(timeoutMs);
+  return xSemaphoreTakeRecursive(displayMutex, timeoutTicks) == pdTRUE;
+}
+
+void unlockDisplay() {
+  if (displayMutex != nullptr) {
+    xSemaphoreGiveRecursive(displayMutex);
+  }
+}
+
 void writeDisplayStatusScreen(const String &title,
                              const String &line1,
                              const String &line2,
@@ -1576,6 +1618,9 @@ void writeDisplayStatusScreen(const String &title,
                              const String &line5,
                              const String &line6,
                              const String &line7) {
+  DisplayGuard displayGuard;
+  if (!displayGuard.acquired()) return;
+
   const String lines[] = {
     fitDisplayLine(title),
     fitDisplayLine(line1),
@@ -1617,6 +1662,9 @@ void writeDisplayProgressScreen(const String &title,
                                size_t total,
                                const String &detail,
                                const String &footer) {
+  DisplayGuard displayGuard;
+  if (!displayGuard.acquired()) return;
+
   String percentLine = "Progress";
   String countLine = "";
   int percent = -1;
