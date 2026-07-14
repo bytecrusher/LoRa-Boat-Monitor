@@ -64,6 +64,8 @@ private:
   bool locked = false;
 };
 
+void renderDisplayLines(const String (&lines)[8], bool forceAll = false);
+
 int configHeaderStart() {
   return cfgStart - int(sizeof(ConfigStorageHeader));
 }
@@ -1376,6 +1378,8 @@ void writeDisplay() {
   DisplayGuard displayGuard;
   if (!displayGuard.acquired()) return;
 
+  if (isDisplayProgressModeActive()) return;
+
   // Formating display data
   char cnt[10] = "";
   //dtostrf(int(counter16), 5, 0, cnt);
@@ -1407,117 +1411,28 @@ void writeDisplay() {
   char rel[10];
   dtostrf(int(actconf.relay), 5, 0, rel);
   
-  // Refresh OLED data
-  u8x8.setFont(u8x8_font_chroma48medium8_r);
-  u8x8.drawString(0,0,"LoRa Monitor");
-  //u8x8.drawString(0,0,"NoWa(C)OBP");
-  //u8x8.drawString(11,0,actconf.fversion);
-  u8x8.drawString(0,1,"C:");
-  u8x8.drawString(2,1,cnt);
-  u8x8.drawString(0,2,"T:");
-  u8x8.drawString(2,2,tmp);
-  u8x8.drawString(0,3,"P:");
-  u8x8.drawString(2,3,pres);
-  u8x8.drawString(0,4,"H:");
-  u8x8.drawString(2,4,hum);
-  u8x8.drawString(0,5,"D:");
-  u8x8.drawString(2,5, dew);
-  u8x8.drawString(8,1,"dT:");
-  u8x8.drawString(11,1, dt);
-  u8x8.drawString(15,1, "s");
-  u8x8.drawString(9,2,"V:");
-  u8x8.drawString(11,2, vol);
-  u8x8.drawString(8,3,"T2:");
-  u8x8.drawString(11,3, tmp2);
-  u8x8.drawString(8,4,"Y:");
-  u8x8.drawString(10,4, lat);
-  u8x8.drawString(8,5,"X:");
-  u8x8.drawString(10,5, lon);
-  u8x8.drawString(0,6,"L:");
-  u8x8.drawString(2,6, tnk1);
-  u8x8.drawString(8,6,"L2:");
-  u8x8.drawString(11,6, tnk2);
-  u8x8.drawString(0,7,"A:");
-  u8x8.drawString(2,7, alm);
-  u8x8.drawString(8,7,"R:");
-  u8x8.drawString(11,7, rel);
-  u8x8.refreshDisplay();    // Only required for SSD1606/7 
+  const String lines[8] = {
+    "LoRa Monitor",
+    "C:" + String(cnt) + " dT:" + String(dt) + "s",
+    "T:" + String(tmp) + " V:" + String(vol),
+    "P:" + String(pres) + " T2:" + String(tmp2),
+    "H:" + String(hum) + " Y:" + String(lat),
+    "D:" + String(dew) + " X:" + String(lon),
+    "L:" + String(tnk1) + " L2:" + String(tnk2),
+    "A:" + String(alm) + " R:" + String(rel)
+  };
+  renderDisplayLines(lines);
 }
 
 // Display sensor values on OLED
 void writeDisplayValues(configData myactconf) {
-  DisplayGuard displayGuard;
-  if (!displayGuard.acquired()) return;
-
-  //WebSerial.println("Update Display.");
-  // Formating display data
-  char cnt[10] = "";
-  //dtostrf(int(counter16), 5, 0, cnt);
-  //dtostrf(int(LMIC.seqnoUp), 5, 0, cnt);
-  char tmp[10];      
-  dtostrf(temperature, 5, 1, tmp);
-  char pres[10];
-  dtostrf(pressure, 5, 0, pres);
-  char hum[10];
-  dtostrf(humidity, 5, 1, hum);
-  char dew[10];
-  dtostrf(dewp, 5, 1, dew);
-  char dt[10];
-  dtostrf(float(TX_INTERVAL), 4, 0, dt);
-  char vol[10];
-  dtostrf(voltage, 5, 1, vol);
-  char tmp2[10];
-  dtostrf(temp1wire, 5, 1, tmp2);
-  char lat[10];
-  dtostrf(latitude, 5, 3, lat);
-  char lon[10];
-  dtostrf(longitude, 6, 4, lon);
-  char tnk1[10];
-  dtostrf(tank1p, 5, 1, tnk1);
-  char tnk2[10];
-  dtostrf(tank2p, 5, 1, tnk2);
-  char alm[10];
-  dtostrf(int(alarm1), 5, 0, alm);
-  char rel[10];
-  dtostrf(int(myactconf.relay), 5, 0, rel);
-  
-  // Refresh OLED data
-  //u8x8.setFont(u8x8_font_chroma48medium8_r);
-  //u8x8.drawString(0,0,"NoWa(C)OBP");
-  //u8x8.drawString(11,0,actconf.fversion);
-  //u8x8.drawString(0,1,"C:");
-  u8x8.drawString(2,1,cnt);
-  //u8x8.drawString(0,2,"T:");
-  u8x8.drawString(2,2,tmp);
-  //u8x8.drawString(0,3,"P:");
-  u8x8.drawString(2,3,pres);
-  //u8x8.drawString(0,4,"H:");
-  u8x8.drawString(2,4,hum);
-  //u8x8.drawString(0,5,"D:");
-  u8x8.drawString(2,5, dew);
-  //u8x8.drawString(8,1,"dT:");
-  u8x8.drawString(11,1, dt);
-  //u8x8.drawString(15,1, "s");
-  //u8x8.drawString(9,2,"V:");
-  u8x8.drawString(11,2, vol);
-  //u8x8.drawString(8,3,"T2:");
-  u8x8.drawString(11,3, tmp2);
-  //u8x8.drawString(8,4,"Y:");
-  u8x8.drawString(10,4, lat);
-  //u8x8.drawString(8,5,"X:");
-  u8x8.drawString(10,5, lon);
-  //u8x8.drawString(0,6,"L:");
-  u8x8.drawString(2,6, tnk1);
-  //u8x8.drawString(8,6,"L2:");
-  u8x8.drawString(11,6, tnk2);
-  //u8x8.drawString(0,7,"A:");
-  u8x8.drawString(2,7, alm);
-  //u8x8.drawString(8,7,"R:");
-  u8x8.drawString(11,7, rel);
-  u8x8.refreshDisplay();    // Only required for SSD1606/7
+  (void)myactconf;
+  writeDisplay();
 }
 
 void writeDisplayByMode(configData myactconf) {
+  if (isDisplayProgressModeActive()) return;
+
   if (String(myactconf.OledDisplayMode) == "Status") {
     const String wifiState = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "not connected";
     const String mdsState = String(myactconf.SendDataViaWifi) == "Yes" ? "MDS enabled" : "MDS disabled";
@@ -1573,6 +1488,9 @@ String fitDisplayLine(const String &value) {
 }
 
 String lastDisplayLines[8];
+bool displayLineCacheValid = false;
+bool displayProgressModeActive = false;
+unsigned long displayProgressHoldUntilMillis = 0;
 unsigned long lastDisplayProgressRefreshMillis = 0;
 int lastDisplayProgressPercent = -1;
 String lastDisplayProgressTitle = "";
@@ -1587,6 +1505,41 @@ void resetDisplayProgressCache() {
   lastDisplayProgressMessage = "";
   lastDisplayProgressDetail = "";
   lastDisplayProgressFooter = "";
+}
+
+void renderDisplayLines(const String (&rawLines)[8], bool forceAll) {
+  u8x8.setPowerSave(0);
+  u8x8.setFont(u8x8_font_chroma48medium8_r);
+
+  for (uint8_t index = 0; index < 8; index++) {
+    const String line = fitDisplayLine(rawLines[index]);
+    if (!forceAll && displayLineCacheValid && lastDisplayLines[index] == line) {
+      continue;
+    }
+
+    char paddedLine[17];
+    memset(paddedLine, ' ', 16);
+    paddedLine[16] = '\0';
+    line.toCharArray(paddedLine, min(size_t(17), line.length() + 1));
+    for (size_t position = line.length(); position < 16; position++) {
+      paddedLine[position] = ' ';
+    }
+    u8x8.drawString(0, index, paddedLine);
+    lastDisplayLines[index] = line;
+  }
+
+  displayLineCacheValid = true;
+}
+
+String buildDisplayProgressBar(int percent) {
+  const int boundedPercent = constrain(percent, 0, 100);
+  const int filledTiles = (boundedPercent * 14 + 99) / 100;
+  String bar = "[";
+  for (int tile = 0; tile < 14; tile++) {
+    bar += tile < filledTiles ? '#' : '-';
+  }
+  bar += ']';
+  return bar;
 }
 }
 
@@ -1608,6 +1561,22 @@ void unlockDisplay() {
   if (displayMutex != nullptr) {
     xSemaphoreGiveRecursive(displayMutex);
   }
+}
+
+bool isDisplayProgressModeActive() {
+  if (displayProgressModeActive) return true;
+  if (displayProgressHoldUntilMillis == 0) return false;
+  if (static_cast<int32_t>(displayProgressHoldUntilMillis - millis()) > 0) return true;
+  displayProgressHoldUntilMillis = 0;
+  return false;
+}
+
+void finishDisplayProgressMode(uint32_t holdMillis) {
+  DisplayGuard displayGuard;
+  if (!displayGuard.acquired()) return;
+  displayProgressModeActive = false;
+  displayProgressHoldUntilMillis = holdMillis > 0 ? millis() + holdMillis : 0;
+  resetDisplayProgressCache();
 }
 
 void writeDisplayStatusScreen(const String &title,
@@ -1632,28 +1601,7 @@ void writeDisplayStatusScreen(const String &title,
     fitDisplayLine(line7)
   };
 
-  bool displayChanged = false;
-  for (uint8_t index = 0; index < 8; index++) {
-    if (lastDisplayLines[index] != lines[index]) {
-      displayChanged = true;
-      break;
-    }
-  }
-
-  if (!displayChanged) {
-    return;
-  }
-
-  u8x8.setPowerSave(0);
-  u8x8.clearDisplay();
-  u8x8.setFont(u8x8_font_chroma48medium8_r);
-  for (uint8_t index = 0; index < 8; index++) {
-    if (lines[index].length() > 0) {
-      u8x8.drawString(0, index, lines[index].c_str());
-    }
-    lastDisplayLines[index] = lines[index];
-  }
-  u8x8.refreshDisplay();
+  renderDisplayLines(lines);
 }
 
 void writeDisplayProgressScreen(const String &title,
@@ -1664,6 +1612,9 @@ void writeDisplayProgressScreen(const String &title,
                                const String &footer) {
   DisplayGuard displayGuard;
   if (!displayGuard.acquired()) return;
+
+  displayProgressModeActive = true;
+  displayProgressHoldUntilMillis = 0;
 
   String percentLine = "Progress";
   String countLine = "";
@@ -1686,8 +1637,8 @@ void writeDisplayProgressScreen(const String &title,
                               normalizedDetail != lastDisplayProgressDetail ||
                               normalizedFooter != lastDisplayProgressFooter;
   const bool percentChanged = percent != lastDisplayProgressPercent;
-  const int previousBucket = lastDisplayProgressPercent >= 0 ? (lastDisplayProgressPercent / 20) : -1;
-  const int currentBucket = percent >= 0 ? (percent / 20) : -1;
+  const int previousBucket = lastDisplayProgressPercent >= 0 ? (lastDisplayProgressPercent / 5) : -1;
+  const int currentBucket = percent >= 0 ? (percent / 5) : -1;
   const bool refreshWindowElapsed = now - lastDisplayProgressRefreshMillis >= 1500;
   const bool shouldRefresh = (contentChanged && refreshWindowElapsed) ||
                              (percent >= 0 && (percent == 0 || percent == 100 || (percentChanged && currentBucket != previousBucket))) ||
@@ -1704,12 +1655,17 @@ void writeDisplayProgressScreen(const String &title,
   lastDisplayProgressPercent = percent;
   lastDisplayProgressRefreshMillis = now;
 
-  writeDisplayStatusScreen(title,
-                           normalizedMessage,
-                           countLine,
-                           percentLine,
-                           normalizedDetail,
-                           normalizedFooter);
+  const String progressLines[8] = {
+    normalizedTitle,
+    normalizedMessage,
+    normalizedDetail,
+    "",
+    percent >= 0 ? buildDisplayProgressBar(percent) : "[--------------]",
+    percentLine,
+    countLine,
+    normalizedFooter
+  };
+  renderDisplayLines(progressLines);
 }
 
 // Parse a bounded amount of GPS input without blocking LoRa or web tasks.

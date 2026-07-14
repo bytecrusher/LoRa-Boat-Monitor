@@ -492,17 +492,21 @@ void webFilesDownloadTask(void *parameter) {
 
   bool success = false;
   if (WiFi.status() != WL_CONNECTED) {
-    setWebFilesUpdateError(true, "No WiFi connection available for web files download.");
+    const String message = "No WiFi connection available for web files download.";
+    setWebFilesUpdateError(true, message);
+    finishOtaProgress(false, message);
   } else {
     success = DownloadFilesFromWeb();
     if (success) {
-      setWebFilesUpdateError(false, "Web files updated successfully.");
+      const String message = "Web files updated successfully.";
+      setWebFilesUpdateError(false, message);
       setWebFilesUpdateRetryCount(0);
-      writeDisplayStatusScreen("Web files", "Update complete", String(actconf.fversion));
+      finishOtaProgress(true, message);
     } else {
       const WebFilesUpdateSnapshot state = getWebFilesUpdateSnapshot();
-      setWebFilesUpdateError(true, state.message.length() == 0 ? "Web files download failed." : state.message);
-      writeDisplayStatusScreen("Web files", "Download failed", "Retry manual");
+      const String message = state.message.length() == 0 ? "Web files download failed." : state.message;
+      setWebFilesUpdateError(true, message);
+      finishOtaProgress(false, message);
     }
   }
 
@@ -3081,6 +3085,9 @@ void updateOtaProgress(const String &phase, size_t currentBytes, size_t totalByt
 
 void finishOtaProgress(bool success, const String &message) {
   OtaProgressSnapshot state = getOtaProgressSnapshot();
+  const bool webPackageUpdate = state.phase.indexOf("web-package") >= 0;
+  const bool rebootPending = !webPackageUpdate &&
+    (state.phase.indexOf("firmware") >= 0 || state.phase.indexOf("filesystem") >= 0 || state.phase == "finalizing");
   state.active = false;
   state.success = success;
   if (state.total > 0) state.current = state.total;
@@ -3089,8 +3096,9 @@ void finishOtaProgress(bool success, const String &message) {
   setOtaProgressState(state);
   writeDisplayStatusScreen(success ? "Update complete" : "Update error",
                            message,
-                           state.total > 0 ? (String(state.total) + " bytes") : "",
-                           success ? "Reboot pending" : "See WebSerial");
+                           state.total > 0 ? (String(state.total) + (webPackageUpdate ? " files" : " bytes")) : "",
+                           success ? (rebootPending ? "Reboot pending" : "Ready") : "See WebSerial");
+  finishDisplayProgressMode(success ? 6000UL : 10000UL);
   logRemoteOtaStatusToMds(state.phase, state.current, state.total, message, true);
 }
 

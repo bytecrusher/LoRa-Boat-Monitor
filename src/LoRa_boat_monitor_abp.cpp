@@ -654,6 +654,7 @@ bool processStandbyAutoUpdate() {
                              success ? "Web files OK" : "Web files failed",
                              String(actconf.fversion),
                              success ? "Done" : "Retry later");
+    finishDisplayProgressMode(success ? 5000UL : 10000UL);
     return success;
   }
 
@@ -1825,6 +1826,7 @@ void state1(){
       }
     }
     runDownloadingFilesStatus = false;
+    finishDisplayProgressMode(webFilesCurrent ? 5000UL : 10000UL);
   }
 
   processPendingRemoteOta("Remote", false);

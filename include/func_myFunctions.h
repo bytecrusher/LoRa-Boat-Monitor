@@ -171,6 +171,8 @@ void writeDisplayValues(configData myactconf);
 void writeDisplayByMode(configData myactconf);
 bool lockDisplay(uint32_t timeoutMs = UINT32_MAX);
 void unlockDisplay();
+bool isDisplayProgressModeActive();
+void finishDisplayProgressMode(uint32_t holdMillis = 5000);
 void writeDisplayStatusScreen(const String &title,
                              const String &line1 = "",
                              const String &line2 = "",
