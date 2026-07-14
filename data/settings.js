@@ -22,6 +22,16 @@ function bindSettingsPageEvents() {
         toggleAllButton.addEventListener("click", ToggleAllSections);
     }
 
+    var jumpButtons = document.querySelectorAll(".settings-jump");
+    for (var j = 0; j < jumpButtons.length; j += 1) {
+        jumpButtons[j].addEventListener("click", function (event) {
+            var target = event.currentTarget.dataset.target;
+            if (target) {
+                openSettingsSection(target);
+            }
+        });
+    }
+
     var backButton = byId("backToOverviewButton");
     if (backButton) {
         backButton.addEventListener("click", function () {
@@ -62,6 +72,8 @@ function bindSettingsPageEvents() {
     if (settingsForm) {
         settingsForm.addEventListener("submit", saveSettings);
     }
+
+    bindWifiPrioritySwap(settingsForm);
 }
 
 function applySettingsSelections() {
@@ -83,6 +95,36 @@ function applySettingsSelections() {
     if (selections.crypt == 1) {
         byId("logoutBtn").style.display = "block";
     }
+}
+
+function bindWifiPrioritySwap(form) {
+    if (!form) return;
+
+    var fields = [form.corder1, form.corder2, form.corder3].filter(function (field) {
+        return !!field;
+    });
+
+    fields.forEach(function (field) {
+        field.dataset.previousValue = field.value;
+        field.addEventListener("change", function (event) {
+            var changedField = event.currentTarget;
+            var previousValue = changedField.dataset.previousValue || "0";
+            var newValue = changedField.value;
+
+            if (newValue !== "0") {
+                fields.forEach(function (otherField) {
+                    if (otherField === changedField || otherField.value !== newValue) {
+                        return;
+                    }
+
+                    otherField.value = previousValue;
+                    otherField.dataset.previousValue = previousValue;
+                });
+            }
+
+            changedField.dataset.previousValue = newValue;
+        });
+    });
 }
 
 function showPage() {
@@ -208,10 +250,44 @@ function settingsCsrfToken(form) {
     return csrfField ? csrfField.value : "";
 }
 
+function normalizeHttpsEndpoint(value) {
+    var normalized = String(value || "").trim();
+    if (!normalized) {
+        return "";
+    }
+
+    var queryIndex = normalized.indexOf("?");
+    if (queryIndex >= 0) {
+        normalized = normalized.slice(0, queryIndex);
+    }
+
+    while (normalized.endsWith("/")) {
+        normalized = normalized.slice(0, -1);
+    }
+
+    return normalized;
+}
+
+function isValidHttpsEndpoint(value) {
+    var normalized = normalizeHttpsEndpoint(value);
+    if (!normalized || !normalized.startsWith("https://")) {
+        return false;
+    }
+
+    return normalized.lastIndexOf("/") > 8;
+}
+
 async function saveSettings(event) {
     event.preventDefault();
 
     var form = event.currentTarget;
+    var otaField = form ? form.elements.mdsOtaUrl : null;
+    if (otaField && otaField.value.trim().length > 0 && !isValidHttpsEndpoint(otaField.value)) {
+        alert("The MDS OTA endpoint must be a valid https:// URL that points to the OTA script.");
+        otaField.focus();
+        return;
+    }
+
     var token = settingsCsrfToken(form);
     var formData = new FormData(form);
     if (token) {
@@ -292,6 +368,22 @@ function ToggleAllSections() {
     }
 }
 
+function openSettingsSection(targetId) {
+    var targetElement = byId(targetId);
+    if (!targetElement) {
+        return;
+    }
+
+    if (targetElement.style.display === "none" || targetElement.style.display === "") {
+        targetElement.style.display = "block";
+    }
+
+    var button = document.querySelector('.section-toggle[data-target="' + targetId + '"]');
+    if (button) {
+        button.value = "-";
+    }
+}
+
 function check_devaddr(iname) {
     var valuestring = "";
     if (iname == "devaddr") {
@@ -328,9 +420,10 @@ function check_ssid(iname) {
     if (iname == "cssid3") { valuestring = document.SetForm.cssid3.value; }
     if (iname == "sssid") { valuestring = document.SetForm.sssid.value; }
     var reguexp = /[^\x20-\x7E]/;
-    if (reguexp.exec(valuestring) || valuestring.length < 1 || valuestring.length > 30) {
+    var isClientSsid = iname == "cssid1" || iname == "cssid2" || iname == "cssid3";
+    if (reguexp.exec(valuestring) || (!isClientSsid && valuestring.length < 1) || valuestring.length > 30) {
         document.getElementById('sub').disabled = true;
-        alert('Error!\nUse only printable characters.\nSSID Length 1-30');
+        alert('Error!\nUse only printable characters.\nSSID length 1-30 for the hotspot, 0-30 for Wi-Fi clients.');
     }
     else {
         document.getElementById('sub').disabled = false;
@@ -386,9 +479,9 @@ function check_passwd(iname) {
 function check_mds_ota_url(iname) {
     var field = document.SetForm[iname];
     var value = field ? field.value.trim() : "";
-    if (value.length > 0 && !value.startsWith("https://")) {
+    if (value.length > 0 && !isValidHttpsEndpoint(value)) {
         document.getElementById('sub').disabled = true;
-        alert('Error!\nThe MDS OTA endpoint must start with https://');
+        alert('Error!\nThe MDS OTA endpoint must be a valid https:// URL that points to the OTA script.');
     }
     else {
         document.getElementById('sub').disabled = false;
@@ -541,20 +634,20 @@ async function restoreConfigBackup() {
     setBusyState("Restoring config backup...");
 
     try {
-        await request("/restoreconfigbackup", { method: "POST" });
+        var response = await request("/restoreconfigbackup", { method: "POST" });
+        if (!response.ok) {
+            var serverMessage = response.json && response.json.message
+                ? response.json.message
+                : response.text;
+            var statusMessage = response.status ? "HTTP " + response.status : "HTTP error";
+            throw new Error(serverMessage || "Restore failed (" + statusMessage + ").");
+        }
+
         setTimeout(function () {
             waitForDeviceAndRedirect("/settings.html", 45);
         }, 3000);
     } catch (error) {
         clearBusyState();
-        var message = "Restore failed.";
-        try {
-            var response = JSON.parse(error.text);
-            if (response.message) {
-                message = response.message;
-            }
-        } catch (e) {
-        }
-        alert(message);
+        alert(error && error.message ? error.message : "Restore failed.");
     }
 }

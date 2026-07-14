@@ -1,8 +1,18 @@
 var staticData = null;
-var tank1Gauge = null;
-var tank2Gauge = null;
+var BATTERY_MIN_VOLTAGE = 10.5;
+var BATTERY_NORMAL_VOLTAGE = 12.4;
+var BATTERY_MAX_VOLTAGE = 14.4;
 
-function tankPercentToGaugeValue(value, adcValue) {
+function clampNumber(value, min, max) {
+    var numberValue = parseFloat(value);
+    if (isNaN(numberValue)) {
+        numberValue = min;
+    }
+
+    return Math.max(min, Math.min(max, numberValue));
+}
+
+function resolveTankPercent(value, adcValue) {
     var percent = parseFloat(value);
     if (isNaN(percent)) {
         percent = 0;
@@ -19,12 +29,99 @@ function tankPercentToGaugeValue(value, adcValue) {
     return percent;
 }
 
-function updateGauge(gauge, value, adcValue) {
-    if (!gauge) {
+function updateTankCard(prefix, value, adcValue) {
+    var percent = resolveTankPercent(value, adcValue);
+    var card = document.getElementById(prefix + 'Card');
+    var instrument = document.getElementById(prefix + 'Instrument');
+    var needle = document.getElementById(prefix + 'Needle');
+    var gaugeValue = document.getElementById(prefix + 'GaugeValue');
+    var status = document.getElementById(prefix + 'Status');
+    var angle = -130 + (percent * 2.6);
+
+    if (instrument) {
+        instrument.style.setProperty('--tank-level', percent.toFixed(1));
+    }
+
+    if (needle) {
+        needle.style.transform = 'translateX(-50%) rotate(' + angle.toFixed(1) + 'deg)';
+    }
+
+    if (gaugeValue) {
+        gaugeValue.textContent = percent.toFixed(1) + '%';
+    }
+
+    if (!card || !status) {
         return;
     }
 
-    gauge.update({ value: tankPercentToGaugeValue(value, adcValue) });
+    card.classList.remove('tank-card--low', 'tank-card--empty', 'tank-card--ok');
+    if (percent <= 5) {
+        card.classList.add('tank-card--empty');
+        status.textContent = 'Empty';
+    } else if (percent < 20) {
+        card.classList.add('tank-card--low');
+        status.textContent = 'Low level';
+    } else {
+        card.classList.add('tank-card--ok');
+        status.textContent = 'Level OK';
+    }
+}
+
+function resolveBatteryGaugePercent(voltage, capacity) {
+    var capacityPercent = parseFloat(capacity);
+    if (!isNaN(capacityPercent) && capacityPercent >= 0) {
+        return Math.max(0, Math.min(100, capacityPercent));
+    }
+
+    var clampedVoltage = clampNumber(voltage, BATTERY_MIN_VOLTAGE, BATTERY_MAX_VOLTAGE);
+    return ((clampedVoltage - BATTERY_MIN_VOLTAGE) / (BATTERY_MAX_VOLTAGE - BATTERY_MIN_VOLTAGE)) * 100;
+}
+
+function updateBatteryGauge(voltage, capacity, rawAdc) {
+    var numericVoltage = parseFloat(voltage);
+    var percent = resolveBatteryGaugePercent(voltage, capacity);
+    var card = document.getElementById('batteryCard');
+    var needle = document.getElementById('batteryNeedle');
+    var voltageValue = document.getElementById('batteryGaugeVoltage');
+    var capacityValue = document.getElementById('batteryGaugeCapacity');
+    var rawValue = document.getElementById('batteryGaugeAdc');
+    var status = document.getElementById('batteryStatus');
+    var angle = -130 + (percent * 2.6);
+
+    if (needle) {
+        needle.style.transform = 'translateX(-50%) rotate(' + angle.toFixed(1) + 'deg)';
+    }
+
+    if (voltageValue) {
+        voltageValue.textContent = isNaN(numericVoltage) ? '-' : numericVoltage.toFixed(2);
+    }
+
+    if (capacityValue) {
+        capacityValue.textContent = percent.toFixed(0) + '%';
+    }
+
+    if (rawValue) {
+        rawValue.textContent = rawAdc || '0';
+    }
+
+    if (!card || !status) {
+        return;
+    }
+
+    card.classList.remove('battery-card--low', 'battery-card--warning', 'battery-card--ok', 'battery-card--charge');
+    if (!isNaN(numericVoltage) && numericVoltage > BATTERY_NORMAL_VOLTAGE + 0.4) {
+        card.classList.add('battery-card--charge');
+        status.textContent = 'Charging / high';
+    } else if (percent <= 15) {
+        card.classList.add('battery-card--low');
+        status.textContent = 'Battery low';
+    } else if (percent < 35) {
+        card.classList.add('battery-card--warning');
+        status.textContent = 'Watch battery';
+    } else {
+        card.classList.add('battery-card--ok');
+        status.textContent = 'Battery OK';
+    }
 }
 
 function updateSensorIndicators(myObj) {
@@ -82,58 +179,22 @@ function updateSensorPage(myObj) {
     setElementValue('standbyInputLevelDiag', myObj.Device.MeasuringValues.StandbyInputLevel.Value);
 
     updateSensorIndicators(myObj);
-    updateGauge(tank1Gauge, myObj.Device.MeasuringValues.Tank1.Value, myObj.Device.MeasuringValues.Tank1adc.Value);
-    updateGauge(tank2Gauge, myObj.Device.MeasuringValues.Tank2.Value, myObj.Device.MeasuringValues.Tank2adc.Value);
+    updateBatteryGauge(
+        myObj.Device.MeasuringValues.BatteryVoltage.Value,
+        myObj.Device.MeasuringValues.BatteryCapacity.Value,
+        myObj.Device.MeasuringValues.BatteryAdc.Value
+    );
+    updateTankCard('tank1', myObj.Device.MeasuringValues.Tank1.Value, myObj.Device.MeasuringValues.Tank1adc.Value);
+    updateTankCard('tank2', myObj.Device.MeasuringValues.Tank2.Value, myObj.Device.MeasuringValues.Tank2adc.Value);
 }
 
 function refreshSensorPage() {
     fetchJson('/data.json', updateSensorPage);
 }
 
-function createTankGauge(canvasId, title) {
-    return new RadialGauge({
-        renderTo: canvasId,
-        width: 300,
-        height: 300,
-        units: '%',
-        title: title,
-        minValue: 0,
-        startAngle: 90,
-        ticksAngle: 180,
-        valueBox: true,
-        valueInt: 3,
-        valueDec: 1,
-        maxValue: 100,
-        majorTicks: ['0', '50', '100'],
-        minorTicks: 2,
-        strokeTicks: true,
-        highlights: [
-            { from: 0, to: 20, color: 'rgba(200, 50, 50, .65)' },
-            { from: 20, to: 100, color: 'rgba(0, 128, 0, .28)' }
-        ],
-        colorPlate: '#fff',
-        borderShadowWidth: 0,
-        borders: false,
-        needleType: 'arrow',
-        needleWidth: 4,
-        needleCircleSize: 7,
-        needleCircleOuter: true,
-        needleCircleInner: false,
-        animationDuration: 500,
-        animationRule: 'linear'
-    }).draw();
-}
-
-function initGauges() {
-    tank1Gauge = createTankGauge('canvas-id', 'Tank 1');
-    tank2Gauge = createTankGauge('canvas-id2', 'Tank 2');
-}
-
 document.addEventListener('DOMContentLoaded', function () {
-    initGauges();
     fetchJson('/staticdata.json', function (myObj) {
         staticData = myObj;
     });
-    refreshSensorPage();
-    setInterval(refreshSensorPage, 1000);
+    startVisiblePolling(refreshSensorPage, 5000);
 });

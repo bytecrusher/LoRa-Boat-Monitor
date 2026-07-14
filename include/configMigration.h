@@ -1,0 +1,94 @@
+#pragma once
+
+#include <Arduino.h>
+
+#include "Configuration.h"
+
+struct LegacyConfigDataV16 {
+  int valid = 16;
+  int crypt = 1;
+  char username[31] = "admin";
+  char password[31] = "boatmonitor";
+  char devname[21] = "LoRa Boat Monitor";
+  char crights[29] = "NoWa (C) (mod by Gunni) 2023";
+  char fversion[7] = "V1.13m";
+  char license[12] = "GPL3";
+  int debug = 3;
+  int corder1 = 1;
+  char cssid1[31] = "";
+  char cpassword1[31] = "";
+  int corder2 = 2;
+  char cssid2[31] = "";
+  char cpassword2[31] = "";
+  int corder3 = 3;
+  char cssid3[31] = "";
+  char cpassword3[31] = "";
+  int timeout = 10;
+  char sssid[31] = "LoRaBoatMonitor";
+  char spassword[31] = "LoRaBoatMonitor";
+  int apchannel = 1;
+  int maxconnections = 2;
+  int mDNS = 1;
+  char hostname[31] = "boatmonitor";
+  int dataport = 6666;
+  int httpport = 80;
+  int serverMode = 0;
+  int serspeed = 115200;
+  int WebSerialDebug = 0;
+  char firmwareUpdateUrl[50] = "";
+  char autoFirmwareUpdate[8] = "No";
+  int skin = 0;
+  uint32_t devaddr = 0x00000000;
+  uint8_t nskey[16] = {0};
+  uint8_t appkey[16] = {0};
+  char lorafrequency[6] = "EU868";
+  int lchannel = 1;
+  int spreadf = 10;
+  int dynsf = 1;
+  unsigned int tinterval = 1;
+  uint32_t fcnt = 0;
+  int relay = 0;
+  int instrumentSize = 400;
+  int deviceID = 0;
+  int senddata = 1;
+  int sendubidots = 0;
+  float voffset = 6.47301;
+  float a1vslope = 0.02860676;
+  float a2vslope = 0;
+  int vaverage = 1;
+  float t1offset = 0;
+  float a1t1slope = 143.1974;
+  float a2t1slope = 0;
+  int t1average = 1;
+  float t2offset = 0;
+  float a1t2slope = 143.1974;
+  float a2t2slope = 0;
+  int t2average = 1;
+  char tempSensorType[10] = "Off";
+  char tempUnit[2] = "C";
+  char envSensor[20] = "Off";
+  char standbyMode[4] = "Off";
+  int standbySleepDuration = 15;
+  char loraOperationMode[8] = "Standby";
+  char WifiStandbyMode[8] = "No";
+  char SendDataViaWifi[8] = "No";
+  char MdsUrl[100] = "https://yourservername/ingest/receivejson.php";
+  char MdsApiKey[30] = "";
+  int MdsSensorIdBattery = 0;
+  int MdsSensorIdTanks = 0;
+  int MdsSensorIdStatus = 0;
+  int MdsSensorIdGps = 0;
+  int MdsSensorIdEnv = 0;
+  int MdsSensorIdDewpoint = 0;
+  int MdsSensorIdVedirect = 0;
+  int cssStyle = 0;
+  int OledDisplayRotation = 0;
+  char mdsOtaUrl[100] = "https://mds-git.derguntmar.de/ota/getupdate.php";
+  char mdsOtaSecret[65] = "";
+  char standbyFirmwareUpdateCheck[8] = "No";
+  int standbyFirmwareUpdateIntervalHours = 24;
+};
+
+configData migrateLegacyConfigV16ToCurrent(const LegacyConfigDataV16 &legacy);
+bool readLegacyConfigFromEeprom(LegacyConfigDataV16 &legacy);
+bool repairLegacyConfigV15(LegacyConfigDataV16 &legacy);

@@ -1,155 +1,94 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-    <title>LoRa Status - %devname%</title>
-    <link rel='stylesheet' type='text/css' href='/styles.css'>
-    <link rel='stylesheet' type='text/css' href='/common.css'>
-    <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
-    <meta name=viewport content='width=device-width, initial-scale=1'>
+  <title>LoRa Status - %devname%</title>
+  <link rel='stylesheet' type='text/css' href='/styles.css'>
+  <link rel='stylesheet' type='text/css' href='/common.css'>
+  <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1'>
+  <meta name='csrf-token' content='%csrfToken%'>
 </head>
 
-<body>
+<body class='lora-status-page'>
+  %header%
 
-    %header%
+  <div class='page-content'>
+    <section class='page-section'>
+      <div class='page-hero'>
+        <h2>LoRa Status <data class='blink' id='info'></data></h2>
+        <p class='muted-text'>Live LoRaWAN settings, transmission state and a controlled manual uplink test.</p>
+      </div>
+    </section>
 
-    <h3>LoRa Status <data class="blink" id='info'></data>
-    </h3>
-    <font size='4'>
-        <table class="data-table">
+    <section class='status-grid compact-status-grid'>
+      <article class='status-card'>
+        <span class='status-label'>Region</span>
+        <strong id='region'>-</strong>
+        <span class='muted-text'>Device address <span id='address'>-</span></span>
+      </article>
+      <article class='status-card'>
+        <span class='status-label'>Radio</span>
+        <strong>CH <span id='actualch'>-</span> / SF<span id='actualsf'>-</span></strong>
+        <span class='muted-text'>Configured uplink parameters</span>
+      </article>
+      <article class='status-card'>
+        <span class='status-label'>Schedule</span>
+        <strong><span id='tinterval'>-</span> min</strong>
+        <span class='muted-text'>Time slot <span id='slot'>-</span></span>
+      </article>
+      <article class='status-card'>
+        <span class='status-label'>Frame Counter</span>
+        <strong id='counter'>-</strong>
+        <span class='muted-text'>Next uplink uses the following counter</span>
+      </article>
+    </section>
 
-            <tr>
-                <td class="icon-cell">
-                    <div class='svg'>
-                        <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-access-point'
-                            width='30' height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
-                            stroke-linecap='round' stroke-linejoin='round'>
-                            <path stroke='none' d='M0 0h24v24H0z' fill='none' />
-                            <line x1='12' y1='12' x2='12' y2='12.01' />
-                            <path d='M14.828 9.172a4 4 0 0 1 0 5.656' />
-                            <path d='M17.657 6.343a8 8 0 0 1 0 11.314' />
-                            <path d='M9.168 14.828a4 4 0 0 1 0 -5.656' />
-                            <path d='M6.337 17.657a8 8 0 0 1 0 -11.314' />
-                        </svg>
-                    </div>
-                </td>
+    <section class='page-section lora-manual-panel'>
+      <div class='table-toolbar'>
+        <div>
+          <h3>Manual Uplink Test</h3>
+          <p class='muted-text'>Reads current sensor values and immediately queues one LoRaWAN packet. It does not change the configured send interval. An unconfirmed uplink only proves that the local radio cycle completed; verify reception in TTN Live Data.</p>
+        </div>
+        <button id='sendLoraNow' type='button'>Send LoRa Packet Now</button>
+      </div>
 
-                <td>Frequency Region:</td>
-                <td><data id='region'></data></td>
-                <td></td>
-            </tr>
-            <tr>
-                <td class="icon-cell">
-                    <div class='svg'>
-                        <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-medical-cross'
-                            width='30' height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
-                            stroke-linecap='round' stroke-linejoin='round'>
-                            <path stroke='none' d='M0 0h24v24H0z' fill='none' />
-                            <path
-                                d='M13 3a1 1 0 0 1 1 1v4.535l3.928 -2.267a1 1 0 0 1 1.366 .366l1 1.732a1 1 0 0 1 -.366 1.366l-3.927 2.268l3.927 2.269a1 1 0 0 1 .366 1.366l-1 1.732a1 1 0 0 1 -1.366 .366l-3.928 -2.269v4.536a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-4.536l-3.928 2.268a1 1 0 0 1 -1.366 -.366l-1 -1.732a1 1 0 0 1 .366 -1.366l3.927 -2.268l-3.927 -2.268a1 1 0 0 1 -.366 -1.366l1 -1.732a1 1 0 0 1 1.366 -.366l3.928 2.267v-4.535a1 1 0 0 1 1 -1h2z' />
-                        </svg>
-                    </div>
-                </td>
+      <div id='loraActionNotice' class='notice notice-info lora-inline-notice'>Ready for a manual LoRa uplink.</div>
 
-                <td>Device Address:</td>
-                <td><data id='address'></data></td>
-                <td></td>
-            </tr>
+      <div class='metric-grid compact-metrics lora-result-grid'>
+        <div class='metric-card'>
+          <span class='status-label'>State</span>
+          <strong id='manualLoraState'>Idle</strong>
+        </div>
+        <div class='metric-card'>
+          <span class='status-label'>LMIC</span>
+          <strong id='manualLoraPending'>Ready</strong>
+        </div>
+        <div class='metric-card'>
+          <span class='status-label'>Last Result</span>
+          <strong id='manualLoraResult'>No test yet</strong>
+        </div>
+      </div>
+    </section>
 
-            <tr>
-                <td class="icon-cell">
-                    <div class='svg'>
-                        <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-square-x' width='30'
-                            height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
-                            stroke-linecap='round' stroke-linejoin='round'>
-                            <path stroke='none' d='M0 0h24v24H0z' fill='none' />
-                            <rect x='4' y='4' width='16' height='16' rx='2' />
-                            <path d='M10 10l4 4m0 -4l-4 4' />
-                        </svg>
-                    </div>
-                </td>
+    <section class='page-section'>
+      <div class='table-toolbar'>
+        <div>
+          <h3>Transmission Diagnostics</h3>
+          <p class='muted-text'>Recent manual send events, newest event at the bottom.</p>
+        </div>
+        <span class='muted-text'>Uptime <span id='loraUptime'>-</span></span>
+      </div>
+      <ol id='loraDebugLog' class='lora-debug-log'>
+        <li>No manual transmission events recorded.</li>
+      </ol>
+    </section>
 
-                <td>Current Channel:</td>
-                <td><data id='actualch'></data></td>
-                <td></td>
-            </tr>
-            <tr>
-                <td class="icon-cell">
-                    <div class='svg'>
-                        <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-separator-vertical'
-                            width='30' height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
-                            stroke-linecap='round' stroke-linejoin='round'>
-                            <path stroke='none' d='M0 0h24v24H0z' fill='none' />
-                            <line x1='12' y1='4' x2='12' y2='20' />
-                            <polyline points='8 8 4 12 8 16' />
-                            <polyline points='16 16 20 12 16 8' />
-                        </svg>
-                    </div>
-                </td>
-                <td>Current Spreading Factor:</td>
-                <td><data id='actualsf'></data></td>
-                <td></td>
-            </tr>
-            <tr>
-                <td class="icon-cell">
-                    <div class='svg'>
-                        <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-alarm' width='30'
-                            height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
-                            stroke-linecap='round' stroke-linejoin='round'>
-                            <path stroke='none' d='M0 0h24v24H0z' fill='none' />
-                            <circle cx='12' cy='13' r='7' />
-                            <polyline points='12 10 12 13 14 13' />
-                            <line x1='7' y1='4' x2='4.25' y2='6' />
-                            <line x1='17' y1='4' x2='19.75' y2='6' />
-                        </svg>
-                    </div>
-                </td>
+    <div class='page-actions'>
+      <a class='button-secondary' href='/'>Back to Overview</a>
+    </div>
+  </div>
 
-                <td>Transmit Interval:</td>
-                <td><data id='tinterval'></data>m</td>
-                <td></td>
-            </tr>
-            <tr>
-                <td class="icon-cell">
-                    <div class='svg'>
-                        <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-square-dot'
-                            width='30' height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
-                            stroke-linecap='round' stroke-linejoin='round'>
-                            <path stroke='none' d='M0 0h24v24H0z' fill='none' />
-                            <rect x='4' y='4' width='16' height='16' rx='2' />
-                            <circle cx='12' cy='12' r='1' />
-                        </svg>
-                    </div>
-                </td>
-
-                <td>Time Slot:</td>
-                <td><data id='slot'></data></td>
-                <td></td>
-            </tr>
-            <tr>
-                <td>
-                    <div class='svg'>
-                        <svg xmlns='http://www.w3.org/2000/svg' class='icon icon-tabler icon-tabler-wave-square'
-                            width='30' height='30' viewBox='0 0 24 24' stroke-width='1.5' stroke='#FFFFFF' fill='none'
-                            stroke-linecap='round' stroke-linejoin='round'>
-                            <path stroke='none' d='M0 0h24v24H0z' fill='none' />
-                            <path d='M3 12h5v8h4v-16h4v8h5' />
-                        </svg>
-                    </div>
-                </td>
-
-                <td>Transmit Counter:</td>
-                <td><data id='counter'></data></td>
-                <td></td>
-            </tr>
-        </table>
-    </font><br>
-    <hr>
-
-    <br>
-    <form action='/'><button type='submit'>Back to Overview</button></form>
-    <script src='/common.js' type='text/javascript'></script>
-    <script src='/lora.js' type='text/javascript'></script>
+  <script src='/common.js' type='text/javascript'></script>
+  <script src='/lora.js' type='text/javascript'></script>
 </body>
-
 </html>

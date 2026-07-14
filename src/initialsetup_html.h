@@ -248,26 +248,23 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
         }
     }
 
+    function createHttpRequest() {
+        return new XMLHttpRequest();
+    }
+
     function refreshUpdateFilesInfo() {
-        var http = null;
-        if (window.XMLHttpRequest) {
-            http = new XMLHttpRequest();
-        } else if (window.ActiveXObject) {
-            http = new ActiveXObject("Microsoft.XMLHTTP");
-        }
-        if (http != null) {
-            http.open("GET", "/updatefilesinfo?ts=" + Date.now(), true);
-            http.onreadystatechange = function() {
-                if (http.readyState == XMLHttpRequest.DONE && http.status == 200) {
-                    try {
-                        renderUpdateFilesInfo(JSON.parse(http.responseText));
-                    } catch (error) {
-                        console.log('Unable to parse update file info.', error);
-                    }
+        var http = createHttpRequest();
+        http.open("GET", "/updatefilesinfo?ts=" + Date.now(), true);
+        http.onreadystatechange = function() {
+            if (http.readyState == XMLHttpRequest.DONE && http.status == 200) {
+                try {
+                    renderUpdateFilesInfo(JSON.parse(http.responseText));
+                } catch (error) {
+                    console.log('Unable to parse update file info.', error);
                 }
-            };
-            http.send(null);
-        }
+            }
+        };
+        http.send(null);
     };
 
     function startInterval() {
@@ -277,17 +274,10 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
     };
 
     function meineFunktion() {
-        var http = null;
-        if (window.XMLHttpRequest) {
-            http = new XMLHttpRequest();
-        } else if (window.ActiveXObject) {
-            http = new ActiveXObject("Microsoft.XMLHTTP");
-        }
-        if (http != null) {
-            http.open("GET", "/updatefilesprogress?ts=" + Date.now(), true);
-            http.onreadystatechange = meineFunktionAusgeben;
-            http.send(null);
-        }
+        var http = createHttpRequest();
+        http.open("GET", "/updatefilesprogress?ts=" + Date.now(), true);
+        http.onreadystatechange = meineFunktionAusgeben;
+        http.send(null);
 
         function meineFunktionAusgeben() {
             if (http.readyState != XMLHttpRequest.DONE) {
@@ -319,20 +309,13 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
     function FormatFS(){
         const response = confirm("Are you sure you want Format the Filesystem?");
         if (response) {
-            var http = null;
-            if (window.XMLHttpRequest) {
-                http = new XMLHttpRequest();
-            } else if (window.ActiveXObject) {
-                http = new ActiveXObject("Microsoft.XMLHTTP");
-            }
-            if (http != null) {
-                document.getElementById('loader').style.display = 'block';
-                document.getElementById('myDiv').style.display = 'none';
-                http.open("POST", "/formatfs", true);
-                addCsrfHeader(http);
-                http.onreadystatechange = FormatFSAusgeben;
-                http.send(null);
-            }
+            var http = createHttpRequest();
+            document.getElementById('loader').style.display = 'block';
+            document.getElementById('myDiv').style.display = 'none';
+            http.open("POST", "/formatfs", true);
+            addCsrfHeader(http);
+            http.onreadystatechange = FormatFSAusgeben;
+            http.send(null);
 
             function FormatFSAusgeben() {
                 if (http.readyState == XMLHttpRequest.DONE) {
@@ -363,18 +346,11 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
     };
 
     function UpdateFiles(){
-        var http = null;
-        if (window.XMLHttpRequest) {
-            http = new XMLHttpRequest();
-        } else if (window.ActiveXObject) {
-            http = new ActiveXObject("Microsoft.XMLHTTP");
-        }
-        if (http != null) {
-            http.open("POST", "/updatefiles", true);
-            addCsrfHeader(http);
-            http.onreadystatechange = UpdateFilesAusgeben;
-            http.send(null);
-        }
+        var http = createHttpRequest();
+        http.open("POST", "/updatefiles", true);
+        addCsrfHeader(http);
+        http.onreadystatechange = UpdateFilesAusgeben;
+        http.send(null);
 
         function UpdateFilesAusgeben() {
             if (http.readyState == XMLHttpRequest.DONE) {                
@@ -402,20 +378,13 @@ const char initialsetup_html[] PROGMEM = R"rawliteral(
     };
 
     function getTable(){
-        var http = null;
-        if (window.XMLHttpRequest) {
-            http = new XMLHttpRequest();
-        } else if (window.ActiveXObject) {
-            http = new ActiveXObject("Microsoft.XMLHTTP");
-        }
-        if (http != null) {
-            document.getElementById('loader').style.display = 'block';
-            document.getElementById('myDiv').style.display = 'none';
-            //startInterval();
-            http.open("GET", "/gettable", true);
-            http.onreadystatechange = getTableAusgeben;
-            http.send(null);
-        }
+        var http = createHttpRequest();
+        document.getElementById('loader').style.display = 'block';
+        document.getElementById('myDiv').style.display = 'none';
+        //startInterval();
+        http.open("GET", "/gettable", true);
+        http.onreadystatechange = getTableAusgeben;
+        http.send(null);
 
         function getTableAusgeben() {
             if (http.readyState == XMLHttpRequest.DONE) {                

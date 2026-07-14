@@ -97,8 +97,6 @@ function read_static_json() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-  read_json();
   read_static_json();
+  startVisiblePolling(read_json, 5000);
 });
-
-setInterval(function () { read_json(); }, 1000);

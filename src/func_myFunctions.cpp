@@ -1,6 +1,9 @@
 #include "func_myFunctions.h"
 #include <Configuration.h>
 #include <WiFi.h>
+#include <stddef.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 namespace {
 struct ConfigStorageHeader {
@@ -23,6 +26,27 @@ constexpr uint32_t CONFIG_BACKUP_MAGIC = 0x43424631UL;   // "CBF1"
 constexpr uint16_t CONFIG_BACKUP_VERSION = 1;
 constexpr char CONFIG_BACKUP_PATH[] = "/config-backup.bin";
 constexpr char WEB_FILES_VERSION_PATH[] = "/webfiles-version.txt";
+StaticSemaphore_t configStorageMutexBuffer;
+SemaphoreHandle_t configStorageMutex = nullptr;
+
+class ConfigStorageGuard {
+public:
+  ConfigStorageGuard() {
+    if (configStorageMutex == nullptr) {
+      configStorageMutex = xSemaphoreCreateMutexStatic(&configStorageMutexBuffer);
+    }
+    locked = configStorageMutex != nullptr && xSemaphoreTake(configStorageMutex, portMAX_DELAY) == pdTRUE;
+  }
+
+  ~ConfigStorageGuard() {
+    if (locked) xSemaphoreGive(configStorageMutex);
+  }
+
+  bool acquired() const { return locked; }
+
+private:
+  bool locked = false;
+};
 
 int configHeaderStart() {
   return cfgStart - int(sizeof(ConfigStorageHeader));
@@ -49,6 +73,40 @@ bool readConfigStorageHeader(ConfigStorageHeader &header) {
          header.length <= sizeof(configData);
 }
 
+bool migrateConfigWithExpandedFirmwareVersion(const uint8_t *storedConfig, uint16_t storedLength, configData &cfg) {
+  constexpr size_t oldFirmwareVersionSize = 7;
+  const size_t firmwareOffset = offsetof(configData, fversion);
+  const size_t newFirmwareVersionSize = sizeof(cfg.fversion);
+  const size_t oldTailOffset = firmwareOffset + oldFirmwareVersionSize;
+  const size_t newTailOffset = firmwareOffset + newFirmwareVersionSize;
+
+  if (newFirmwareVersionSize != oldFirmwareVersionSize + 1 ||
+      storedLength != sizeof(configData) - 1 ||
+      oldTailOffset > storedLength ||
+      newTailOffset > sizeof(configData)) {
+    return false;
+  }
+
+  int storedValid = 0;
+  memcpy(&storedValid, storedConfig, sizeof(storedValid));
+  if (storedValid != 17) {
+    return false;
+  }
+
+  cfg = configData();
+  memcpy(reinterpret_cast<uint8_t*>(&cfg), storedConfig, firmwareOffset);
+  memcpy(cfg.fversion, storedConfig + firmwareOffset, min(oldFirmwareVersionSize, newFirmwareVersionSize - 1));
+  cfg.fversion[newFirmwareVersionSize - 1] = '\0';
+
+  const size_t tailLength = storedLength - oldTailOffset;
+  if (tailLength > sizeof(configData) - newTailOffset) {
+    return false;
+  }
+  memcpy(reinterpret_cast<uint8_t*>(&cfg) + newTailOffset, storedConfig + oldTailOffset, tailLength);
+  cfg.valid = defconf.valid;
+  return true;
+}
+
 bool readConfigBackupHeader(File &file, ConfigBackupHeader &header) {
   if (!file || file.size() < int(sizeof(ConfigBackupHeader) + sizeof(configData))) {
     return false;
@@ -61,15 +119,6 @@ bool readConfigBackupHeader(File &file, ConfigBackupHeader &header) {
   return header.magic == CONFIG_BACKUP_MAGIC &&
          header.version == CONFIG_BACKUP_VERSION &&
          header.length == sizeof(configData);
-}
-
-void flushSerial2UntilSentenceStart() {
-  int nextByte = -1;
-  while ((nextByte = Serial2.read()) >= 0) {
-    if (nextByte == '$') {
-      break;
-    }
-  }
 }
 
 String htmlEscapeLocal(const String &value) {
@@ -86,6 +135,41 @@ String htmlEscapeLocal(const String &value) {
     }
   }
   return escaped;
+}
+
+String buildMacScopedDefaultSecret(const char *prefix, uint64_t suffixValue, uint8_t hexDigits) {
+  if (prefix == nullptr || hexDigits == 0 || hexDigits > 12) {
+    return "";
+  }
+
+  char format[10];
+  snprintf(format, sizeof(format), "%%0%dllX", hexDigits);
+
+  char suffix[20];
+  snprintf(suffix, sizeof(suffix), format, static_cast<unsigned long long>(suffixValue));
+
+  String secret = String(prefix) + String(suffix);
+  secret.toUpperCase();
+  return secret;
+}
+
+bool hasExpectedGeneratedPrefix(const char *value, const char *prefix, size_t expectedLength) {
+  if (value == nullptr || prefix == nullptr) {
+    return false;
+  }
+
+  const size_t prefixLength = strlen(prefix);
+  if (strncmp(value, prefix, prefixLength) != 0 || strlen(value) != expectedLength) {
+    return false;
+  }
+
+  for (size_t i = prefixLength; value[i] != '\0'; i++) {
+    if (!isxdigit(static_cast<unsigned char>(value[i]))) {
+      return false;
+    }
+  }
+
+  return true;
 }
 }  // namespace
 
@@ -261,7 +345,12 @@ void DebugPrint(int type, unsigned int num, int base){
   }
 }
 
-void eraseEEPROMConfig(configData cfg) {
+void eraseEEPROMConfig(const configData &cfg) {
+  ConfigStorageGuard guard;
+  if (!guard.acquired()) {
+    DebugPrintln(1, "Could not lock configuration storage for erase");
+    return;
+  }
   // Reset EEPROM bytes to '0' for the length of the data structure
   //noInterrupts();                       // Stop all interrupts important for writing in EEPROM
   EEPROM.begin(sizeEEPROM);
@@ -270,13 +359,18 @@ void eraseEEPROMConfig(configData cfg) {
   for (int i = eraseStart; i < eraseEnd; i++) {
     EEPROM.write(i, 0);
   }
-  delay(200);
-  EEPROM.commit();
+  const bool committed = EEPROM.commit();
   EEPROM.end();
+  if (!committed) DebugPrintln(1, "Failed to erase EEPROM configuration");
   //interrupts();                         // Activate all interrupts
 }
 
-void saveEEPROMConfig(configData cfg) {
+bool saveEEPROMConfig(const configData &cfg) {
+  ConfigStorageGuard guard;
+  if (!guard.acquired()) {
+    DebugPrintln(1, "Could not lock configuration storage for save");
+    return false;
+  }
   // Save configuration from RAM into EEPROM
   //noInterrupts();                       // Stop all interrupts important for writing in EEPROM
   const ConfigStorageHeader header = {
@@ -289,39 +383,73 @@ void saveEEPROMConfig(configData cfg) {
   EEPROM.begin(sizeEEPROM);
   EEPROM.put(configHeaderStart(), header);
   EEPROM.put( cfgStart, cfg );
-  delay(200);
-  EEPROM.commit();                      // Only needed for ESP8266 to get data written
+  const bool committed = EEPROM.commit();
   EEPROM.end();                         // Free RAM copy of structure
   //interrupts();                         // Activate all interrupts
-  DebugPrintln(3, "New settings saved in EEPROM");
+  DebugPrintln(committed ? 3 : 1, committed ? "New settings saved in EEPROM" : "Failed to commit EEPROM configuration");
+  return committed;
 }
 
 configData loadEEPROMConfig() {
+  ConfigStorageGuard guard;
+  if (!guard.acquired()) {
+    DebugPrintln(1, "Could not lock configuration storage for load");
+    return configData();
+  }
   // Loads configuration from EEPROM into RAM
   configData cfg = configData();
   ConfigStorageHeader header;
   EEPROM.begin(sizeEEPROM);
   if (readConfigStorageHeader(header)) {
+    uint8_t storedConfig[sizeof(configData)] = {0};
     for (uint16_t i = 0; i < header.length; ++i) {
-      reinterpret_cast<uint8_t*>(&cfg)[i] = EEPROM.read(cfgStart + i);
+      storedConfig[i] = EEPROM.read(cfgStart + i);
     }
     EEPROM.end();
 
-    const uint32_t checksum = calculateConfigChecksum(reinterpret_cast<const uint8_t*>(&cfg), header.length);
+    const uint32_t checksum = calculateConfigChecksum(storedConfig, header.length);
     if (checksum == header.checksum) {
+      if (header.length == sizeof(configData)) {
+        memcpy(reinterpret_cast<uint8_t*>(&cfg), storedConfig, sizeof(configData));
+        return cfg;
+      }
+      if (migrateConfigWithExpandedFirmwareVersion(storedConfig, header.length, cfg)) {
+        DebugPrintln(3, "Migrated EEPROM config after firmware version field expansion");
+        return cfg;
+      }
+
+      DebugPrintln(1, "Unsupported EEPROM config length; refusing header-backed config");
+      return configData();
+    } else {
+      DebugPrintln(1, "EEPROM config checksum mismatch; refusing corrupted config");
+      return configData();
+    }
+  } else {
+    uint8_t rawConfig[sizeof(configData)] = {0};
+    for (size_t i = 0; i < sizeof(rawConfig); ++i) {
+      rawConfig[i] = EEPROM.read(cfgStart + i);
+    }
+    EEPROM.end();
+
+    memcpy(reinterpret_cast<uint8_t*>(&cfg), rawConfig, sizeof(configData));
+    if (cfg.valid == defconf.valid) {
       return cfg;
     }
 
-    DebugPrintln(1, "EEPROM config header checksum mismatch, trying legacy layout");
-    EEPROM.begin(sizeEEPROM);
+    if (migrateConfigWithExpandedFirmwareVersion(rawConfig, sizeof(configData) - 1, cfg)) {
+      DebugPrintln(3, "Migrated raw EEPROM config after firmware version field expansion");
+      return cfg;
+    }
+
+    return cfg;
   }
 
-  EEPROM.get(cfgStart, cfg);
-  EEPROM.end();
-  return cfg;
+  return configData();
 }
 
 bool hasEEPROMConfigHeader() {
+  ConfigStorageGuard guard;
+  if (!guard.acquired()) return false;
   ConfigStorageHeader header;
   EEPROM.begin(sizeEEPROM);
   const bool hasHeader = readConfigStorageHeader(header);
@@ -405,6 +533,33 @@ bool hasConfigBackupInLittleFS() {
   return LittleFS.exists(CONFIG_BACKUP_PATH);
 }
 
+String getFirmwareReleaseChannel() {
+  return String(FIRMWARE_RELEASE_CHANNEL);
+}
+
+String getFirmwareReleaseLabel() {
+  return String(FIRMWARE_RELEASE_LABEL);
+}
+
+String buildWebFilesVersionTag(const char *version, const char *channel) {
+  if (version == nullptr || version[0] == '\0') {
+    return "";
+  }
+
+  String versionTag = String(version);
+  String releaseChannel = channel == nullptr || channel[0] == '\0'
+    ? getFirmwareReleaseChannel()
+    : String(channel);
+  releaseChannel.trim();
+  releaseChannel.toLowerCase();
+
+  if (releaseChannel.length() == 0) {
+    return versionTag;
+  }
+
+  return versionTag + "|" + releaseChannel;
+}
+
 bool saveWebFilesVersion(const char *version) {
   if (version == nullptr || version[0] == '\0') {
     return false;
@@ -420,7 +575,7 @@ bool saveWebFilesVersion(const char *version) {
     return false;
   }
 
-  versionFile.print(version);
+  versionFile.print(buildWebFilesVersionTag(version));
   versionFile.close();
   return true;
 }
@@ -441,13 +596,177 @@ String getStoredWebFilesVersion() {
   return storedVersion;
 }
 
-bool areWebFilesCurrent(const char *version) {
+String getStoredWebFilesVersionOnly() {
+  String storedVersion = getStoredWebFilesVersion();
+  const int separatorIndex = storedVersion.indexOf('|');
+  if (separatorIndex >= 0) {
+    storedVersion = storedVersion.substring(0, separatorIndex);
+  }
+  storedVersion.trim();
+  return storedVersion;
+}
+
+String getStoredWebFilesChannel() {
+  String storedVersion = getStoredWebFilesVersion();
+  const int separatorIndex = storedVersion.indexOf('|');
+  if (separatorIndex < 0) {
+    return "";
+  }
+
+  String storedChannel = storedVersion.substring(separatorIndex + 1);
+  storedChannel.trim();
+  storedChannel.toLowerCase();
+  return storedChannel;
+}
+
+bool areWebFilesCurrent(const char *version, const char *channel) {
   if (version == nullptr || version[0] == '\0' || !LittleFS.exists(WEB_FILES_VERSION_PATH)) {
     return false;
   }
 
+  String expectedTag = buildWebFilesVersionTag(version, channel);
   String storedVersion = getStoredWebFilesVersion();
-  return storedVersion == String(version);
+  if (storedVersion == expectedTag) {
+    return true;
+  }
+
+  // Legacy marker compatibility: allow plain version tags from older builds.
+  return storedVersion == String(version) && getStoredWebFilesChannel().length() == 0;
+}
+
+String buildDefaultWebPassword() {
+  return buildMacScopedDefaultSecret("BM-", ESP.getEfuseMac() & 0xFFFFFFULL, 6);
+}
+
+String buildDefaultApPassword() {
+  return buildMacScopedDefaultSecret("AP-", ESP.getEfuseMac() & 0xFFFFFFFFULL, 8);
+}
+
+bool isGeneratedWebPassword(const char *value) {
+  return hasExpectedGeneratedPrefix(value, "BM-", 9);
+}
+
+bool isGeneratedApPassword(const char *value) {
+  return hasExpectedGeneratedPrefix(value, "AP-", 11);
+}
+
+bool isLegacyWeakWebPassword(const char *value) {
+  return value == nullptr ||
+         value[0] == '\0' ||
+         strcmp(value, "boatmonitor") == 0 ||
+         strcmp(value, "12345678") == 0 ||
+         strcmp(value, "auto-generated") == 0;
+}
+
+bool isLegacyWeakApPassword(const char *value) {
+  return value == nullptr ||
+         value[0] == '\0' ||
+         strcmp(value, "LoRaBoatMonitor") == 0 ||
+         strcmp(value, "12345678") == 0 ||
+         strcmp(value, "auto-generated") == 0;
+}
+
+bool normalizeMdsOtaEndpoint(const String &configuredValue, String &normalizedEndpoint) {
+  String candidate = configuredValue;
+  candidate.trim();
+
+  if (candidate.length() == 0) {
+    normalizedEndpoint = "";
+    return false;
+  }
+
+  for (size_t i = 0; i < candidate.length(); i++) {
+    const char c = candidate.charAt(i);
+    if (c < 32 || c > 126) {
+      normalizedEndpoint = "";
+      return false;
+    }
+  }
+
+  if (!candidate.startsWith("https://")) {
+    normalizedEndpoint = "";
+    return false;
+  }
+
+  const int queryStart = candidate.indexOf('?');
+  if (queryStart >= 0) {
+    candidate = candidate.substring(0, queryStart);
+  }
+
+  while (candidate.endsWith("/")) {
+    candidate.remove(candidate.length() - 1);
+  }
+
+  const int lastSlash = candidate.lastIndexOf('/');
+  if (lastSlash <= 8) {
+    normalizedEndpoint = "";
+    return false;
+  }
+
+  normalizedEndpoint = candidate;
+  return true;
+}
+
+String buildMdsOtaMetadataUrl(const String &endpoint, const char *fileName) {
+  String normalizedEndpoint;
+  if (!normalizeMdsOtaEndpoint(endpoint, normalizedEndpoint) || fileName == nullptr || fileName[0] == '\0') {
+    return "";
+  }
+
+  const int lastSlash = normalizedEndpoint.lastIndexOf('/');
+  if (lastSlash <= 8) {
+    return "";
+  }
+
+  return normalizedEndpoint.substring(0, lastSlash) + "/bin/" + String(fileName);
+}
+
+String buildMdsOtaWebBaseUrl(const String &endpoint) {
+  String normalizedEndpoint;
+  if (!normalizeMdsOtaEndpoint(endpoint, normalizedEndpoint)) {
+    return "";
+  }
+
+  const int lastSlash = normalizedEndpoint.lastIndexOf('/');
+  if (lastSlash <= 8) {
+    return "";
+  }
+
+  return normalizedEndpoint.substring(0, lastSlash) + "/bin/web";
+}
+
+String normalizeSha256String(const String &sha256) {
+  String normalized = sha256;
+  normalized.trim();
+  normalized.toLowerCase();
+
+  if (normalized.length() != 64) {
+    return "";
+  }
+
+  for (size_t i = 0; i < normalized.length(); i++) {
+    if (!isxdigit(static_cast<unsigned char>(normalized.charAt(i)))) {
+      return "";
+    }
+  }
+
+  return normalized;
+}
+
+String sha256ToHexString(const uint8_t digest[32]) {
+  static const char hexChars[] = "0123456789abcdef";
+  String hex;
+  hex.reserve(64);
+  for (size_t i = 0; i < 32; i++) {
+    hex += hexChars[(digest[i] >> 4) & 0x0F];
+    hex += hexChars[digest[i] & 0x0F];
+  }
+  return hex;
+}
+
+bool hasReasonableSystemTime() {
+  const time_t now = time(nullptr);
+  return now >= 1704067200; // 2024-01-01 00:00:00 UTC
 }
 
 float calculateBatteryVoltageFromAdc(const configData &cfg, uint16_t rawAdc) {
@@ -1039,7 +1358,7 @@ void readValues(configData myactconf) {
 // Display sensor values on OLED
 void writeDisplay() {
   // Formating display data
-  char cnt[10];
+  char cnt[10] = "";
   //dtostrf(int(counter16), 5, 0, cnt);
   //dtostrf(int(LMIC.seqnoUp), 5, 0, cnt);
   char tmp[10];      
@@ -1071,7 +1390,7 @@ void writeDisplay() {
   
   // Refresh OLED data
   u8x8.setFont(u8x8_font_chroma48medium8_r);
-  u8x8.drawString(0,0,"LoRaBoatMonitor");
+  u8x8.drawString(0,0,"LoRa Monitor");
   //u8x8.drawString(0,0,"NoWa(C)OBP");
   //u8x8.drawString(11,0,actconf.fversion);
   u8x8.drawString(0,1,"C:");
@@ -1110,7 +1429,7 @@ void writeDisplay() {
 void writeDisplayValues(configData myactconf) {
   //WebSerial.println("Update Display.");
   // Formating display data
-  char cnt[10];
+  char cnt[10] = "";
   //dtostrf(int(counter16), 5, 0, cnt);
   //dtostrf(int(LMIC.seqnoUp), 5, 0, cnt);
   char tmp[10];      
@@ -1176,10 +1495,55 @@ void writeDisplayValues(configData myactconf) {
   u8x8.refreshDisplay();    // Only required for SSD1606/7
 }
 
+void writeDisplayByMode(configData myactconf) {
+  if (String(myactconf.OledDisplayMode) == "Status") {
+    const String wifiState = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "not connected";
+    const String mdsState = String(myactconf.SendDataViaWifi) == "Yes" ? "MDS enabled" : "MDS disabled";
+    const String loraMode = "LoRa " + String(myactconf.loraOperationMode);
+    const String priority = "Prio " + String(myactconf.transmitPriority);
+    const String standbyLevel = digitalRead(alarmPin) == LOW ? "GPIO39 LOW" : "GPIO39 HIGH";
+    const String batteryLine = "Bat " + String(voltage, 2) + "V " + String(capacity, 0) + "%";
+    const String webLine = "Web " + String(myactconf.fversion);
+    writeDisplayStatusScreen("Device status",
+                             wifiState,
+                             mdsState,
+                             loraMode,
+                             priority,
+                             standbyLevel,
+                             batteryLine,
+                             webLine);
+    return;
+  }
+
+  writeDisplay();
+}
+
 namespace {
+String sanitizeDisplayText(const String &value) {
+  String sanitized;
+  sanitized.reserve(value.length());
+
+  for (size_t i = 0; i < value.length(); i++) {
+    const unsigned char c = static_cast<unsigned char>(value[i]);
+    if (c >= 32 && c <= 126) {
+      sanitized += char(c);
+    } else if (c == '\n' || c == '\r' || c == '\t') {
+      sanitized += ' ';
+    } else {
+      sanitized += '?';
+    }
+  }
+
+  while (sanitized.indexOf("  ") >= 0) {
+    sanitized.replace("  ", " ");
+  }
+
+  sanitized.trim();
+  return sanitized;
+}
+
 String fitDisplayLine(const String &value) {
-  String line = value;
-  line.trim();
+  String line = sanitizeDisplayText(value);
   if (line.length() > 16) {
     line = line.substring(0, 16);
   }
@@ -1274,11 +1638,12 @@ void writeDisplayProgressScreen(const String &title,
                               normalizedDetail != lastDisplayProgressDetail ||
                               normalizedFooter != lastDisplayProgressFooter;
   const bool percentChanged = percent != lastDisplayProgressPercent;
-  const int previousBucket = lastDisplayProgressPercent >= 0 ? (lastDisplayProgressPercent / 10) : -1;
-  const int currentBucket = percent >= 0 ? (percent / 10) : -1;
-  const bool shouldRefresh = contentChanged ||
+  const int previousBucket = lastDisplayProgressPercent >= 0 ? (lastDisplayProgressPercent / 20) : -1;
+  const int currentBucket = percent >= 0 ? (percent / 20) : -1;
+  const bool refreshWindowElapsed = now - lastDisplayProgressRefreshMillis >= 1500;
+  const bool shouldRefresh = (contentChanged && refreshWindowElapsed) ||
                              (percent >= 0 && (percent == 0 || percent == 100 || (percentChanged && currentBucket != previousBucket))) ||
-                             (now - lastDisplayProgressRefreshMillis >= 700);
+                             refreshWindowElapsed;
 
   if (!shouldRefresh) {
     return;
@@ -1299,47 +1664,16 @@ void writeDisplayProgressScreen(const String &title,
                            normalizedFooter);
 }
 
-// Timer 1 interrupt Read and print GPS values
-void readGPSValuesFlag() {
-  flag2 = true;
-}
-
-// Timer 1 interrupt Read and print GPS values
-void readGPSValues(configData myactconf) {
+// Parse a bounded amount of GPS input without blocking LoRa or web tasks.
+void readGPSValues() {
   boolean debugGPS = false;
-  if (debugGPS) {
-    DebugPrintln(3, "Timer1");
-  }
   rmc_finish = false;
-  const unsigned long gpsWaitStart = millis();
-  unsigned long lastRestartAttempt = 0;
-  // Special hack to restart the hanging serial 2 port.
-  // Bound the wait time so a missing/sleeping GPS cannot block forever.
-  while(!Serial2.available()){
-    while(Serial2.read() >= 0);  // Clear read buffer
-
-    if (millis() - gpsWaitStart >= 1500) {
-      if (debugGPS) {
-        DebugPrintln(3, "GPS timeout waiting for serial data");
-      }
-      flag2 = false;
-      return;
-    }
-
-    if (millis() - lastRestartAttempt >= 400) {
-      Serial2.end();
-      cooperativeDelay(50);
-      Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
-      lastRestartAttempt = millis();
-    }
-    cooperativeDelay(10);
-  }
-  // Read serial 2 if data coming and RMC not finished and no LoRa telegram sending
-  while(Serial2.read() >= 0);  // Clear read buffer
-  cooperativeDelay(1500);      // Wait 1.5s for new telegrams form GPS
-  c_counter = 0;               // Clear commata counter
-  while(Serial2.available() && !rmc_finish && !lora_activ && !loraEvent_activ) { // If data on serial 2 available
+  size_t processedBytes = 0;
+  constexpr size_t MAX_GPS_BYTES_PER_LOOP = 256;
+  constexpr size_t MAX_NMEA_SENTENCE_LENGTH = 160;
+  while(Serial2.available() && !rmc_finish && !lora_activ && !loraEvent_activ && processedBytes < MAX_GPS_BYTES_PER_LOOP) {
     inByte = Serial2.read(); // Read data
+    processedBytes++;
     // Start by $ or ! string
     if ((start==0) && ((inByte == '$')||(inByte == '!'))) {
       start = 1;
@@ -1348,7 +1682,15 @@ void readGPSValues(configData myactconf) {
       nmea_all = "";
     }
     if(start==1 && (inByte==44)) {c_counter++;}   // Count all commata
-    if(start==1) {nmea_all.concat((char)inByte);} // Concat character
+    if (start == 1) {
+      if (nmea_all.length() >= MAX_NMEA_SENTENCE_LENGTH) {
+        start = 0;
+        nmea_all = "";
+        c_counter = 0;
+        continue;
+      }
+      nmea_all.concat((char)inByte);
+    }
     if((inByte==13) && (start==1)) { // Detect end of NMEA0183 telegram (CR)
       start=0;
       if (debugGPS) {
@@ -1444,7 +1786,7 @@ void readGPSValues(configData myactconf) {
 
           if (debugGPS) {
             DebugPrint(3, "Env Sensor ");
-            DebugPrintln(3, String(myactconf.envSensor));
+            DebugPrintln(3, String(actconf.envSensor));
             DebugPrintln(3, "");
           }
 
@@ -1452,22 +1794,16 @@ void readGPSValues(configData myactconf) {
         }
         else{
           DebugPrintln(3, "Checksum wrong!");
-          flushSerial2UntilSentenceStart(); // Clear read buffer until sentence start
           nmea = "";
           nmea_all = "";
         }
       }
       else{
-        DebugPrintln(3, "No RMC message found! ");
-        cooperativeDelay(250);
-        flushSerial2UntilSentenceStart(); // Clear read buffer until sentence start
         nmea = "";
         nmea_all = "";
       }
     }
   }
-  while(Serial2.read() >= 0);  // Clear read buffer
-  flag2 = false;
 }
 
 // Timer2 Interrupt relay timer
@@ -1538,6 +1874,10 @@ static String uploadTempPath(const String &filename) {
   return uploadTargetPath(filename) + ".upload";
 }
 
+static String uploadBackupPath(const String &filename) {
+  return uploadTargetPath(filename) + ".rollback";
+}
+
 static void cleanupUpload(AsyncWebServerRequest *request, const String &filename) {
   if (request->_tempFile) {
     request->_tempFile.close();
@@ -1545,28 +1885,41 @@ static void cleanupUpload(AsyncWebServerRequest *request, const String &filename
   LittleFS.remove(uploadTempPath(filename));
 }
 
-void handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+bool handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
   String logmessage = "Client:" + request->client()->remoteIP().toString() + " " + request->url();
   Serial.println(logmessage);
 
   if (!isSafeUploadFilename(filename)) {
     Serial.println("Upload rejected: unsafe filename");
-    return;
+    return false;
   }
 
   if (index + len > MAX_FILE_MANAGER_UPLOAD_SIZE) {
     Serial.println("Upload rejected: file too large");
     cleanupUpload(request, filename);
-    return;
+    return false;
   }
 
   if (!index) {
     logmessage = "Upload Start: " + String(filename);
     const String tempPath = uploadTempPath(filename);
+    const String targetPath = uploadTargetPath(filename);
+    const String backupPath = uploadBackupPath(filename);
+    if (LittleFS.exists(backupPath)) {
+      if (!LittleFS.exists(targetPath)) {
+        LittleFS.rename(backupPath, targetPath);
+      } else {
+        LittleFS.remove(backupPath);
+      }
+    }
     if (LittleFS.exists(tempPath)) {
       LittleFS.remove(tempPath);
     }
     request->_tempFile = LittleFS.open(tempPath, "w");
+    if (!request->_tempFile) {
+      Serial.println("Upload rejected: temporary file could not be opened");
+      return false;
+    }
     Serial.println(logmessage);
   }
 
@@ -1575,7 +1928,7 @@ void handleUpload(AsyncWebServerRequest *request, String filename, size_t index,
     if (!request->_tempFile || request->_tempFile.write(data, len) != len) {
       Serial.println("Upload rejected: write failed");
       cleanupUpload(request, filename);
-      return;
+      return false;
     }
     logmessage = "Writing file: " + String(filename) + " index=" + String(index) + " len=" + String(len);
     Serial.println(logmessage);
@@ -1587,16 +1940,28 @@ void handleUpload(AsyncWebServerRequest *request, String filename, size_t index,
     request->_tempFile.close();
     const String tempPath = uploadTempPath(filename);
     const String targetPath = uploadTargetPath(filename);
-    if (LittleFS.exists(targetPath)) {
-      LittleFS.remove(targetPath);
+    const String backupPath = uploadBackupPath(filename);
+    LittleFS.remove(backupPath);
+
+    const bool hadOriginal = LittleFS.exists(targetPath);
+    if (hadOriginal && !LittleFS.rename(targetPath, backupPath)) {
+      LittleFS.remove(tempPath);
+      Serial.println("Upload rejected: existing file could not be backed up");
+      return false;
     }
+
     if (!LittleFS.rename(tempPath, targetPath)) {
       LittleFS.remove(tempPath);
+      if (hadOriginal) {
+        LittleFS.rename(backupPath, targetPath);
+      }
       Serial.println("Upload rejected: install failed");
-      return;
+      return false;
     }
+    LittleFS.remove(backupPath);
     Serial.println(logmessage);
   }
+  return true;
 }
 
 // Make size of files human readable

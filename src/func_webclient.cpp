@@ -9,17 +9,14 @@
 #include <ArduinoJson.h>
 #include <mbedtls/sha256.h>
 #include <esp_sleep.h>
+#include <freertos/semphr.h>
 #include <time.h>
 #include <Configuration.h>
 #include "func_myFunctions.h"
 #include "func_webServerHandler.h"
+#include "updateRuntimeState.h"
 
 extern const uint8_t cert_cacert_pem_start[] asm("_binary_cert_cacert_pem_start");
-extern size_t webFilesDownloadCompleted;
-extern size_t webFilesDownloadTotal;
-extern String webFilesDownloadCurrentName;
-extern String webFilesDownloadStatusMessage;
-extern bool webFilesDownloadFatalError;
 extern time_t lastStandbyEventEpoch;
 extern time_t lastWakeupEventEpoch;
 extern char lastStandbyEventCause[24];
@@ -38,10 +35,65 @@ String getLastMdsStatus()
 }
 
 namespace {
+StaticSemaphore_t mdsUploadMutexBuffer;
+SemaphoreHandle_t mdsUploadMutex = nullptr;
+
+class MdsUploadGuard {
+public:
+  MdsUploadGuard()
+  {
+    if (mdsUploadMutex == nullptr) {
+      mdsUploadMutex = xSemaphoreCreateMutexStatic(&mdsUploadMutexBuffer);
+    }
+    locked = mdsUploadMutex != nullptr && xSemaphoreTake(mdsUploadMutex, 0) == pdTRUE;
+  }
+
+  ~MdsUploadGuard()
+  {
+    if (locked) {
+      xSemaphoreGive(mdsUploadMutex);
+    }
+  }
+
+  bool acquired() const { return locked; }
+
+private:
+  bool locked = false;
+};
+
 const size_t MAX_WEB_FILE_DOWNLOAD_SIZE = 262144;
 const size_t MAX_WEB_BUNDLE_DOWNLOAD_SIZE = 1048576;
 const char WEB_BUNDLE_DOWNLOAD_PATH[] = "/webbundle-server.tar";
-const char MDS_GIT_CERT_FINGERPRINT[] = "BB:B9:F7:5F:FD:F1:DB:03:EE:DC:3E:DF:46:B0:0A:97:27:43:F7:FF:A6:B3:62:A1:B8:8D:C5:E2:95:DD:A3:38";
+const char *WEB_INTERFACE_FILES[] = {
+  "css_black.css",
+  "css_red.css",
+  "css_white.css",
+  "common.css",
+  "common.js",
+  "devinfo.html",
+  "error.html",
+  "favicon.ico",
+  "filesystem.html",
+  "filesystem.js",
+  "firmware.html",
+  "firmware-page.js",
+  "gauge.min.js",
+  "header.html",
+  "header.js",
+  "app.js",
+  "lora.html",
+  "index.html",
+  "index.js",
+  "lora.js",
+  "restart.html",
+  "restart.js",
+  "sensorv.html",
+  "sensorv.js",
+  "settings-page.css",
+  "settings.html",
+  "settings.js"
+};
+const size_t WEB_INTERFACE_FILE_COUNT = sizeof(WEB_INTERFACE_FILES) / sizeof(WEB_INTERFACE_FILES[0]);
 
 bool isStandbyEnabledForMds(const configData &config)
 {
@@ -61,34 +113,28 @@ bool isStandbyEnabledForMds(const configData &config)
   return standbyInputInactive || wakeupCycleActive || pendingMdsDeviceEventStored;
 }
 
-String normalizeSha256(const String &sha256) {
-  String normalized = sha256;
-  normalized.trim();
-  normalized.toLowerCase();
-
-  if (normalized.length() != 64) {
-    return "";
+String getStandbyStateForMds(const configData &config)
+{
+  if (String(config.standbyMode) != "On") {
+    return "always_online";
   }
 
-  for (size_t i = 0; i < normalized.length(); i++) {
-    const char c = normalized[i];
-    if (!isxdigit(c)) {
-      return "";
-    }
+  // The hardware input is high when the device should stay permanently online.
+  if (alarm1) {
+    return "always_online";
   }
 
-  return normalized;
+  return "wakeup";
 }
 
-String sha256ToHex(const uint8_t digest[32]) {
-  static const char hexChars[] = "0123456789abcdef";
-  String hex;
-  hex.reserve(64);
-  for (size_t i = 0; i < 32; i++) {
-    hex += hexChars[(digest[i] >> 4) & 0x0F];
-    hex += hexChars[digest[i] & 0x0F];
-  }
-  return hex;
+void addMdsBoardMetadata(JsonObject &board, const configData &config)
+{
+  board["apiKey"] = String(config.MdsApiKey);
+  board["protocolVersion"] = "1";
+  board["macAddress"] = WiFi.macAddress();
+  board["firmwareVersion"] = String(config.fversion);
+  board["standbyEnabled"] = isStandbyEnabledForMds(config);
+  board["standbyState"] = getStandbyStateForMds(config);
 }
 
 bool getLittleFsFileSha256(const String &path, String &sha256) {
@@ -120,7 +166,7 @@ bool getLittleFsFileSha256(const String &path, String &sha256) {
   uint8_t digest[32];
   mbedtls_sha256_finish_ret(&shaContext, digest);
   mbedtls_sha256_free(&shaContext);
-  sha256 = sha256ToHex(digest);
+  sha256 = sha256ToHexString(digest);
   return sha256.length() == 64;
 }
 
@@ -133,35 +179,108 @@ bool isWebFileCurrent(const char *fileName, const String &expectedSha256) {
   return actualSha256 == expectedSha256;
 }
 
-String normalizeFirmwareUpdateBaseUrl(const char *configuredValue)
-{
-  String endpoint = String(configuredValue == nullptr ? "" : configuredValue);
-  endpoint.trim();
-  if (!endpoint.startsWith("https://")) {
+bool fetchFirmwareManifest(JsonDocument &manifest);
+String getExpectedWebFileSha256(JsonDocument &manifest, const char *fversion, const char *fileName);
+
+bool verifyInstalledWebFiles(JsonDocument &manifest, const char *fversion, String &errorMessage) {
+  for (size_t i = 0; i < WEB_INTERFACE_FILE_COUNT; i++) {
+    const char *fileName = WEB_INTERFACE_FILES[i];
+    const String expectedSha256 = getExpectedWebFileSha256(manifest, fversion, fileName);
+    if (expectedSha256.length() == 0) {
+      errorMessage = "Missing manifest hash for " + String(fileName) + ".";
+      return false;
+    }
+
+    if (!isWebFileCurrent(fileName, expectedSha256)) {
+      errorMessage = "Installed web file failed verification: " + String(fileName) + ".";
+      return false;
+    }
+  }
+
+  return true;
+}
+
+String normalizeManifestChannelName(const String &channel) {
+  String normalized = channel;
+  normalized.trim();
+  normalized.toLowerCase();
+  if (normalized == "release") {
+    return "stable";
+  }
+  return normalized;
+}
+
+JsonObject findManifestReleaseForVersion(JsonDocument &manifest, const char *fversion, String *resolvedChannel = nullptr) {
+  if (fversion == nullptr || fversion[0] == '\0') {
+    return JsonObject();
+  }
+
+  const String preferredChannel = normalizeManifestChannelName(getFirmwareReleaseChannel());
+  const char *channels[] = {"stable", "beta"};
+
+  for (const char *channel : channels) {
+    if (String(channel) != preferredChannel) {
+      continue;
+    }
+    JsonObject entry = manifest[channel].as<JsonObject>();
+    if (!entry.isNull() && String(entry["version"] | "") == String(fversion)) {
+      if (resolvedChannel != nullptr) {
+        *resolvedChannel = String(channel);
+      }
+      return entry;
+    }
+  }
+
+  for (const char *channel : channels) {
+    JsonObject entry = manifest[channel].as<JsonObject>();
+    if (!entry.isNull() && String(entry["version"] | "") == String(fversion)) {
+      if (resolvedChannel != nullptr) {
+        *resolvedChannel = String(channel);
+      }
+      return entry;
+    }
+  }
+
+  return JsonObject();
+}
+
+String getManifestWebFilesBasePath(JsonDocument &manifest, const char *fversion) {
+  JsonObject entry = findManifestReleaseForVersion(manifest, fversion);
+  if (entry.isNull()) {
     return "";
   }
 
-  const int queryStart = endpoint.indexOf('?');
-  if (queryStart >= 0) {
-    endpoint = endpoint.substring(0, queryStart);
+  String webFilesPath = entry["webFiles"] | "";
+  webFilesPath.trim();
+  while (webFilesPath.endsWith("/")) {
+    webFilesPath.remove(webFilesPath.length() - 1);
   }
-
-  const int lastSlash = endpoint.lastIndexOf('/');
-  if (lastSlash <= 8) {
-    return "";
-  }
-
-  return endpoint.substring(0, lastSlash) + "/bin/web";
+  return webFilesPath;
 }
 
 bool downloadAndInstallWebBundle(String &errorMessage) {
-  const String baseUrl = normalizeFirmwareUpdateBaseUrl(actconf.mdsOtaUrl);
+  JsonDocument manifest;
+  const bool manifestAvailable = fetchFirmwareManifest(manifest);
+  bool verifyWithManifest = manifestAvailable;
+  String webFilesBasePath = manifestAvailable ? getManifestWebFilesBasePath(manifest, actconf.fversion) : "";
+  if (webFilesBasePath.length() == 0) {
+    const String channel = normalizeManifestChannelName(getFirmwareReleaseChannel());
+    if (channel == "beta") {
+      webFilesBasePath = "beta/" + String(actconf.fversion);
+    } else {
+      webFilesBasePath = String(actconf.fversion);
+    }
+    verifyWithManifest = false;
+    DebugPrintln(2, "Manifest has no matching web files entry; trying direct web bundle path: " + webFilesBasePath);
+  }
+
+  const String baseUrl = buildMdsOtaWebBaseUrl(String(actconf.mdsOtaUrl));
   if (baseUrl.length() == 0) {
     errorMessage = "MDS OTA endpoint is not configured.";
     return false;
   }
 
-  const String bundleUrl = baseUrl + "/webui-package.tar";
+  const String bundleUrl = baseUrl + "/" + webFilesBasePath + "/webui-package.tar";
   WiFiClientSecure client;
   HTTPClient http;
 
@@ -187,6 +306,7 @@ bool downloadAndInstallWebBundle(String &errorMessage) {
     http.end();
     return false;
   }
+  setWebFilesUpdateProgress(0, static_cast<size_t>(contentLength), "webui-package.tar", "Downloading web package.");
 
   if (LittleFS.exists(WEB_BUNDLE_DOWNLOAD_PATH)) {
     LittleFS.remove(WEB_BUNDLE_DOWNLOAD_PATH);
@@ -202,9 +322,17 @@ bool downloadAndInstallWebBundle(String &errorMessage) {
   WiFiClient *stream = http.getStreamPtr();
   uint8_t buffer[1024];
   size_t written = 0;
+  unsigned long lastProgressMillis = millis();
   while (http.connected() && written < static_cast<size_t>(contentLength)) {
     const size_t availableBytes = stream->available();
     if (availableBytes == 0) {
+      if (millis() - lastProgressMillis > 15000UL) {
+        targetFile.close();
+        LittleFS.remove(WEB_BUNDLE_DOWNLOAD_PATH);
+        http.end();
+        errorMessage = "Web bundle download timed out.";
+        return false;
+      }
       delay(1);
       continue;
     }
@@ -225,6 +353,13 @@ bool downloadAndInstallWebBundle(String &errorMessage) {
       return false;
     }
     written += bytesRead;
+    lastProgressMillis = millis();
+    setWebFilesUpdateProgress(written, static_cast<size_t>(contentLength), "webui-package.tar", "Downloading web package.");
+    writeDisplayProgressScreen("Web files",
+                               "Downloading bundle",
+                               written,
+                               static_cast<size_t>(contentLength),
+                               "webui-package.tar");
   }
 
   targetFile.close();
@@ -243,49 +378,99 @@ bool downloadAndInstallWebBundle(String &errorMessage) {
     return false;
   }
 
-  webFilesDownloadTotal = 1;
-  webFilesDownloadCompleted = 1;
-  webFilesDownloadCurrentName = "";
-  webFilesDownloadStatusMessage = "Web package installed successfully.";
+  if (verifyWithManifest) {
+    String verificationError;
+    if (!verifyInstalledWebFiles(manifest, actconf.fversion, verificationError)) {
+      errorMessage = verificationError;
+      return false;
+    }
+  } else {
+    DebugPrintln(2, "Skipping manifest hash verification for direct web bundle fallback.");
+  }
+
+  setWebFilesUpdateProgress(1, 1, "", "Web package installed successfully.");
   return true;
 }
 
 bool fetchTextFromUpdateServer(const String &url, String &payload) {
-  WiFiClientSecure client;
-  HTTPClient http;
+  payload = "";
 
-  client.setCACert(reinterpret_cast<const char*>(cert_cacert_pem_start));
-  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  http.setTimeout(10000);
-
-  if (!http.begin(client, url)) {
-    DebugPrintln(1, "- failed to initialize HTTPS manifest request");
+  if (WiFi.status() != WL_CONNECTED) {
+    DebugPrintln(1, "Manifest request skipped because WiFi is not connected");
     return false;
   }
 
-  const int httpCode = http.GET();
-  if (httpCode != HTTP_CODE_OK) {
-    DebugPrint(1, "Manifest request failed: ");
-    DebugPrintln(1, httpCode);
-    http.end();
+  const unsigned long waitStart = millis();
+  while (!hasReasonableSystemTime() && millis() - waitStart < 4000UL) {
+    delay(100);
+  }
+
+  if (!hasReasonableSystemTime()) {
+    DebugPrintln(1, "Manifest request skipped because system time is not synchronized");
     return false;
   }
 
-  payload = http.getString();
-  payload.trim();
-  http.end();
-  return payload.length() > 0;
+  for (uint8_t attempt = 0; attempt < 2; ++attempt) {
+    WiFiClientSecure client;
+    HTTPClient http;
+
+    client.setCACert(reinterpret_cast<const char*>(cert_cacert_pem_start));
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    http.setTimeout(10000);
+    http.setReuse(false);
+    http.addHeader("Cache-Control", "no-cache");
+    http.addHeader("Pragma", "no-cache");
+
+    if (!http.begin(client, url)) {
+      DebugPrintln(1, "- failed to initialize HTTPS manifest request");
+    } else {
+      const int httpCode = http.GET();
+      if (httpCode == HTTP_CODE_OK) {
+        payload = http.getString();
+        payload.trim();
+        http.end();
+        if (payload.length() > 0) {
+          return true;
+        }
+      } else {
+        DebugPrint(1, "Manifest request failed: ");
+        DebugPrintln(1, httpCode);
+      }
+      http.end();
+    }
+
+    if (attempt == 0) {
+      delay(250);
+    }
+  }
+
+  return false;
 }
 
 bool fetchFirmwareManifest(JsonDocument &manifest) {
-  const String baseUrl = normalizeFirmwareUpdateBaseUrl(actconf.mdsOtaUrl);
+  const String baseUrl = buildMdsOtaWebBaseUrl(String(actconf.mdsOtaUrl));
   if (baseUrl.length() == 0) {
     DebugPrintln(1, "MDS OTA endpoint is not configured");
     return false;
   }
-  const String manifestUrl = baseUrl + "/firmware-manifest.json";
+  const String preferredChannel = normalizeManifestChannelName(getFirmwareReleaseChannel());
+  const String candidateUrls[] = {
+    baseUrl + "/" + preferredChannel + ".json",
+    baseUrl + "/firmware-manifest.json"
+  };
+
   String manifestPayload;
-  if (!fetchTextFromUpdateServer(manifestUrl, manifestPayload)) {
+  bool fetched = false;
+  for (size_t i = 0; i < (sizeof(candidateUrls) / sizeof(candidateUrls[0])); ++i) {
+    manifestPayload = "";
+    if (!fetchTextFromUpdateServer(candidateUrls[i], manifestPayload)) {
+      continue;
+    }
+    fetched = true;
+    break;
+  }
+
+  if (!fetched) {
     return false;
   }
 
@@ -296,45 +481,31 @@ bool fetchFirmwareManifest(JsonDocument &manifest) {
     return false;
   }
 
-  return true;
+  if (!manifest[preferredChannel.c_str()].isNull() || !manifest["version"].isNull()) {
+    if (!manifest["version"].isNull()) {
+      JsonDocument wrapped;
+      wrapped[preferredChannel] = manifest.as<JsonObject>();
+      manifest.clear();
+      manifest.set(wrapped);
+    }
+    return true;
+  }
+
+  DebugPrintln(1, "Firmware metadata JSON does not contain a usable release entry");
+  return false;
 }
 
 String getExpectedWebFileSha256(JsonDocument &manifest, const char *fversion, const char *fileName) {
-  const char *channels[] = {"stable", "beta"};
-  for (const char *channel : channels) {
-    JsonObject entry = manifest[channel].as<JsonObject>();
-    if (entry.isNull()) {
-      continue;
-    }
-    const char *version = entry["version"] | "";
-    if (String(version) != String(fversion)) {
-      continue;
-    }
-    const char *sha256 = entry["webFileHashes"][fileName] | "";
-    return normalizeSha256(String(sha256));
+  JsonObject entry = findManifestReleaseForVersion(manifest, fversion);
+  if (entry.isNull()) {
+    return "";
   }
-
-  return "";
+  const char *sha256 = entry["webFileHashes"][fileName] | "";
+  return normalizeSha256String(String(sha256));
 }
 
 bool hasManifestReleaseForVersion(JsonDocument &manifest, const char *fversion) {
-  if (fversion == nullptr || fversion[0] == '\0') {
-    return false;
-  }
-
-  const char *channels[] = {"stable", "beta"};
-  for (const char *channel : channels) {
-    JsonObject entry = manifest[channel].as<JsonObject>();
-    if (entry.isNull()) {
-      continue;
-    }
-    const char *version = entry["version"] | "";
-    if (String(version) == String(fversion)) {
-      return true;
-    }
-  }
-
-  return false;
+  return !findManifestReleaseForVersion(manifest, fversion).isNull();
 }
 
 String normalizeSecureUrl(const String &configuredValue)
@@ -350,17 +521,16 @@ String normalizeSecureUrl(const String &configuredValue)
   if (normalized.startsWith("https://git.derguntmar.de/")) {
     normalized.replace("https://git.derguntmar.de/", "https://mds-git.derguntmar.de/");
   }
+  if (normalized.startsWith("https://s-git.derguntmar.de/")) {
+    normalized.replace("https://s-git.derguntmar.de/", "https://mds-git.derguntmar.de/");
+  }
 
   return normalized;
 }
 
 bool hasValidSystemTime()
 {
-  const time_t now = time(nullptr);
-  // The current Let's Encrypt R12 server certificate for MDS is valid from
-  // 2026-05-03. Older stale RTC values can pass a generic "after 2024" check
-  // but still fail TLS validation with "certificate not yet valid".
-  return now >= 1777852800; // 2026-05-04 00:00:00 UTC
+  return hasReasonableSystemTime();
 }
 
 bool waitForMdsSystemTime(uint32_t timeoutMs)
@@ -464,8 +634,14 @@ void addMdsSensorRecord(JsonArray &sensors, int enabledMarker, const char *senso
   sensor["transmissionPath"] = transmissionPath;
 }
 
-bool postMdsPayload(configData actconf, JsonDocument &docpayload, const char *contextLabel)
+bool postMdsPayload(const configData &actconf, JsonDocument &docpayload, const char *contextLabel)
 {
+  MdsUploadGuard uploadGuard;
+  if (!uploadGuard.acquired()) {
+    DebugPrintln(2, String("Skipping overlapping MDS request (") + contextLabel + ")");
+    return false;
+  }
+
   lastMdsStatus = "";
   const String mdsUrl = normalizeSecureUrl(String(actconf.MdsUrl));
   if (mdsUrl.length() == 0) {
@@ -508,22 +684,21 @@ bool postMdsPayload(configData actconf, JsonDocument &docpayload, const char *co
       lastMdsStatus = responseBody;
     }
 
-    bool success = false;
-    if (httpResponseCode > 0) {
+    bool success = httpResponseCode >= 200 && httpResponseCode < 300;
+    if (success) {
       JsonDocument responseJson;
       if (deserializeJson(responseJson, responseBody) == DeserializationError::Ok) {
+        const String responseStatus = responseJson["status"] | "";
+        if (responseStatus.length() > 0) {
+          success = responseStatus == "ok";
+        }
         if (responseJson["insertedSensorRows"].is<int>() || responseJson["skippedSensorRows"].is<int>()) {
           DebugPrintln(3, String("MDS inserted rows: ") + int(responseJson["insertedSensorRows"] | 0));
           DebugPrintln(3, String("MDS skipped rows: ") + int(responseJson["skippedSensorRows"] | 0));
           DebugPrintln(3, String("MDS auto resolved rows: ") + int(responseJson["autoResolvedSensorRows"] | 0));
           DebugPrintln(3, String("MDS auto created sensor configs: ") + int(responseJson["autoCreatedSensorConfigs"] | 0));
-          success = (httpResponseCode == HTTP_CODE_OK) && ((int(responseJson["insertedSensorRows"] | 0)) > 0);
-          lastMdsStatus = success ? "MDS upload accepted" : "MDS response did not insert rows";
-        } else {
-          success = (httpResponseCode == HTTP_CODE_OK);
+          lastMdsStatus = success ? "MDS upload accepted" : "MDS rejected the upload";
         }
-      } else {
-        success = (httpResponseCode == HTTP_CODE_OK);
       }
     }
     return success;
@@ -541,12 +716,7 @@ bool postMdsPayload(configData actconf, JsonDocument &docpayload, const char *co
   const int pathStart = urlWithoutScheme.indexOf('/');
   const String host = pathStart >= 0 ? urlWithoutScheme.substring(0, pathStart) : urlWithoutScheme;
   const String path = pathStart >= 0 ? urlWithoutScheme.substring(pathStart) : "/";
-  const bool usePinnedMdsCertificate = (host == "mds-git.derguntmar.de");
-  if (usePinnedMdsCertificate) {
-    client.setInsecure();
-  } else {
-    client.setCACert(reinterpret_cast<const char*>(cert_cacert_pem_start));
-  }
+  client.setCACert(reinterpret_cast<const char*>(cert_cacert_pem_start));
 
   IPAddress resolvedIp;
   if (!WiFi.hostByName(host.c_str(), resolvedIp)) {
@@ -562,6 +732,7 @@ bool postMdsPayload(configData actconf, JsonDocument &docpayload, const char *co
   if (!client.connect(host.c_str(), 443)) {
     char errorBuffer[128] = {0};
     client.lastError(errorBuffer, sizeof(errorBuffer));
+    client.stop();
     lastMdsStatus = "Failed to connect to MDS host";
     if (errorBuffer[0] != '\0') {
       lastMdsStatus += ": " + String(errorBuffer);
@@ -570,13 +741,6 @@ bool postMdsPayload(configData actconf, JsonDocument &docpayload, const char *co
     if (errorBuffer[0] != '\0') {
       DebugPrintln(1, "TLS client error: " + String(errorBuffer));
     }
-    return false;
-  }
-
-  if (usePinnedMdsCertificate && !client.verify(MDS_GIT_CERT_FINGERPRINT, host.c_str())) {
-    lastMdsStatus = "MDS TLS fingerprint verification failed";
-    DebugPrintln(1, "MDS TLS fingerprint verification failed");
-    client.stop();
     return false;
   }
 
@@ -645,141 +809,114 @@ bool DownloadFilesFromWeb()
 {
   const char *fversion = actconf.fversion;
   DebugPrintln(3, "Downloading web files for installed firmware version: " + String(fversion));
-  webFilesDownloadStatusMessage = "Downloading web package.";
-  webFilesDownloadFatalError = false;
-  webFilesDownloadCompleted = 0;
-  webFilesDownloadTotal = 1;
-  webFilesDownloadCurrentName = "webui-package.tar";
+  resetWebFilesUpdateState(1, "webui-package.tar", "Downloading web package.");
 
   String bundleError;
-  writeDisplayProgressScreen("Web files", "Downloading bundle", 0, 1, webFilesDownloadCurrentName);
+  writeDisplayProgressScreen("Web files", "Downloading bundle", 0, 1, "webui-package.tar");
   if (downloadAndInstallWebBundle(bundleError)) {
     saveWebFilesVersion(fversion);
-    webFilesDownloadStatusMessage = "Web files updated successfully.";
-    writeDisplayStatusScreen("Web files", "Update done", String(fversion));
+    setWebFilesUpdateMessage("Web files updated successfully.");
+    writeDisplayStatusScreen("Web files", "Update complete", String(fversion));
     return true;
   }
 
   DebugPrintln(1, "Web bundle install failed, falling back to single-file download: " + bundleError);
-  webFilesDownloadStatusMessage = "Bundle install failed: " + bundleError + " Trying single files.";
-  webFilesDownloadCompleted = 0;
-  webFilesDownloadTotal = 0;
-  webFilesDownloadCurrentName = "";
-
-  const char *webFiles[] = {
-    "css_black.css",
-    "css_red.css",
-    "css_white.css",
-    "common.css",
-    "common.js",
-    "devinfo.html",
-    "error.html",
-    "favicon.ico",
-    "firmware.html",
-    "firmware-page.js",
-    "firmware_ota.html",
-    "firmware_ota.css",
-    "firmware_ota.js",
-    "gauge.min.js",
-    "header.html",
-    "header.js",
-    "app.js",
-    "lora.html",
-    "index.html",
-    "index.js",
-    "lora.js",
-    "restart.html",
-    "restart.js",
-    "sensorv.html",
-    "sensorv.js",
-    "settings-page.css",
-    "settings.html",
-    "settings.js"
-  };
+  setWebFilesUpdateProgress(0, 0, "", "Bundle install failed: " + bundleError + " Trying single files.");
 
   JsonDocument manifest;
   if (!fetchFirmwareManifest(manifest)) {
     DebugPrintln(1, "Unable to fetch firmware manifest for web file hash validation");
-    webFilesDownloadStatusMessage = "Unable to fetch firmware manifest.";
-    writeDisplayStatusScreen("Web files", "Manifest failed", "Check WiFi/TLS");
+    setWebFilesUpdateError(true, "Unable to fetch firmware manifest.");
+    writeDisplayStatusScreen("Web files", "Manifest failed", "Check WiFi");
     return false;
   }
 
   if (!hasManifestReleaseForVersion(manifest, fversion)) {
-    webFilesDownloadStatusMessage = "Update server has no web files for " + String(fversion) + ". Use the local web package instead.";
-    webFilesDownloadFatalError = true;
-    DebugPrintln(1, webFilesDownloadStatusMessage);
+    const String message = "Update server has no web files for " + String(fversion) + ". Use the local web package instead.";
+    setWebFilesUpdateFatalError(true, message);
+    DebugPrintln(1, message);
     writeDisplayStatusScreen("Web files", "No server files", String(fversion), "Use local pkg");
     return false;
   }
 
-  webFilesDownloadCompleted = 0;
-  webFilesDownloadTotal = sizeof(webFiles) / sizeof(webFiles[0]);
-  webFilesDownloadCurrentName = "";
+  const String webFilesBasePath = getManifestWebFilesBasePath(manifest, fversion);
+  if (webFilesBasePath.length() == 0) {
+    setWebFilesUpdateFatalError(true, "Manifest is missing the web files path for " + String(fversion) + ".");
+    writeDisplayStatusScreen("Web files", "Manifest error", String(fversion), "Missing path");
+    return false;
+  }
+
+  setWebFilesUpdateProgress(0, WEB_INTERFACE_FILE_COUNT, "", "Checking web files.");
 
   bool allFilesUpdated = true;
-  for (size_t i = 0; i < webFilesDownloadTotal; ++i) {
-    webFilesDownloadCurrentName = String(webFiles[i]);
-    webFilesDownloadStatusMessage = "Checking " + webFilesDownloadCurrentName + ".";
+  String currentName;
+  for (size_t i = 0; i < WEB_INTERFACE_FILE_COUNT; ++i) {
+    currentName = String(WEB_INTERFACE_FILES[i]);
+    setWebFilesUpdateProgress(i, WEB_INTERFACE_FILE_COUNT, currentName, "Checking " + currentName + ".");
     writeDisplayProgressScreen("Web files",
                                "Checking file",
-                               webFilesDownloadCompleted,
-                               webFilesDownloadTotal,
-                               webFilesDownloadCurrentName);
-    const String expectedSha256 = getExpectedWebFileSha256(manifest, fversion, webFiles[i]);
+                               i,
+                               WEB_INTERFACE_FILE_COUNT,
+                               currentName);
+    const String expectedSha256 = getExpectedWebFileSha256(manifest, fversion, WEB_INTERFACE_FILES[i]);
     if (expectedSha256.length() == 0) {
       DebugPrint(1, "Missing manifest hash for web file: ");
-      DebugPrintln(1, webFiles[i]);
-      webFilesDownloadStatusMessage = "Update server is incomplete for " + String(fversion) + ". Missing hash for " + webFilesDownloadCurrentName + ".";
-      webFilesDownloadFatalError = true;
+      DebugPrintln(1, WEB_INTERFACE_FILES[i]);
+      setWebFilesUpdateFatalError(true, "Update server is incomplete for " + String(fversion) + ". Missing hash for " + currentName + ".");
       allFilesUpdated = false;
       break;
     } else {
-      if (isWebFileCurrent(webFiles[i], expectedSha256)) {
+      if (isWebFileCurrent(WEB_INTERFACE_FILES[i], expectedSha256)) {
         DebugPrint(3, "Web file already current, skipping download: ");
-        DebugPrintln(3, webFiles[i]);
+        DebugPrintln(3, WEB_INTERFACE_FILES[i]);
       } else {
-        webFilesDownloadStatusMessage = "Downloading " + webFilesDownloadCurrentName + ".";
+        setWebFilesUpdateProgress(i, WEB_INTERFACE_FILE_COUNT, currentName, "Downloading " + currentName + ".");
         writeDisplayProgressScreen("Web files",
                                    "Downloading",
-                                   webFilesDownloadCompleted,
-                                   webFilesDownloadTotal,
-                                   webFilesDownloadCurrentName);
-        allFilesUpdated = DownloadFile(webFiles[i], fversion, expectedSha256) && allFilesUpdated;
+                                   i,
+                                   WEB_INTERFACE_FILE_COUNT,
+                                   currentName);
+        allFilesUpdated = DownloadFile(WEB_INTERFACE_FILES[i], webFilesBasePath.c_str(), expectedSha256) && allFilesUpdated;
       }
     }
-    webFilesDownloadCompleted = i + 1;
+    setWebFilesUpdateProgress(i + 1, WEB_INTERFACE_FILE_COUNT, currentName, allFilesUpdated ? "File complete." : "File error.");
     writeDisplayProgressScreen("Web files",
-                               allFilesUpdated ? "Processed file" : "File error",
-                               webFilesDownloadCompleted,
-                               webFilesDownloadTotal,
-                               webFilesDownloadCurrentName);
+                               allFilesUpdated ? "File complete" : "File error",
+                               i + 1,
+                               WEB_INTERFACE_FILE_COUNT,
+                               currentName);
   }
-
-  webFilesDownloadCurrentName = "";
 
   if (allFilesUpdated) {
     saveWebFilesVersion(fversion);
-    webFilesDownloadStatusMessage = "Web files updated successfully.";
-    writeDisplayStatusScreen("Web files", "Update done", String(fversion));
+    setWebFilesUpdateProgress(WEB_INTERFACE_FILE_COUNT, WEB_INTERFACE_FILE_COUNT, "", "Web files updated successfully.");
+    writeDisplayStatusScreen("Web files", "Update complete", String(fversion));
   } else {
-    writeDisplayStatusScreen("Web files", "Update failed", webFilesDownloadStatusMessage);
+    writeDisplayStatusScreen("Web files", "Update failed", "See WebSerial", currentName);
   }
 
   return allFilesUpdated;
 }
 
-bool DownloadFile(const char *fileName, const char *fversion, const String &expectedSha256)
+bool DownloadFile(const char *fileName, const char *webFilesBasePath, const String &expectedSha256)
 {
-  const String normalizedExpectedSha256 = normalizeSha256(expectedSha256);
+  const String normalizedExpectedSha256 = normalizeSha256String(expectedSha256);
   if (normalizedExpectedSha256.length() == 0) {
     DebugPrint(1, "Refusing web file download without valid SHA256: ");
     DebugPrintln(1, fileName);
     return false;
   }
 
-  const String baseUrl = normalizeFirmwareUpdateBaseUrl(actconf.mdsOtaUrl);
-  const String myurl = baseUrl + "/" + String(fversion) + "/" + String(fileName);
+  const String baseUrl = buildMdsOtaWebBaseUrl(String(actconf.mdsOtaUrl));
+  String normalizedWebFilesBasePath = String(webFilesBasePath == nullptr ? "" : webFilesBasePath);
+  normalizedWebFilesBasePath.trim();
+  while (normalizedWebFilesBasePath.startsWith("/")) {
+    normalizedWebFilesBasePath.remove(0, 1);
+  }
+  while (normalizedWebFilesBasePath.endsWith("/")) {
+    normalizedWebFilesBasePath.remove(normalizedWebFilesBasePath.length() - 1);
+  }
+  const String myurl = baseUrl + "/" + normalizedWebFilesBasePath + "/" + String(fileName);
   WiFiClientSecure client;
   HTTPClient http;
 
@@ -826,6 +963,7 @@ bool DownloadFile(const char *fileName, const char *fversion, const String &expe
       WiFiClient *stream = http.getStreamPtr();
       uint8_t buffer[1024];
       size_t written = 0;
+      unsigned long lastProgressMillis = millis();
       mbedtls_sha256_context shaContext;
       mbedtls_sha256_init(&shaContext);
       mbedtls_sha256_starts_ret(&shaContext, 0);
@@ -833,6 +971,14 @@ bool DownloadFile(const char *fileName, const char *fversion, const String &expe
       while (http.connected() && written < static_cast<size_t>(contentLength)) {
         const size_t availableBytes = stream->available();
         if (availableBytes == 0) {
+          if (millis() - lastProgressMillis > 15000UL) {
+            DebugPrintln(1, "- web file download timed out");
+            targetFile.close();
+            mbedtls_sha256_free(&shaContext);
+            LittleFS.remove(tempPath);
+            http.end();
+            return false;
+          }
           delay(1);
           continue;
         }
@@ -856,6 +1002,7 @@ bool DownloadFile(const char *fileName, const char *fversion, const String &expe
 
         mbedtls_sha256_update_ret(&shaContext, buffer, bytesRead);
         written += bytesRead;
+        lastProgressMillis = millis();
       }
 
       targetFile.close();
@@ -871,7 +1018,7 @@ bool DownloadFile(const char *fileName, const char *fversion, const String &expe
         return false;
       }
 
-      const String actualSha256 = sha256ToHex(digest);
+      const String actualSha256 = sha256ToHexString(digest);
       if (actualSha256 != normalizedExpectedSha256) {
         DebugPrint(1, "Web file checksum mismatch: ");
         DebugPrintln(1, fileName);
@@ -903,7 +1050,7 @@ bool DownloadFile(const char *fileName, const char *fversion, const String &expe
   return downloadSuccess;
 }
 
-bool sendToMDS(configData actconf)
+bool sendToMDS(const configData &actconf)
 {
   if (WiFi.status() != WL_CONNECTED) {
     lastMdsStatus = "WiFi is not connected";
@@ -915,11 +1062,7 @@ bool sendToMDS(configData actconf)
   JsonObject board = docpayload["board"].to<JsonObject>();
   JsonArray sensors = docpayload["sensors"].to<JsonArray>();
 
-  board["apiKey"] = String(actconf.MdsApiKey);
-  board["protocolVersion"] = "1";
-  board["macAddress"] = WiFi.macAddress();
-  board["firmwareVersion"] = String(actconf.fversion);
-  board["standbyEnabled"] = isStandbyEnabledForMds(actconf);
+  addMdsBoardMetadata(board, actconf);
 
   char mdsDate[11];
   char mdsTime[9];
@@ -949,7 +1092,7 @@ bool sendToMDS(configData actconf)
   return postMdsPayload(actconf, docpayload, "sensor upload");
 }
 
-bool sendMdsDeviceEvent(configData actconf, const char *sensorName)
+bool sendMdsDeviceEvent(const configData &actconf, const char *sensorName)
 {
   if (WiFi.status() != WL_CONNECTED) {
     lastMdsStatus = "WiFi is not connected";
@@ -967,11 +1110,7 @@ bool sendMdsDeviceEvent(configData actconf, const char *sensorName)
   JsonObject board = docpayload["board"].to<JsonObject>();
   JsonArray sensors = docpayload["sensors"].to<JsonArray>();
 
-  board["apiKey"] = String(actconf.MdsApiKey);
-  board["protocolVersion"] = "1";
-  board["macAddress"] = WiFi.macAddress();
-  board["firmwareVersion"] = String(actconf.fversion);
-  board["standbyEnabled"] = isStandbyEnabledForMds(actconf);
+  addMdsBoardMetadata(board, actconf);
 
   char mdsDate[11];
   char mdsTime[9];
@@ -991,4 +1130,49 @@ bool sendMdsDeviceEvent(configData actconf, const char *sensorName)
   sensor["transmissionPath"] = "1";
 
   return postMdsPayload(actconf, docpayload, sensorName == nullptr ? "device event" : sensorName);
+}
+
+bool sendMdsOtaStatus(const configData &actconf, const char *phase, int percent, const String &targetVersion, const String &message)
+{
+  if (WiFi.status() != WL_CONNECTED) {
+    DebugPrintln(2, "Skipping MDS OTA status because WiFi is not connected");
+    return false;
+  }
+
+  if (String(actconf.MdsApiKey).length() == 0) {
+    DebugPrintln(2, "Skipping MDS OTA status because MDS API key is not configured");
+    return false;
+  }
+
+  JsonDocument docpayload;
+  JsonObject board = docpayload["board"].to<JsonObject>();
+  JsonArray sensors = docpayload["sensors"].to<JsonArray>();
+
+  addMdsBoardMetadata(board, actconf);
+
+  char mdsDate[11];
+  char mdsTime[9];
+  buildMdsTimestamp(mdsDate, mdsTime);
+
+  String clippedMessage = message;
+  clippedMessage.replace("\r", " ");
+  clippedMessage.replace("\n", " ");
+  if (clippedMessage.length() > 140) {
+    clippedMessage = clippedMessage.substring(0, 137) + "...";
+  }
+
+  JsonObject sensor = sensors.add<JsonObject>();
+  sensor["sensorType"] = "OtaStatus";
+  sensor["type"] = "OtaStatus";
+  sensor["sensorName"] = "OtaUpdate";
+  sensor["name"] = "OtaUpdate";
+  sensor["value1"] = String(phase == nullptr ? "" : phase);
+  sensor["value2"] = percent < 0 ? 0 : percent;
+  sensor["value3"] = targetVersion.length() > 0 ? targetVersion : String(actconf.fversion);
+  sensor["value4"] = clippedMessage;
+  sensor["date"] = mdsDate;
+  sensor["time"] = mdsTime;
+  sensor["transmissionPath"] = "1";
+
+  return postMdsPayload(actconf, docpayload, "ota status");
 }

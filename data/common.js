@@ -24,6 +24,27 @@ function setText(id, value) {
     element.textContent = value;
 }
 
+function setHtmlPageAssetVersion(version) {
+    var assetVersion = version || '';
+    if (!assetVersion) {
+        return;
+    }
+
+    var nodes = document.querySelectorAll('link[href], script[src]');
+    for (var i = 0; i < nodes.length; i += 1) {
+        var node = nodes[i];
+        var attributeName = node.tagName === 'LINK' ? 'href' : 'src';
+        var currentValue = node.getAttribute(attributeName);
+        if (!currentValue || currentValue.indexOf('http') === 0 || currentValue.indexOf('data:') === 0) {
+            continue;
+        }
+        if (currentValue.indexOf('?v=') >= 0) {
+            continue;
+        }
+        node.setAttribute(attributeName, currentValue + (currentValue.indexOf('?') >= 0 ? '&' : '?') + 'v=' + encodeURIComponent(assetVersion));
+    }
+}
+
 function toggleClass(id, className, enabled) {
     var element = byId(id);
     if (!element) {
@@ -43,6 +64,50 @@ function setElementsDisabled(selector, disabled, root) {
     for (var i = 0; i < nodes.length; i += 1) {
         nodes[i].disabled = disabled;
     }
+}
+
+function startVisiblePolling(callback, intervalMs) {
+    var timer = null;
+    var running = false;
+
+    function run() {
+        if (document.hidden || running) {
+            return;
+        }
+        running = true;
+        Promise.resolve(callback()).catch(function () {}).finally(function () {
+            running = false;
+            if (!document.hidden && timer !== null) {
+                timer = window.setTimeout(run, intervalMs);
+            }
+        });
+    }
+
+    function start() {
+        if (timer !== null) {
+            return;
+        }
+        timer = window.setTimeout(run, 0);
+    }
+
+    function stop() {
+        if (timer === null) {
+            return;
+        }
+        window.clearTimeout(timer);
+        timer = null;
+    }
+
+    document.addEventListener('visibilitychange', function () {
+        if (document.hidden) {
+            stop();
+        } else {
+            start();
+        }
+    });
+
+    start();
+    return stop;
 }
 
 function navigateTo(url, target) {

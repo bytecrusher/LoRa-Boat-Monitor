@@ -6,11 +6,11 @@
   <meta name=viewport content='width=device-width, initial-scale=1'>
   <meta name='csrf-token' content='%csrfToken%'>
   <title>Firmware Update - %devname%</title>
-  <link rel='stylesheet' type='text/css' href='/styles.css'>
-  <link rel='stylesheet' type='text/css' href='/common.css'>
+  <link rel='stylesheet' type='text/css' href='/styles.css?v=%fversion%'>
+  <link rel='stylesheet' type='text/css' href='/common.css?v=%fversion%'>
 </head>
 
-<body>
+<body data-firmware-version="%fversion%">
   %header%
   <div id="loader" class="hidden" style="display:none;"></div>
   <div id="myDiv" class="animate-bottom" style="display:block;">
@@ -40,15 +40,28 @@
     </div>
     <div class="firmware-card-grid">
     <form class="page-section firmware-card" name='upform3' action='/doUpdate' method='post' enctype='multipart/form-data'>
-      <h4>MDS OTA Firmware</h4>
+      <h4>Release Firmware</h4>
       <input type='hidden' name='csrf' value='%csrfToken%'>
       <div class="form-stack">
-        <div class="status-line"><span>Server Version</span><strong id="mdsOtaVersion">Checking...</strong></div>
-        <div class="status-line"><span>Status</span><strong id="mdsOtaStatus">Checking...</strong></div>
-        <div class="status-line"><span>Secret</span><strong>%mdsOtaSecretStatus%</strong></div>
-        <input class="readonly-field" type='text' name='mdsOtaUrl' size='50' value='%mdsOtaUrl%' readonly>
-        <span id="mdsOtaDetail" class="status-text muted-text">The device asks MDS for an update and sends the configured OTA secret as a request header.</span>
-        <button type='button' id='mdsOtaFirmwareButton'>Install MDS OTA Firmware</button>
+        <div class="status-line"><span>Server Version</span><strong id="releaseOtaVersion">Checking...</strong></div>
+        <div class="status-line"><span>Status</span><strong id="releaseOtaStatus">Checking...</strong></div>
+        <div class="status-line"><span>Channel</span><strong>Release</strong></div>
+        <input class="readonly-field" type='text' name='mdsReleaseUrl' size='50' value='%mdsOtaUrl%' readonly>
+        <span id="releaseOtaDetail" class="status-text muted-text">Installs the current released firmware from the MDS OTA manifest.</span>
+        <button type='button' id='releaseOtaFirmwareButton'>Install Release Firmware</button>
+      </div>
+    </form>
+
+    <form class="page-section firmware-card" name='upform4' action='/doUpdate' method='post' enctype='multipart/form-data'>
+      <h4>Beta Firmware</h4>
+      <input type='hidden' name='csrf' value='%csrfToken%'>
+      <div class="form-stack">
+        <div class="status-line"><span>Server Version</span><strong id="betaOtaVersion">Checking...</strong></div>
+        <div class="status-line"><span>Status</span><strong id="betaOtaStatus">Checking...</strong></div>
+        <div class="status-line"><span>Channel</span><strong>Beta</strong></div>
+        <input class="readonly-field" type='text' name='mdsBetaUrl' size='50' value='%mdsOtaUrl%' readonly>
+        <span id="betaOtaDetail" class="status-text muted-text">Installs the current beta firmware from the MDS OTA manifest.</span>
+        <button type='button' id='betaOtaFirmwareButton'>Install Beta Firmware</button>
       </div>
     </form>
 
@@ -58,6 +71,7 @@
       <div class="form-stack">
         <span class="muted-text">Allowed file types: .bin or .bmb</span>
         <input type='file' required name='image' id='localFirmwareFile'>
+        <span id="localFirmwareFileName" class="status-text muted-text">No firmware file selected.</span>
         <input type='text' name='md5' size='40' value='' maxlength='40' placeholder='Optional MD5 checksum'>
         <button type='button' id='localFirmwareButton' disabled>Install Local Firmware</button>
       </div>
@@ -69,6 +83,7 @@
       <div class="form-stack">
         <span class="muted-text">Upload a web package that replaces only the known web interface files and keeps the LittleFS config backup untouched.</span>
         <input type='file' required name='webbundle' id='localWebBundleFile'>
+        <span id="localWebBundleFileName" class="status-text muted-text">No web package selected.</span>
         <span class="status-text muted-text">Recommended file: <code>webui-package.tar</code></span>
         <button type='button' id='localWebBundleButton' disabled>Install Local Web Package</button>
       </div>
@@ -77,7 +92,7 @@
 
     <section class="page-section">
       <h4>Web Interface Files</h4>
-      <p class="muted-text">Downloads the HTML, CSS and JavaScript files that match the installed firmware version. The source is derived automatically from the configured MDS OTA endpoint. If MDS OTA is not configured, use the local web package upload above.</p>
+      <p class="muted-text">Downloads the HTML, CSS and JavaScript files that match the installed firmware version and its channel. The source is derived automatically from the configured MDS OTA endpoint. If MDS OTA is not configured, use the local web package upload above.</p>
       <div class="status-grid compact-status-grid">
         <article class="status-card">
           <span class="status-label">Installed Web Files</span>
@@ -103,16 +118,57 @@
       </div>
     </section>
 
+    <section class="page-section">
+      <div class="table-toolbar">
+        <div>
+          <h4>OTA Diagnostics</h4>
+          <p class="muted-text">Shows the device-side checks used by firmware and web file updates.</p>
+        </div>
+        <div class="button-group">
+          <button type="button" id="otaDiagnosticsButton">Refresh Diagnostics</button>
+        </div>
+      </div>
+      <div class="status-grid compact-status-grid">
+        <article class="status-card">
+          <span class="status-label">Wi-Fi</span>
+          <strong id="otaDiagWifi">Checking...</strong>
+        </article>
+        <article class="status-card">
+          <span class="status-label">Time</span>
+          <strong id="otaDiagTime">Checking...</strong>
+        </article>
+        <article class="status-card">
+          <span class="status-label">Endpoint</span>
+          <strong id="otaDiagEndpoint">Checking...</strong>
+        </article>
+      </div>
+      <div class="status-grid compact-status-grid">
+        <article class="status-card">
+          <span class="status-label">Beta Metadata</span>
+          <strong id="otaDiagBeta">Checking...</strong>
+        </article>
+        <article class="status-card">
+          <span class="status-label">Release Metadata</span>
+          <strong id="otaDiagRelease">Checking...</strong>
+        </article>
+        <article class="status-card">
+          <span class="status-label">Manifest</span>
+          <strong id="otaDiagManifest">Checking...</strong>
+        </article>
+      </div>
+      <div id="otaDiagnosticsDetail" class="status-inline-note">Waiting for diagnostics.</div>
+    </section>
+
     <div class="page-section">
       <div class="button-row">
         <button type='button' id='mdsTestButton'>Test MDS Upload</button>
-        <button type='button' id='backToOverviewButton'>Back to Overview</button>
+        <a class='btn button-secondary' id='backToOverviewButton' href='/index.html'>Back to Overview</a>
       </div>
       <p class="muted-text"><b>Info:</b> The device restarts automatically after a successful firmware update.</p>
     </div>
   </div>
-  <script src='/common.js' type='text/javascript'></script>
-  <script src='/firmware-page.js' type='text/javascript'></script>
+  <script src='/common.js?v=%fversion%' type='text/javascript'></script>
+  <script src='/firmware-page.js?v=%fversion%' type='text/javascript'></script>
 </body>
 
 </html>

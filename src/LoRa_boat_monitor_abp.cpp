@@ -65,6 +65,8 @@
 #include "func_webclient.h"     // my lib for webclient connection (getting files for webserver)
 #include <stdint.h>
 #include "Configuration.h"      // Configuration
+#include "configMigration.h"    // Legacy configuration migration
+#include "updateRuntimeState.h"
 
 configData actconf;             // Actual configuration, Global variable
                                 // Overload with old EEPROM configuration by start. It is necessary for port and serial speed
@@ -77,26 +79,23 @@ configData actconf;             // Actual configuration, Global variable
 #include "vedirect.h"               // VE.direct lib
 #include "filesystem.h"             // Function for filesystem
 #include "NMEATelegrams.h"          // Function library for NMEA telegrams
+void noteManualLoraTxStarted();
+bool completeManualLoraSend(bool acknowledged, uint8_t downlinkBytes);
+bool failManualLoraSend(const char *reason);
 #include "LoRa.h"                   // LoRa Lib
-#include "task.h"                   // Task for LoRa code
 
 // Declarations
 int value;                      // Value from first byte in EEPROM
 int empty;                      // If EEPROM empty without configuration then set to 1 otherwise 0
 configData defconf;             // Definition of default configuration data
 
-void Task1code( void *pvParameters );  //Initiates TaskCode1
-
-TaskHandle_t Task1;             // Declare task for LoRa code
 
 AsyncWebServer httpServer(actconf.httpport);   // Port for HTTP server
 //MDNSResponder mdns;                       // Activate DNS responder
 WiFiServer server(actconf.dataport);        // Declare WiFi NMEA server port
 #define MAX_CLIENTS 3 //maximal number of simultaneousy connected clients
 WiFiClient clients[MAX_CLIENTS]; //Array of clients
-char result[70] = "0";  //string for NMEA-assembly (dollar symbol, MWV, CS)
 
-Ticker Timer1;                  // Declare Timer for GPS data reading
 Ticker Timer2;                  // Declare Timer for relay ontime
 Ticker Timer3;                  // Declare Timer for NMEA sending
 Ticker Timer4;                  // Declare Timer for Lora sending
@@ -125,10 +124,12 @@ RTC_DATA_ATTR char pendingMdsStandbyEventCause[24] = "";
 RTC_DATA_ATTR char pendingMdsWakeupEventCause[24] = "";
 RTC_DATA_ATTR time_t lastSentMdsStandbyEventEpoch = 0;
 RTC_DATA_ATTR time_t lastSentMdsWakeupEventEpoch = 0;
+RTC_DATA_ATTR time_t lastStandbyAutoUpdateCheckEpoch = 0;
 RTC_DATA_ATTR MdsDeviceEventSnapshot pendingMdsDeviceEventQueue[MDS_DEVICE_EVENT_QUEUE_SIZE];
 RTC_DATA_ATTR uint8_t pendingMdsDeviceEventQueueHead = 0;
 RTC_DATA_ATTR uint8_t pendingMdsDeviceEventQueueTail = 0;
 RTC_DATA_ATTR uint8_t pendingMdsDeviceEventQueueCount = 0;
+RTC_DATA_ATTR bool keepAwakeAfterUpdateRestart = false;
 
 const int STATE_DELAY = 1000;
 bool reboot = false;
@@ -139,261 +140,107 @@ bool sendedLoraAfterSleepOneTime = false;
 
 bool toggleDisplayStatus = false;
 long LoraSendDurationSeconds = 0;
-boolean runDownloadingFiles = false;
-boolean runDownloadingFilesStatus = false;
-size_t webFilesDownloadCompleted = 0;
-size_t webFilesDownloadTotal = 0;
-String webFilesDownloadCurrentName = "";
-String webFilesDownloadStatusMessage = "";
-bool webFilesDownloadError = false;
-bool webFilesDownloadFatalError = false;
-uint8_t webFilesDownloadRetryCount = 0;
-unsigned long webFilesDownloadStartedMillis = 0;
-bool remoteOtaPending = false;
-bool remoteOtaInProgress = false;
-String remoteOtaUrl = "";
-String remoteOtaVersion = "";
-String remoteOtaSha256 = "";
-bool remoteOtaUseMdsEndpoint = false;
-bool remoteOtaRebootRequired = false;
+volatile boolean runDownloadingFiles = false;
+volatile boolean runDownloadingFilesStatus = false;
 bool wifiServicesInitialized = false;
 bool mdnsInitialized = false;
 bool standbyWakeDisplayActive = false;
+unsigned long standbyWakeDisplayHoldUntilMillis = 0;
+bool standbyAutoUpdateAttemptedThisWake = false;
 
 const unsigned long MDS_UPLOAD_INTERVAL_MS = 300000UL;
 const unsigned long WAKE_MDS_RETRY_INTERVAL_MS = 30000UL;
-const unsigned long AUTO_FIRMWARE_UPDATE_RETRY_MS = 1800000UL;
-const unsigned long AUTO_FIRMWARE_UPDATE_INTERVAL_MS = 21600000UL;
+const unsigned long STANDBY_WAKE_DISPLAY_HOLD_MS = 2500UL;
 unsigned long lastMdsUploadMillis = 0;
-unsigned long nextAutoFirmwareUpdateCheckMillis = 0;
 bool pendingWakeMdsEvent = false;
 int pendingWakeReasonCode = 0;
 String pendingWakeReasonLabel = "unknown";
 unsigned long nextWakeMdsRetryMillis = 0;
 bool currentWakeMdsEventCaptured = false;
-
-long timezone = 1; 
-byte daysavetime = 1;
+unsigned long currentWakeupBootMillis = 0;
+bool currentWakeupBootMillisCaptured = false;
 
 namespace {
-struct LegacyConfigDataV16 {
-  int valid = 16;
-  int crypt = 1;
-  char username[31] = "admin";
-  char password[31] = "boatmonitor";
-  char devname[21] = "LoRa Boat Monitor";
-  char crights[29] = "NoWa (C) (mod by Gunni) 2023";
-  char fversion[7] = "V1.13m";
-  char license[12] = "GPL3";
-  int debug = 3;
-  int corder1 = 1;
-  char cssid1[31] = "";
-  char cpassword1[31] = "";
-  int corder2 = 2;
-  char cssid2[31] = "";
-  char cpassword2[31] = "";
-  int corder3 = 3;
-  char cssid3[31] = "";
-  char cpassword3[31] = "";
-  int timeout = 10;
-  char sssid[31] = "LoRaBoatMonitor";
-  char spassword[31] = "LoRaBoatMonitor";
-  int apchannel = 1;
-  int maxconnections = 2;
-  int mDNS = 1;
-  char hostname[31] = "boatmonitor";
-  int dataport = 6666;
-  int httpport = 80;
-  int serverMode = 0;
-  int serspeed = 115200;
-  int WebSerialDebug = 0;
-  char firmwareUpdateUrl[50] = "";
-  char autoFirmwareUpdate[8] = "No";
-  int skin = 0;
-  uint32_t devaddr = 0x00000000;
-  uint8_t nskey[16] = {0};
-  uint8_t appkey[16] = {0};
-  char lorafrequency[6] = "EU868";
-  int lchannel = 1;
-  int spreadf = 10;
-  int dynsf = 1;
-  unsigned int tinterval = 1;
-  uint32_t fcnt = 0;
-  int relay = 0;
-  int instrumentSize = 400;
-  int deviceID = 0;
-  int senddata = 1;
-  int sendubidots = 0;
-  float voffset = 6.47301;
-  float a1vslope = 0.02860676;
-  float a2vslope = 0;
-  int vaverage = 1;
-  float t1offset = 0;
-  float a1t1slope = 143.1974;
-  float a2t1slope = 0;
-  int t1average = 1;
-  float t2offset = 0;
-  float a1t2slope = 143.1974;
-  float a2t2slope = 0;
-  int t2average = 1;
-  char tempSensorType[10] = "Off";
-  char tempUnit[2] = "C";
-  char envSensor[20] = "Off";
-  char standbyMode[4] = "Off";
-  int standbySleepDuration = 15;
-  char loraOperationMode[8] = "Standby";
-  char WifiStandbyMode[8] = "No";
-  char SendDataViaWifi[8] = "No";
-  char MdsUrl[100] = "https://yourservername/ingest/receivejson.php";
-  char MdsApiKey[30] = "";
-  int MdsSensorIdBattery = 0;
-  int MdsSensorIdTanks = 0;
-  int MdsSensorIdStatus = 0;
-  int MdsSensorIdGps = 0;
-  int MdsSensorIdEnv = 0;
-  int MdsSensorIdDewpoint = 0;
-  int MdsSensorIdVedirect = 0;
-  int cssStyle = 0;
-  int OledDisplayRotation = 0;
-  char mdsOtaUrl[100] = "https://mds-git.derguntmar.de/ota/getupdate.php";
-  char mdsOtaSecret[65] = "";
-  char standbyFirmwareUpdateCheck[8] = "No";
-  int standbyFirmwareUpdateIntervalHours = 24;
+constexpr uint8_t MANUAL_LORA_LOG_SIZE = 8;
+
+struct ManualLoraLogEntry {
+  uint32_t timestampMillis;
+  char message[96];
 };
 
-void copyLegacyString(char *target, size_t targetSize, const char *source) {
-  if (target == nullptr || targetSize == 0 || source == nullptr) {
-    return;
+volatile bool manualLoraSendRequested = false;
+volatile bool manualLoraSendInProgress = false;
+bool manualLoraRuntimeOwned = false;
+uint32_t manualLoraRequestId = 0;
+uint32_t manualLoraRequestedMillis = 0;
+uint32_t manualLoraStartedMillis = 0;
+uint32_t manualLoraCompletedMillis = 0;
+uint32_t manualLoraResultHoldUntilMillis = 0;
+bool manualLoraLastAcknowledged = false;
+uint8_t manualLoraLastDownlinkBytes = 0;
+char manualLoraState[20] = "idle";
+char manualLoraMessage[128] = "Ready for a manual LoRa uplink.";
+ManualLoraLogEntry manualLoraLog[MANUAL_LORA_LOG_SIZE] = {};
+uint8_t manualLoraLogWriteIndex = 0;
+uint8_t manualLoraLogCount = 0;
+portMUX_TYPE manualLoraStatusMux = portMUX_INITIALIZER_UNLOCKED;
+
+void addManualLoraLog(const String &message) {
+  portENTER_CRITICAL(&manualLoraStatusMux);
+  ManualLoraLogEntry &entry = manualLoraLog[manualLoraLogWriteIndex];
+  entry.timestampMillis = millis();
+  strlcpy(entry.message, message.c_str(), sizeof(entry.message));
+  manualLoraLogWriteIndex = (manualLoraLogWriteIndex + 1) % MANUAL_LORA_LOG_SIZE;
+  if (manualLoraLogCount < MANUAL_LORA_LOG_SIZE) {
+    manualLoraLogCount++;
   }
-  strncpy(target, source, targetSize - 1);
-  target[targetSize - 1] = '\0';
+  portEXIT_CRITICAL(&manualLoraStatusMux);
 }
 
-configData migrateLegacyConfigV16ToCurrent(const LegacyConfigDataV16 &legacy) {
-  configData migrated = defconf;
-  migrated.valid = defconf.valid;
-  migrated.crypt = legacy.crypt;
-  copyLegacyString(migrated.username, sizeof(migrated.username), legacy.username);
-  copyLegacyString(migrated.password, sizeof(migrated.password), legacy.password);
-  copyLegacyString(migrated.devname, sizeof(migrated.devname), legacy.devname);
-  copyLegacyString(migrated.crights, sizeof(migrated.crights), legacy.crights);
-  copyLegacyString(migrated.fversion, sizeof(migrated.fversion), legacy.fversion);
-  copyLegacyString(migrated.license, sizeof(migrated.license), legacy.license);
-  migrated.debug = legacy.debug;
-  migrated.corder1 = legacy.corder1;
-  copyLegacyString(migrated.cssid1, sizeof(migrated.cssid1), legacy.cssid1);
-  copyLegacyString(migrated.cpassword1, sizeof(migrated.cpassword1), legacy.cpassword1);
-  migrated.corder2 = legacy.corder2;
-  copyLegacyString(migrated.cssid2, sizeof(migrated.cssid2), legacy.cssid2);
-  copyLegacyString(migrated.cpassword2, sizeof(migrated.cpassword2), legacy.cpassword2);
-  migrated.corder3 = legacy.corder3;
-  copyLegacyString(migrated.cssid3, sizeof(migrated.cssid3), legacy.cssid3);
-  copyLegacyString(migrated.cpassword3, sizeof(migrated.cpassword3), legacy.cpassword3);
-  migrated.timeout = legacy.timeout;
-  copyLegacyString(migrated.sssid, sizeof(migrated.sssid), legacy.sssid);
-  copyLegacyString(migrated.spassword, sizeof(migrated.spassword), legacy.spassword);
-  migrated.apchannel = legacy.apchannel;
-  migrated.maxconnections = legacy.maxconnections;
-  migrated.mDNS = legacy.mDNS;
-  copyLegacyString(migrated.hostname, sizeof(migrated.hostname), legacy.hostname);
-  migrated.dataport = legacy.dataport;
-  migrated.httpport = legacy.httpport;
-  migrated.serverMode = legacy.serverMode;
-  migrated.serspeed = legacy.serspeed;
-  migrated.WebSerialDebug = legacy.WebSerialDebug;
-  copyLegacyString(migrated.firmwareUpdateUrl, sizeof(migrated.firmwareUpdateUrl), legacy.firmwareUpdateUrl);
-  migrated.skin = legacy.skin;
-  migrated.devaddr = legacy.devaddr;
-  memcpy(migrated.nskey, legacy.nskey, sizeof(migrated.nskey));
-  memcpy(migrated.appkey, legacy.appkey, sizeof(migrated.appkey));
-  copyLegacyString(migrated.lorafrequency, sizeof(migrated.lorafrequency), legacy.lorafrequency);
-  migrated.lchannel = legacy.lchannel;
-  migrated.spreadf = legacy.spreadf;
-  migrated.dynsf = legacy.dynsf;
-  migrated.tinterval = legacy.tinterval;
-  migrated.fcnt = legacy.fcnt;
-  migrated.relay = legacy.relay;
-  migrated.instrumentSize = legacy.instrumentSize;
-  migrated.deviceID = legacy.deviceID;
-  migrated.senddata = legacy.senddata;
-  migrated.voffset = legacy.voffset;
-  migrated.a1vslope = legacy.a1vslope;
-  migrated.a2vslope = legacy.a2vslope;
-  migrated.vaverage = legacy.vaverage;
-  migrated.t1offset = legacy.t1offset;
-  migrated.a1t1slope = legacy.a1t1slope;
-  migrated.a2t1slope = legacy.a2t1slope;
-  migrated.t1average = legacy.t1average;
-  migrated.t2offset = legacy.t2offset;
-  migrated.a1t2slope = legacy.a1t2slope;
-  migrated.a2t2slope = legacy.a2t2slope;
-  migrated.t2average = legacy.t2average;
-  copyLegacyString(migrated.tempSensorType, sizeof(migrated.tempSensorType), legacy.tempSensorType);
-  copyLegacyString(migrated.tempUnit, sizeof(migrated.tempUnit), legacy.tempUnit);
-  copyLegacyString(migrated.envSensor, sizeof(migrated.envSensor), legacy.envSensor);
-  copyLegacyString(migrated.standbyMode, sizeof(migrated.standbyMode), legacy.standbyMode);
-  migrated.standbySleepDuration = legacy.standbySleepDuration;
-  copyLegacyString(migrated.loraOperationMode, sizeof(migrated.loraOperationMode), legacy.loraOperationMode);
-  copyLegacyString(migrated.WifiStandbyMode, sizeof(migrated.WifiStandbyMode), legacy.WifiStandbyMode);
-  copyLegacyString(migrated.SendDataViaWifi, sizeof(migrated.SendDataViaWifi), legacy.SendDataViaWifi);
-  copyLegacyString(migrated.MdsUrl, sizeof(migrated.MdsUrl), legacy.MdsUrl);
-  copyLegacyString(migrated.MdsApiKey, sizeof(migrated.MdsApiKey), legacy.MdsApiKey);
-  migrated.MdsSensorIdBattery = legacy.MdsSensorIdBattery;
-  migrated.MdsSensorIdTanks = legacy.MdsSensorIdTanks;
-  migrated.MdsSensorIdStatus = legacy.MdsSensorIdStatus;
-  migrated.MdsSensorIdGps = legacy.MdsSensorIdGps;
-  migrated.MdsSensorIdEnv = legacy.MdsSensorIdEnv;
-  migrated.MdsSensorIdDewpoint = legacy.MdsSensorIdDewpoint;
-  migrated.MdsSensorIdVedirect = legacy.MdsSensorIdVedirect;
-  migrated.cssStyle = legacy.cssStyle;
-  migrated.OledDisplayRotation = legacy.OledDisplayRotation;
-  copyLegacyString(migrated.mdsOtaUrl, sizeof(migrated.mdsOtaUrl), legacy.mdsOtaUrl);
-  copyLegacyString(migrated.mdsOtaSecret, sizeof(migrated.mdsOtaSecret), legacy.mdsOtaSecret);
-  return migrated;
+void setManualLoraStatus(const char *state, const String &message) {
+  portENTER_CRITICAL(&manualLoraStatusMux);
+  strlcpy(manualLoraState, state, sizeof(manualLoraState));
+  strlcpy(manualLoraMessage, message.c_str(), sizeof(manualLoraMessage));
+  portEXIT_CRITICAL(&manualLoraStatusMux);
+  addManualLoraLog(message);
+  DebugPrintln(3, "Manual LoRa: " + message);
 }
 
-bool readLegacyConfigFromEeprom(LegacyConfigDataV16 &legacy) {
-  EEPROM.begin(sizeEEPROM);
-  EEPROM.get(cfgStart, legacy);
-  EEPROM.end();
-  return legacy.valid >= 11 && legacy.valid <= 16;
-}
-
-bool repairLegacyConfigV15(LegacyConfigDataV16 &legacy) {
-  if (legacy.valid != 15) {
+bool hasConfiguredLoraSession() {
+  if (actconf.devaddr == 0) {
     return false;
   }
 
-  constexpr size_t insertedOffset = offsetof(LegacyConfigDataV16, skin);
-  constexpr size_t insertedLength = 8 + sizeof(int);
-  constexpr size_t appendedOffset = offsetof(LegacyConfigDataV16, standbyFirmwareUpdateCheck);
-  if (insertedOffset + insertedLength >= appendedOffset || appendedOffset >= sizeof(LegacyConfigDataV16)) {
-    return false;
+  bool hasNetworkKey = false;
+  bool hasApplicationKey = false;
+  for (size_t i = 0; i < sizeof(actconf.nskey); i++) {
+    hasNetworkKey = hasNetworkKey || actconf.nskey[i] != 0;
+    hasApplicationKey = hasApplicationKey || actconf.appkey[i] != 0;
   }
-
-  uint8_t rawConfig[sizeof(LegacyConfigDataV16)] = {0};
-  EEPROM.begin(sizeEEPROM);
-  for (size_t i = 0; i < sizeof(rawConfig); i++) {
-    rawConfig[i] = EEPROM.read(cfgStart + i);
-  }
-  EEPROM.end();
-
-  LegacyConfigDataV16 repaired = LegacyConfigDataV16();
-  uint8_t *repairedBytes = reinterpret_cast<uint8_t*>(&repaired);
-  memcpy(repairedBytes, rawConfig, insertedOffset);
-
-  const size_t shiftedLength = appendedOffset - insertedOffset;
-  memcpy(repairedBytes + insertedOffset, rawConfig + insertedOffset + insertedLength, shiftedLength);
-  memcpy(repaired.standbyFirmwareUpdateCheck, rawConfig + insertedOffset, sizeof(repaired.standbyFirmwareUpdateCheck));
-  memcpy(&repaired.standbyFirmwareUpdateIntervalHours,
-         rawConfig + insertedOffset + sizeof(repaired.standbyFirmwareUpdateCheck),
-         sizeof(repaired.standbyFirmwareUpdateIntervalHours));
-
-  repaired.valid = 16;
-  legacy = repaired;
-  return true;
+  return hasNetworkKey && hasApplicationKey;
 }
-}  // namespace
+}
+
+long timezone = 1;
+byte daysavetime = 1;
+
+bool hasValidWakeSleepTime();
+bool processPendingRemoteOta(const char *contextLabel, bool restartImmediately);
+bool isManualLoraSendBusy();
+bool isManualLoraKeepAwake();
+bool processManualLoraSend();
+
+bool hasActiveStandbyKeepAwakeWork() {
+  const RemoteOtaSnapshot ota = getRemoteOtaSnapshot();
+  return localOtaInProgress ||
+         ota.pending ||
+         ota.inProgress ||
+         runDownloadingFiles ||
+         runDownloadingFilesStatus ||
+         scheduledRestartMillis > 0 ||
+         isManualLoraKeepAwake() ||
+         reboot;
+}
 
 File root;
 
@@ -477,16 +324,36 @@ void IRAM_ATTR onTimer(){
 void registerStandbyEvent(const char *eventCause) {
   lastStandbyEventEpoch = time(nullptr);
   copyEventCause(lastStandbyEventCause, sizeof(lastStandbyEventCause), eventCause);
-
-  // A new standby event starts a new cycle. The matching wakeup slot
-  // must stay empty until the device actually wakes up again.
-  lastWakeupEventEpoch = 0;
-  lastWakeupEventCause[0] = '\0';
 }
 
 void registerWakeupEvent(const char *eventCause) {
   lastWakeupEventEpoch = time(nullptr);
   copyEventCause(lastWakeupEventCause, sizeof(lastWakeupEventCause), eventCause);
+}
+
+void markWakeupBootMoment(const char *eventCause) {
+  currentWakeupBootMillis = millis();
+  currentWakeupBootMillisCaptured = true;
+  lastWakeupEventEpoch = 0;
+  copyEventCause(lastWakeupEventCause, sizeof(lastWakeupEventCause), eventCause);
+}
+
+bool ensureWakeupEventTimestamp(const char *eventCause) {
+  if (lastWakeupEventEpoch > 0) {
+    return true;
+  }
+
+  if (!currentWakeupBootMillisCaptured || !hasValidWakeSleepTime()) {
+    return false;
+  }
+
+  const unsigned long elapsedSinceWakeMs = millis() - currentWakeupBootMillis;
+  lastWakeupEventEpoch = time(nullptr) - static_cast<time_t>((elapsedSinceWakeMs + 500UL) / 1000UL);
+  if ((eventCause != nullptr) && eventCause[0] != '\0') {
+    copyEventCause(lastWakeupEventCause, sizeof(lastWakeupEventCause), eventCause);
+  }
+  DebugPrintln(3, "Wakeup timestamp reconstructed after time sync: " + String(static_cast<unsigned long>(lastWakeupEventEpoch)));
+  return lastWakeupEventEpoch > 0;
 }
 
 bool isDeepSleepWakeup(esp_sleep_wakeup_cause_t wakeupReason) {
@@ -503,15 +370,23 @@ bool isDeepSleepWakeup(esp_sleep_wakeup_cause_t wakeupReason) {
 }
 
 bool capturePendingMdsDeviceEvent(const char *eventCause) {
+  if (!ensureWakeupEventTimestamp(eventCause)) {
+    DebugPrintln(2, "Skipping MDS wakeup event because no wakeup timestamp is available");
+    return false;
+  }
+
   if (lastStandbyEventEpoch <= 0) {
     DebugPrintln(2, "Skipping MDS wakeup event because no standby timestamp is available");
     return false;
   }
 
-  if (lastWakeupEventEpoch <= 0) {
-    registerWakeupEvent(eventCause);
-  } else if ((eventCause != nullptr) && lastWakeupEventCause[0] == '\0') {
+  if ((eventCause != nullptr) && lastWakeupEventCause[0] == '\0') {
     copyEventCause(lastWakeupEventCause, sizeof(lastWakeupEventCause), eventCause);
+  }
+
+  if (lastStandbyEventEpoch > lastWakeupEventEpoch) {
+    DebugPrintln(2, "Skipping MDS wakeup event because standby time is later than wakeup time");
+    return false;
   }
 
   if (lastStandbyEventEpoch == lastSentMdsStandbyEventEpoch && lastWakeupEventEpoch == lastSentMdsWakeupEventEpoch) {
@@ -541,6 +416,30 @@ bool waitForValidSystemTime(uint32_t timeoutMs) {
 
 bool hasValidWakeSleepTime() {
   return time(nullptr) >= MIN_RELIABLE_EVENT_TIME;
+}
+
+bool canUpdateStandbyWakeDisplay(bool force = false) {
+  if (!standbyWakeDisplayActive) {
+    return false;
+  }
+
+  if (force) {
+    return true;
+  }
+
+  return millis() >= standbyWakeDisplayHoldUntilMillis;
+}
+
+void showStandbyWakeDisplay(const String &line1,
+                            const String &line2 = "",
+                            const String &line3 = "",
+                            const String &line4 = "",
+                            bool force = false) {
+  if (!canUpdateStandbyWakeDisplay(force)) {
+    return;
+  }
+
+  writeDisplayStatusScreen("Standby wake", line1, line2, line3, line4);
 }
 
 void stopMdnsService() {
@@ -613,74 +512,179 @@ void maybeSendDataViaWifi() {
 
   const unsigned long now = millis();
 
-  if (pendingWakeMdsEvent && !currentWakeMdsEventCaptured && hasValidWakeSleepTime()) {
-    if (standbyWakeDisplayActive) {
-      writeDisplayStatusScreen("Standby wake", "Capture event", pendingWakeReasonLabel, "for MDS");
-    }
-    capturePendingMdsDeviceEvent(pendingWakeReasonLabel.c_str());
-    pendingWakeMdsEvent = false;
-  }
-
   if (now >= nextWakeMdsRetryMillis && loadNextQueuedMdsDeviceEvent()) {
-    if (standbyWakeDisplayActive) {
-      writeDisplayStatusScreen("Standby wake", "Send wake log", pendingWakeReasonLabel, "to MDS");
-    }
+    showStandbyWakeDisplay("Send wake log", pendingWakeReasonLabel, "Uploading MDS");
     if (sendMdsDeviceEvent(actconf, pendingWakeReasonLabel.c_str())) {
       lastSentMdsStandbyEventEpoch = pendingMdsStandbyEventEpoch;
       lastSentMdsWakeupEventEpoch = pendingMdsWakeupEventEpoch;
       pendingMdsDeviceEventStored = false;
       currentWakeMdsEventCaptured = false;
       nextWakeMdsRetryMillis = 0;
-      if (standbyWakeDisplayActive) {
-        writeDisplayStatusScreen("Standby wake", "Wake log sent", pendingWakeReasonLabel);
-      }
+      showStandbyWakeDisplay("Wake log sent", pendingWakeReasonLabel, "MDS upload ok");
     } else {
       nextWakeMdsRetryMillis = now + WAKE_MDS_RETRY_INTERVAL_MS;
-      if (standbyWakeDisplayActive) {
-        writeDisplayStatusScreen("Standby wake", "Wake log failed", "Retry pending");
-      }
+      showStandbyWakeDisplay("Wake log failed", "Retry pending", "Check WiFi");
     }
   }
 
   if ((lastMdsUploadMillis == 0) || (now - lastMdsUploadMillis >= MDS_UPLOAD_INTERVAL_MS)) {
-    if (standbyWakeDisplayActive) {
-      writeDisplayStatusScreen("Standby wake", "Send sensors", "via WiFi");
-    }
+    showStandbyWakeDisplay("Send sensors", "WiFi -> MDS");
+    lastMdsUploadMillis = now;
     if (sendToMDS(actconf)) {
-      lastMdsUploadMillis = now;
-      if (standbyWakeDisplayActive) {
-        writeDisplayStatusScreen("Standby wake", "Sensor data sent", "Back to sleep");
-      }
+      showStandbyWakeDisplay("Sensors sent", "Back to sleep");
     } else {
       nextWakeMdsRetryMillis = now + WAKE_MDS_RETRY_INTERVAL_MS;
-      if (standbyWakeDisplayActive) {
-        writeDisplayStatusScreen("Standby wake", "Sensor upload", "failed");
-      }
+      showStandbyWakeDisplay("Sensor upload", "Failed", "Retry later");
     }
   }
 }
 
-bool processPendingRemoteOta(const char *contextLabel, bool restartImmediately) {
-  if (!remoteOtaPending || WiFi.status() != WL_CONNECTED) {
+bool isWifiFirstTransmitPriority() {
+  return String(actconf.transmitPriority) == "WifiFirst";
+}
+
+bool isLoraEnabledInStandby() {
+  return String(actconf.loraOperationMode) == "Standby" || String(actconf.loraOperationMode) == "Always";
+}
+
+bool isLoraEnabledInPowerOn() {
+  return String(actconf.loraOperationMode) == "Always" || String(actconf.loraOperationMode) == "PowerOn";
+}
+
+bool isMdsUploadEnabled() {
+  return String(actconf.SendDataViaWifi) == "Yes";
+}
+
+bool isStandbyAutoUpdateEnabled() {
+  return String(actconf.standbyAutoUpdate) == "Yes";
+}
+
+bool areInstalledWebFilesOutdated() {
+  return !areWebFilesCurrent(actconf.fversion, getFirmwareReleaseChannel().c_str());
+}
+
+bool isStandbyAutoFirmwareCheckDue() {
+  if (!isStandbyAutoUpdateEnabled() || !hasValidWakeSleepTime()) {
     return false;
   }
 
-  remoteOtaPending = false;
-  remoteOtaInProgress = true;
-  remoteOtaRebootRequired = false;
+  const time_t now = time(nullptr);
+  const int intervalHours = actconf.standbyAutoUpdateIntervalHours < 1 ? 24 : actconf.standbyAutoUpdateIntervalHours;
+  const time_t intervalSeconds = static_cast<time_t>(intervalHours) * 3600;
+  return lastStandbyAutoUpdateCheckEpoch == 0 || now - lastStandbyAutoUpdateCheckEpoch >= intervalSeconds;
+}
+
+bool shouldEnableWifiForStandbyAutoUpdate() {
+  return isStandbyAutoUpdateEnabled() && (isStandbyAutoFirmwareCheckDue() || areInstalledWebFilesOutdated());
+}
+
+bool processStandbyAutoUpdate() {
+  if (!isStandbyAutoUpdateEnabled() || standbyAutoUpdateAttemptedThisWake) {
+    return false;
+  }
+
+  const bool webFilesOutdated = areInstalledWebFilesOutdated();
+  const bool firmwareCheckDue = isStandbyAutoFirmwareCheckDue();
+  if (!webFilesOutdated && !firmwareCheckDue) {
+    return false;
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    DebugPrintln(2, "Skipping standby auto update because WiFi is not connected");
+    return false;
+  }
+
+  if (!hasValidWakeSleepTime()) {
+    DebugPrintln(2, "Skipping standby auto update because system time is not synchronized");
+    return false;
+  }
+
+  standbyAutoUpdateAttemptedThisWake = true;
+  standbySleepBlockedUntilMillis = millis() + 180000UL;
+  writeDisplayStatusScreen("Auto update", "Checking MDS", getFirmwareReleaseLabel(), String(actconf.fversion));
+  DebugPrintln(3, "Standby auto update check started");
+
+  if (firmwareCheckDue) {
+    String remoteUrl;
+    String remoteVersion;
+    String remoteSha256;
+    String webFilesPath;
+    String resolveError;
+    const String channel = getFirmwareReleaseChannel();
+    lastStandbyAutoUpdateCheckEpoch = time(nullptr);
+
+    if (resolveOtaFirmwareForChannel(channel, remoteUrl, remoteVersion, &resolveError, &remoteSha256, &webFilesPath)) {
+      const int versionComparison = compareOtaFirmwareVersions(remoteVersion, String(actconf.fversion));
+      if (versionComparison > 0) {
+        remoteSha256 = normalizeSha256String(remoteSha256);
+        if (remoteSha256.length() == 64) {
+          writeDisplayStatusScreen("Auto update", "Firmware found", remoteVersion, "Installing");
+          RemoteOtaRequest request;
+          request.url = remoteUrl;
+          request.version = remoteVersion;
+          request.sha256 = remoteSha256;
+          request.channel = channel;
+          if (!acquireMaintenanceOperation(MaintenanceOperation::RemoteOta) || !queueRemoteOtaRequest(request)) {
+            releaseMaintenanceOperation(MaintenanceOperation::RemoteOta);
+            DebugPrintln(1, "Automatic firmware update could not be queued because another update is active");
+            return false;
+          }
+          DebugPrintln(3, "Automatic firmware update queued: " + remoteVersion);
+          return processPendingRemoteOta("Auto", true);
+        }
+        DebugPrintln(1, "Skipping automatic firmware update because manifest SHA256 is missing or invalid");
+      } else {
+        DebugPrintln(3, "No newer firmware available for automatic standby update");
+      }
+    } else {
+      DebugPrintln(1, "Automatic firmware update check failed: " + resolveError);
+    }
+  }
+
+  if (areInstalledWebFilesOutdated()) {
+    if (!acquireMaintenanceOperation(MaintenanceOperation::WebFiles)) {
+      DebugPrintln(2, "Skipping automatic web files update because maintenance is busy");
+      return false;
+    }
+    writeDisplayStatusScreen("Auto update", "Web files", "Downloading", String(actconf.fversion));
+    DebugPrintln(3, "Automatic web files update started");
+    const bool success = DownloadFilesFromWeb();
+    releaseMaintenanceOperation(MaintenanceOperation::WebFiles);
+    writeDisplayStatusScreen("Auto update",
+                             success ? "Web files OK" : "Web files failed",
+                             String(actconf.fversion),
+                             success ? "Done" : "Retry later");
+    return success;
+  }
+
+  writeDisplayStatusScreen("Auto update", "Already current", getFirmwareReleaseLabel(), String(actconf.fversion));
+  return false;
+}
+
+bool processPendingRemoteOta(const char *contextLabel, bool restartImmediately) {
+  if (WiFi.status() != WL_CONNECTED) {
+    return false;
+  }
+
+  RemoteOtaRequest request;
+  if (!beginRemoteOtaRequest(request)) {
+    return false;
+  }
 
   String remoteOtaError;
-  const bool remoteOtaSuccess = performRemoteOtaUpdate(remoteOtaUrl, false, remoteOtaError, remoteOtaSha256, remoteOtaUseMdsEndpoint);
-  remoteOtaInProgress = false;
-  remoteOtaSha256 = "";
-  remoteOtaUseMdsEndpoint = false;
+  const bool remoteOtaSuccess = performRemoteOtaUpdate(request.url, false, remoteOtaError, request.sha256, request.useMdsEndpoint);
+  flushPendingRemoteOtaStatus();
+  const bool rebootRequired = getRemoteOtaSnapshot().rebootRequired;
+  finishRemoteOtaRequest(rebootRequired);
+  releaseMaintenanceOperation(MaintenanceOperation::RemoteOta);
 
-  if (remoteOtaSuccess && remoteOtaRebootRequired) {
+  if (remoteOtaSuccess && rebootRequired) {
     DebugPrintln(3, String(contextLabel) + " OTA update completed, reboot scheduled");
     if (restartImmediately) {
       ESP.restart();
     }
-    reboot = true;
+    scheduledRestartMillis = millis() + 6000UL;
+    reboot = false;
     return true;
   }
 
@@ -719,10 +723,8 @@ void configureAnalogInputs() {
 
 void prepareForStandbySleep() {
   DebugPrintln(3, "Prepare standby sleep");
-  if (standbyWakeDisplayActive) {
-    writeDisplayStatusScreen("Standby wake", "Prepare sleep", pendingWakeReasonLabel);
-    delay(700);
-  }
+  writeDisplayStatusScreen("Standby", "Going to sleep", pendingWakeReasonLabel, "No pending tasks");
+  delay(2200);
 
   if (pendingWakeMdsEvent && !currentWakeMdsEventCaptured && hasValidWakeSleepTime()) {
     capturePendingMdsDeviceEvent(pendingWakeReasonLabel.c_str());
@@ -731,13 +733,18 @@ void prepareForStandbySleep() {
 
   if (String(actconf.SendDataViaWifi) == "Yes" && hasValidWakeSleepTime()) {
     registerStandbyEvent("Sleep standby");
+    if (pendingWakeMdsEvent && !currentWakeMdsEventCaptured) {
+      capturePendingMdsDeviceEvent(pendingWakeReasonLabel.c_str());
+      pendingWakeMdsEvent = false;
+    }
   } else if (String(actconf.SendDataViaWifi) == "Yes") {
     DebugPrintln(2, "Skipping standby timestamp because system time is not synchronized");
   }
 
   // Re-arm wake sources right before sleep so runtime config changes
   // like standbySleepDuration apply without needing a reboot.
-  esp_sleep_enable_timer_wakeup((TIME_TO_SLEEP * 60) * uS_TO_S_FACTOR);
+  const uint64_t sleepDurationUs = uint64_t(max(1, actconf.standbySleepDuration)) * 60ULL * uint64_t(uS_TO_S_FACTOR);
+  esp_sleep_enable_timer_wakeup(sleepDurationUs);
   rtc_gpio_pullup_en(GPIO_NUM_39);
   esp_sleep_enable_ext0_wakeup(GPIO_NUM_39, 0);
 
@@ -754,6 +761,80 @@ void prepareForStandbySleep() {
   u8x8.clearDisplay();
   u8x8.setPowerSave(1);
   standbyWakeDisplayActive = false;
+  standbyWakeDisplayHoldUntilMillis = 0;
+}
+
+struct WifiCandidate {
+  int slot;
+  int priority;
+  const char *ssid;
+  const char *password;
+};
+
+int getWifiPriorityForSlot(int slot) {
+  if (slot == 1) return actconf.corder1;
+  if (slot == 2) return actconf.corder2;
+  if (slot == 3) return actconf.corder3;
+  return 0;
+}
+
+void setWifiPriorityForSlot(int slot, int priority) {
+  if (slot == 1) actconf.corder1 = priority;
+  if (slot == 2) actconf.corder2 = priority;
+  if (slot == 3) actconf.corder3 = priority;
+}
+
+void sortWifiCandidates(WifiCandidate candidates[], size_t count) {
+  for (size_t outer = 0; outer < count; outer++) {
+    for (size_t inner = outer + 1; inner < count; inner++) {
+      const int outerPriority = candidates[outer].priority <= 0 ? 99 : candidates[outer].priority;
+      const int innerPriority = candidates[inner].priority <= 0 ? 99 : candidates[inner].priority;
+      if (innerPriority < outerPriority ||
+          (innerPriority == outerPriority && candidates[inner].slot < candidates[outer].slot)) {
+        WifiCandidate temp = candidates[outer];
+        candidates[outer] = candidates[inner];
+        candidates[inner] = temp;
+      }
+    }
+  }
+}
+
+void promoteSuccessfulWifiSlot(int successfulSlot) {
+  if (successfulSlot < 1 || successfulSlot > 3 || getWifiPriorityForSlot(successfulSlot) == 0) {
+    return;
+  }
+
+  WifiCandidate candidates[3] = {
+    {1, actconf.corder1, actconf.cssid1, actconf.cpassword1},
+    {2, actconf.corder2, actconf.cssid2, actconf.cpassword2},
+    {3, actconf.corder3, actconf.cssid3, actconf.cpassword3}
+  };
+  sortWifiCandidates(candidates, 3);
+
+  int newPriorities[4] = {0, 0, 0, 0};
+  int nextPriority = 1;
+  newPriorities[successfulSlot] = nextPriority++;
+  for (size_t index = 0; index < 3; index++) {
+    const int slot = candidates[index].slot;
+    if (slot == successfulSlot || candidates[index].priority <= 0) {
+      continue;
+    }
+    newPriorities[slot] = nextPriority++;
+  }
+
+  bool changed = false;
+  for (int slot = 1; slot <= 3; slot++) {
+    if (getWifiPriorityForSlot(slot) != newPriorities[slot]) {
+      changed = true;
+      setWifiPriorityForSlot(slot, newPriorities[slot]);
+    }
+  }
+
+  if (changed) {
+    saveEEPROMConfig(actconf);
+    DebugPrint(3, "WiFi priority updated. Last successful slot: ");
+    DebugPrintln(3, successfulSlot);
+  }
 }
 
 void enableWiFi(bool startNetworkServices = true){
@@ -800,26 +881,31 @@ void enableWiFi(bool startNetworkServices = true){
         }
       }
 
-      char cssid[31];
-      char cpassword[31];
+      WifiCandidate wifiCandidates[3] = {
+        {1, actconf.corder1, actconf.cssid1, actconf.cpassword1},
+        {2, actconf.corder2, actconf.cssid2, actconf.cpassword2},
+        {3, actconf.corder3, actconf.cssid3, actconf.cpassword3}
+      };
+      sortWifiCandidates(wifiCandidates, 3);
       
-      for (int i=1; i < 4; i++) {
-        if (i == 1) {
-          strncpy(cssid, actconf.cssid1, sizeof(cssid) - 1);
-          strncpy(cpassword, actconf.cpassword1, sizeof(cpassword) - 1);
-        } else if (i == 2) {
-          strncpy(cssid, actconf.cssid2, sizeof(cssid) - 1);
-          strncpy(cpassword, actconf.cpassword2, sizeof(cpassword) - 1);
-        } else if (i == 3) {
-          strncpy(cssid, actconf.cssid3, sizeof(cssid) - 1);
-          strncpy(cpassword, actconf.cpassword3, sizeof(cpassword) - 1);
+      for (size_t index = 0; index < 3; index++) {
+        WifiCandidate candidate = wifiCandidates[index];
+        if (candidate.priority <= 0) {
+          DebugPrint(3, "Skipping disabled WiFi #");
+          DebugPrintln(3, candidate.slot);
+          continue;
         }
+
+        char cssid[31];
+        char cpassword[31];
+        strncpy(cssid, candidate.ssid, sizeof(cssid) - 1);
+        strncpy(cpassword, candidate.password, sizeof(cpassword) - 1);
         cssid[sizeof(cssid) - 1] = '\0';
         cpassword[sizeof(cpassword) - 1] = '\0';
 
         if (cssid[0] == '\0') {
           DebugPrint(3, "Skipping empty WiFi #");
-          DebugPrintln(3, i);
+          DebugPrintln(3, candidate.slot);
           continue;
         }
 
@@ -835,7 +921,9 @@ void enableWiFi(bool startNetworkServices = true){
 
         // Connect to WiFi network
         DebugPrint(3, "Connecting WiFi #");
-        DebugPrint(3, i);
+        DebugPrint(3, candidate.slot);
+        DebugPrint(3, " priority ");
+        DebugPrint(3, candidate.priority);
         DebugPrint(3, " client to ");
         DebugPrintln(3, cssid);
 
@@ -844,7 +932,8 @@ void enableWiFi(bool startNetworkServices = true){
         u8x8.refreshDisplay();    // Only required for SSD1606/7
 
         // Load connection timeout from configuration (maxccount = (timeout[s] * 1000) / 200[ms])
-        maxccounter = ((actconf.timeout * 1000) / 200);
+        const int effectiveTimeoutSeconds = constrain(actconf.timeout, 3, 15);
+        maxccounter = ((effectiveTimeoutSeconds * 1000) / 200);
         if (networkCount > 0 && !configuredSsidVisible) {
           maxccounter = min(maxccounter, 10);
         }
@@ -874,10 +963,20 @@ void enableWiFi(bool startNetworkServices = true){
           DebugPrint(3, "WiFi client connected with IP: ");
           DebugPrintln(3, WiFi.localIP());
           DebugPrintln(3, "");
-          u8x8.drawString(0,5,"Connected IP:");
-          u8x8.drawString(0,6, WiFi.localIP().toString().c_str());
+          u8x8.clearLine(4);
+          u8x8.clearLine(5);
+          u8x8.clearLine(6);
+          if (startNetworkServices) {
+            u8x8.drawString(0,5,"IP address:");
+            u8x8.drawString(0,6, WiFi.localIP().toString().c_str());
+          } else {
+            u8x8.drawString(0,4,"WiFi/MDS only");
+            u8x8.drawString(0,5,"Web server off");
+            u8x8.drawString(0,6,"Sleep shortly");
+          }
           u8x8.refreshDisplay();    // Only required for SSD1606/7
-          delay(100);
+          promoteSuccessfulWifiSlot(candidate.slot);
+          delay(startNetworkServices ? 100 : 1800);
           DebugPrintln(3, "Exit loop");
           break;
         }
@@ -895,7 +994,7 @@ void enableWiFi(bool startNetworkServices = true){
       DebugPrintln(3, "Contacting Time Server");
 	    configTime(3600*timezone, daysavetime*3600, "time.nist.gov", "0.pool.ntp.org", "1.pool.ntp.org");
 	    struct tm tmstruct;
-      if (waitForValidSystemTime(15000) && getLocalTime(&tmstruct, 1000)) {
+      if (waitForValidSystemTime(5000) && getLocalTime(&tmstruct, 1000)) {
         DebugPrintln(3, "\nNow is : " + String((tmstruct.tm_year)+1900) + "-" + String((tmstruct.tm_mon)+1) + "-" + String(tmstruct.tm_mday) + " " + String(tmstruct.tm_hour) + ":" + String(tmstruct.tm_min) + ":" + String(tmstruct.tm_sec));
       } else {
         DebugPrintln(1, "Time sync failed. HTTPS requests may be postponed until NTP is available.");
@@ -903,6 +1002,10 @@ void enableWiFi(bool startNetworkServices = true){
 
       if (!startNetworkServices) {
         stopMdnsService();
+        writeDisplayStatusScreen("Standby WiFi",
+                                 WiFi.status() == WL_CONNECTED ? "MDS upload only" : "No WiFi",
+                                 "Web server off",
+                                 "Going sleep soon");
         DebugPrintln(3, "WiFi background mode: AP, mDNS and web server are not started.");
         return;
       }
@@ -958,7 +1061,7 @@ void VEdirectSend()
   if(millis() > starttime0 + 1000){
     static int count;
     starttime0 = millis();          // Read actual time
-    if (String(actconf.envSensor) == "VEdirect-Send") {
+    if (String(actconf.envSensor) == "VEdirect-Send" && !isVEdirectBinaryBusy()) {
       if (debugPrintValues) {
         DebugPrintln(3, "VE.direct Output");
       }
@@ -967,22 +1070,13 @@ void VEdirectSend()
       int voltageOut = voltage * 100;
       sendBinaryValue(":78DED00", voltageOut); // Send binary data
       if(count == 0){
-        sendVEdirectBinary();       // VEdirect binary data (setup and data) al 10 times
+        queueVEdirectBinary();      // Send the long setup sequence without blocking the main loop.
       }
     }
     count ++;
     count = count % 10;
   }
 
-/*
-  // Mirror all Ve.direct data to serial 0
-  int data;
-  while (Serial1.available()) {
-    //Show VE.direct Daten on serial port 0
-    data = Serial1.read();
-    Serial.write(data);
-  }
-*/
 }
 
 void VEdirectRead()
@@ -1120,13 +1214,18 @@ void lora_init() {
   // (note: txpow seems to be ignored by the library)
   setSF(slot, actconf.spreadf, actconf.dynsf);
 
-  if (RTC_LMIC.seqnoUp != 0)    // TODO: only for OTAA mode?
+  const bool wokeFromDeepSleep = esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_UNDEFINED;
+  const bool rtcConfigMatches = RTC_LMIC_CONFIG_FINGERPRINT == currentLoraConfigFingerprint();
+  if (wokeFromDeepSleep && RTC_LMIC.seqnoUp != 0 && rtcConfigMatches)
   {
     LoadLMICFromRTC();
     DebugPrintln(3, "LMIC.seqnoUp restored from RTC: " + String(LMIC.seqnoUp));
   }
   else
   {
+    if (RTC_LMIC.seqnoUp != 0 && !rtcConfigMatches) {
+      DebugPrintln(2, "Ignoring RTC LMIC state because LoRa configuration changed");
+    }
     DebugPrintln(3, "LMIC.seqnoUp: " + String(LMIC.seqnoUp));
     LMIC.seqnoUp = actconf.fcnt;
     DebugPrintln(3, "After LMIC.seqnoUp = actconf.fcnt: " + String(LMIC.seqnoUp));
@@ -1148,6 +1247,227 @@ void lora_loop() {
 
 bool machine_state0_executeOnce = true;
 bool machine_state1_executeOnce = true;
+unsigned long lastWifiReconnectAttemptMillis = 0;
+String activePowerOnLoraOperationMode = "";
+bool powerOnLoraRuntimeActive = false;
+
+bool isManualLoraSendBusy() {
+  return manualLoraSendRequested || manualLoraSendInProgress;
+}
+
+bool isManualLoraKeepAwake() {
+  return isManualLoraSendBusy() ||
+         (manualLoraResultHoldUntilMillis > 0 && millis() < manualLoraResultHoldUntilMillis);
+}
+
+bool queueManualLoraSend(String &message) {
+  const RemoteOtaSnapshot ota = getRemoteOtaSnapshot();
+  if (localOtaInProgress || ota.pending || ota.inProgress || runDownloadingFiles || runDownloadingFilesStatus) {
+    message = "An update task is active. Try the LoRa test again after it finishes.";
+    setManualLoraStatus("error", message);
+    return false;
+  }
+  if (!hasConfiguredLoraSession()) {
+    message = "LoRa session is incomplete. Check Device Address, NwkSKey and AppSKey.";
+    setManualLoraStatus("error", message);
+    return false;
+  }
+  if (isManualLoraSendBusy()) {
+    message = "A manual LoRa uplink is already queued or transmitting.";
+    return false;
+  }
+
+  manualLoraRequestId++;
+  manualLoraRequestedMillis = millis();
+  manualLoraStartedMillis = 0;
+  manualLoraCompletedMillis = 0;
+  manualLoraLastAcknowledged = false;
+  manualLoraLastDownlinkBytes = 0;
+  manualLoraSendRequested = true;
+  standbySleepBlockedUntilMillis = millis() + 90000UL;
+  message = "Manual LoRa uplink queued.";
+  setManualLoraStatus("queued", message);
+  return true;
+}
+
+bool processManualLoraSend() {
+  if (!isManualLoraSendBusy()) {
+    return false;
+  }
+
+  const unsigned long now = millis();
+  if (manualLoraSendRequested && now - manualLoraRequestedMillis > 75000UL) {
+    failManualLoraSend("Manual LoRa request timed out while waiting for the radio.");
+    return false;
+  }
+  if (manualLoraSendInProgress && now - manualLoraStartedMillis > 75000UL) {
+    LMIC_clrTxData();
+    os_clearCallback(&sendjob);
+    failManualLoraSend("Manual LoRa transmission timed out after 75 seconds.");
+    return false;
+  }
+
+  if (manualLoraSendRequested && !manualLoraSendInProgress) {
+    if (!powerOnLoraRuntimeActive && !manualLoraRuntimeOwned) {
+      setManualLoraStatus("preparing", "Initializing LoRa session for manual uplink.");
+      lora_init();
+      manualLoraRuntimeOwned = true;
+    }
+
+    if (LMIC.opmode & OP_TXRXPEND) {
+      return true;
+    }
+
+    os_clearCallback(&sendjob);
+    manualLoraSendRequested = false;
+    manualLoraSendInProgress = true;
+    manualLoraStartedMillis = millis();
+    setManualLoraStatus("queued", "Reading sensors and queuing LoRa packet.");
+    do_send(&sendjob);
+
+    if (!(LMIC.opmode & OP_TXRXPEND)) {
+      failManualLoraSend("LMIC did not accept the manual packet.");
+    }
+  }
+
+  return isManualLoraSendBusy();
+}
+
+void noteManualLoraTxStarted() {
+  if (!manualLoraSendInProgress) {
+    return;
+  }
+  setManualLoraStatus("transmitting", "LoRa radio transmission started; waiting for RX windows.");
+}
+
+bool completeManualLoraSend(bool acknowledged, uint8_t downlinkBytes) {
+  if (!manualLoraSendInProgress) {
+    return false;
+  }
+
+  const bool standaloneRuntime = manualLoraRuntimeOwned;
+  manualLoraSendInProgress = false;
+  manualLoraRuntimeOwned = false;
+  manualLoraCompletedMillis = millis();
+  manualLoraResultHoldUntilMillis = millis() + 15000UL;
+  manualLoraLastAcknowledged = acknowledged;
+  manualLoraLastDownlinkBytes = downlinkBytes;
+  String message = "Manual LoRa radio cycle completed";
+  if (acknowledged) {
+    message += " with acknowledgement";
+  }
+  if (downlinkBytes > 0) {
+    message += "; downlink bytes: " + String(downlinkBytes);
+  }
+  message += ".";
+  setManualLoraStatus("complete", message);
+  if (standaloneRuntime) {
+    GOTO_DEEPSLEEP = false;
+  }
+  return standaloneRuntime;
+}
+
+bool failManualLoraSend(const char *reason) {
+  if (!manualLoraSendRequested && !manualLoraSendInProgress) {
+    return false;
+  }
+
+  const bool standaloneRuntime = manualLoraRuntimeOwned;
+  manualLoraSendRequested = false;
+  manualLoraSendInProgress = false;
+  manualLoraRuntimeOwned = false;
+  manualLoraCompletedMillis = millis();
+  manualLoraResultHoldUntilMillis = millis() + 15000UL;
+  setManualLoraStatus("error", String(reason));
+  if (standaloneRuntime) {
+    GOTO_DEEPSLEEP = false;
+  }
+  return standaloneRuntime;
+}
+
+void buildManualLoraStatus(JsonDocument &response) {
+  char state[sizeof(manualLoraState)];
+  char message[sizeof(manualLoraMessage)];
+  ManualLoraLogEntry logSnapshot[MANUAL_LORA_LOG_SIZE];
+  uint8_t logCount;
+  uint8_t logWriteIndex;
+
+  portENTER_CRITICAL(&manualLoraStatusMux);
+  strlcpy(state, manualLoraState, sizeof(state));
+  strlcpy(message, manualLoraMessage, sizeof(message));
+  memcpy(logSnapshot, manualLoraLog, sizeof(logSnapshot));
+  logCount = manualLoraLogCount;
+  logWriteIndex = manualLoraLogWriteIndex;
+  portEXIT_CRITICAL(&manualLoraStatusMux);
+
+  response["state"] = state;
+  response["message"] = message;
+  response["busy"] = isManualLoraSendBusy();
+  response["requestId"] = manualLoraRequestId;
+  response["requestedMillis"] = manualLoraRequestedMillis;
+  response["startedMillis"] = manualLoraStartedMillis;
+  response["completedMillis"] = manualLoraCompletedMillis;
+  response["acknowledged"] = manualLoraLastAcknowledged;
+  response["downlinkBytes"] = manualLoraLastDownlinkBytes;
+  response["operationMode"] = String(actconf.loraOperationMode);
+  response["txPending"] = (LMIC.opmode & OP_TXRXPEND) != 0;
+  response["txCounter"] = LMIC.seqnoUp;
+  response["channel"] = getLMICtxChnl();
+  response["spreadingFactor"] = sf;
+  response["uptimeMillis"] = millis();
+
+  JsonArray events = response["events"].to<JsonArray>();
+  const uint8_t firstIndex = (logWriteIndex + MANUAL_LORA_LOG_SIZE - logCount) % MANUAL_LORA_LOG_SIZE;
+  for (uint8_t i = 0; i < logCount; i++) {
+    const ManualLoraLogEntry &entry = logSnapshot[(firstIndex + i) % MANUAL_LORA_LOG_SIZE];
+    JsonObject event = events.add<JsonObject>();
+    event["millis"] = entry.timestampMillis;
+    event["message"] = entry.message;
+  }
+}
+
+void maintainAlwaysOnWifi() {
+  const unsigned long now = millis();
+  if (WiFi.status() == WL_CONNECTED) {
+    ensureMdnsService();
+    return;
+  }
+
+  if (now - lastWifiReconnectAttemptMillis < 15000UL) {
+    return;
+  }
+  if ((LMIC.opmode & OP_TXRXPEND) || os_queryTimeCriticalJobs(ms2osticksRound(2000))) {
+    return;
+  }
+
+  lastWifiReconnectAttemptMillis = now;
+  DebugPrintln(2, "WiFi disconnected in always-on mode, reconnecting...");
+  writeDisplayStatusScreen("WiFi", "Disconnected", "Reconnecting");
+  enableWiFi();
+}
+
+void syncPowerOnLoraMode() {
+  const String currentMode = String(actconf.loraOperationMode);
+  if (currentMode == activePowerOnLoraOperationMode) {
+    return;
+  }
+
+  activePowerOnLoraOperationMode = currentMode;
+  if (!isLoraEnabledInPowerOn()) {
+    Timer4.detach();
+    GOTO_DEEPSLEEP = false;
+    powerOnLoraRuntimeActive = false;
+    DebugPrintln(3, "Power-on LoRa runtime disabled.");
+    return;
+  }
+
+  Timer4.attach_ms((1000 * TX_INTERVAL), &onTimer);
+  sendLoraQueue = true;
+  lora_init();
+  do_send(&sendjob);
+  powerOnLoraRuntimeActive = true;
+  DebugPrintln(3, "Power-on LoRa runtime enabled for mode: " + currentMode);
+}
 
 // S0 = Standby (Main sw off, WiFi off, Lora send every x minutes)
 void state0(){
@@ -1156,22 +1476,22 @@ void state0(){
     DebugPrintln(3, "state0 once");
 
     if (standbyWakeDisplayActive) {
-      writeDisplayStatusScreen("Standby wake",
-                               pendingWakeReasonLabel,
-                               String(actconf.SendDataViaWifi) == "Yes" ? "WiFi/MDS send" : "LoRa send",
-                               "Batt switch off");
+      showStandbyWakeDisplay(pendingWakeReasonLabel,
+                             String(actconf.SendDataViaWifi) == "Yes" ? "Mode: WiFi/MDS" : "Mode: LoRa",
+                             "Battery switch");
     } else {
-      writeDisplayStatusScreen("State 0", "Batt switch off", "LoRa mode");
+      writeDisplayStatusScreen("Standby mode", "Battery switch", "Mode: LoRa");
     }
 
-    const bool loraEnabledInStandby = (String(actconf.loraOperationMode) == "Standby" || String(actconf.loraOperationMode) == "Always");
+	    const bool loraEnabledInStandby = isLoraEnabledInStandby();
     if (loraEnabledInStandby) {
       sendLoraQueue = true;
     }
 
-    const bool standbyMdsUploadEnabled = (String(actconf.SendDataViaWifi) == "Yes");
+	    const bool standbyMdsUploadEnabled = isMdsUploadEnabled();
     const bool standbyWifiServicesEnabled = (String(actconf.WifiStandbyMode) == "Yes");
-    if (standbyWifiServicesEnabled || standbyMdsUploadEnabled) {
+    const bool standbyAutoUpdateEnabled = shouldEnableWifiForStandbyAutoUpdate();
+    if (standbyWifiServicesEnabled || standbyMdsUploadEnabled || standbyAutoUpdateEnabled) {
       enableWiFi(false);
     }
     else {
@@ -1193,30 +1513,38 @@ void state0(){
   lora_loop();
   delay(20);
 
-  if (String(actconf.loraOperationMode) == "Standby" || String(actconf.loraOperationMode) == "Always") {
-    if (!sendedLoraAfterSleepOneTime) {
-      DebugPrintln(3, "do_send, in state0.");
-      do_send(&sendjob);
-      sendedLoraAfterSleepOneTime = true;
-    }
+	  const bool loraEnabledInStandby = isLoraEnabledInStandby();
+	  const bool wifiUploadEnabled = isMdsUploadEnabled();
+	  if (loraEnabledInStandby) {
+	    if (!sendedLoraAfterSleepOneTime && wifiUploadEnabled && isWifiFirstTransmitPriority()) {
+	      maybeSendDataViaWifi();
+	    }
+	    if (!sendedLoraAfterSleepOneTime) {
+	      DebugPrintln(3, "do_send, in state0.");
+	      do_send(&sendjob);
+	      sendedLoraAfterSleepOneTime = true;
+	    }
 
     static unsigned long lastPrintTime = 0;
     const bool timeCriticalJobs = os_queryTimeCriticalJobs(ms2osticksRound((TX_INTERVAL * 1000)));
     if (!timeCriticalJobs && GOTO_DEEPSLEEP == true && !(LMIC.opmode & OP_TXRXPEND)) {
       DebugPrintln(3, "Lora send done. (state0)");
-      DebugPrintln(3, "Can go sleep ");
-      LoraWANPrintLMICOpmode();
-      SaveLMICToRTC(TX_INTERVAL);
-      delay(500); // give some time to save.
-      prepareForStandbySleep();
-      GoDeepSleep();
+	      DebugPrintln(3, "Can go sleep ");
+	      LoraWANPrintLMICOpmode();
+		      const uint32_t actualSleepSeconds = uint32_t(max(1, actconf.standbySleepDuration)) * 60UL;
+		      SaveLMICToRTC(actualSleepSeconds);
+	      if (wifiUploadEnabled && !isWifiFirstTransmitPriority()) {
+	        maybeSendDataViaWifi();
+	      }
+	      processStandbyAutoUpdate();
+	      delay(500); // give some time to save.
+	      prepareForStandbySleep();
+	      GoDeepSleep();
     } else if (lastPrintTime + 2000 < millis()) {
       if (standbyWakeDisplayActive) {
-        writeDisplayStatusScreen("Standby wake",
-                                 "LoRa sending",
-                                 pendingWakeReasonLabel,
-                                 toggleDisplayStatus ? "." : " ");
-        toggleDisplayStatus = !toggleDisplayStatus;
+        showStandbyWakeDisplay("LoRa sending",
+                               pendingWakeReasonLabel,
+                               "Please wait");
       } else {
         if (toggleDisplayStatus) {
           u8x8.drawString(0,4,".");
@@ -1231,26 +1559,31 @@ void state0(){
       unsigned long difference = (lastPrintTime - loraSendDurationTime) / 1000;
       DebugPrintln(3, "difference: " + String(difference));
       long seconds = millis() / 1000;
-      if (difference >= 50) {  // Abord sending, after 50 seconds
-        DebugPrintln(3, "seconds >= 50");
-        SaveLMICToRTC(TX_INTERVAL);
-        delay(500);
-        prepareForStandbySleep();
-        GoDeepSleep();
+	      if (difference >= 50) {  // Abord sending, after 50 seconds
+	        DebugPrintln(3, "seconds >= 50");
+	        SaveLMICToRTC(TX_INTERVAL);
+	        if (wifiUploadEnabled && !isWifiFirstTransmitPriority()) {
+	          maybeSendDataViaWifi();
+	        }
+	        processStandbyAutoUpdate();
+	        delay(500);
+	        prepareForStandbySleep();
+	        GoDeepSleep();
       }
     }
-  } else {
-    // Standby must still enter deep sleep even when LoRa is disabled.
-    if (String(actconf.SendDataViaWifi) == "Yes") {
-      maybeSendDataViaWifi();
-    }
-    prepareForStandbySleep();
-    GoDeepSleep();
-  }
+	  } else {
+	    // Standby must still enter deep sleep even when LoRa is disabled.
+	    if (wifiUploadEnabled) {
+	      maybeSendDataViaWifi();
+	    }
+	    processStandbyAutoUpdate();
+	    prepareForStandbySleep();
+	    GoDeepSleep();
+	  }
 
-  if (String(actconf.SendDataViaWifi) == "Yes") {
-    maybeSendDataViaWifi();
-  }
+	  if (wifiUploadEnabled && (!loraEnabledInStandby || isWifiFirstTransmitPriority() || GOTO_DEEPSLEEP == false)) {
+	    maybeSendDataViaWifi();
+	  }
 }
 
 // S1 = Battery On (Wifi on)
@@ -1258,12 +1591,12 @@ void state1(){
   if(machine_state1_executeOnce){
     DebugPrintln(3, "state1 once");
     enableWiFi();
+    lastWifiReconnectAttemptMillis = millis();
     delay(2000);    // to be able to read the displayed infos.
     if (standbyWakeDisplayActive) {
-      writeDisplayStatusScreen("Standby wake",
-                               pendingWakeReasonLabel,
-                               "WiFi active",
-                               "Data transfer");
+      showStandbyWakeDisplay(pendingWakeReasonLabel,
+                             "WiFi active",
+                             "Transferring");
     } else {
       u8x8.setPowerSave(0);
       u8x8.clearDisplay();
@@ -1277,24 +1610,18 @@ void state1(){
       digitalWrite(relayPin, HIGH); // Relay on
     }
 
-    const bool loraEnabledInPowerOn = (String(actconf.loraOperationMode) == "Always" || String(actconf.loraOperationMode) == "PowerOn");
-    if (loraEnabledInPowerOn) {
-      Timer4.attach_ms((1000 * TX_INTERVAL), &onTimer);      // Start timer4 for sending Lora
-      sendLoraQueue = true;
-    } else {
-      Timer4.detach();
-    }
-    writeDisplay();
-    if (loraEnabledInPowerOn) {
-      lora_init();
-      do_send(&sendjob);
-    }
+		    if (isMdsUploadEnabled() && isWifiFirstTransmitPriority()) {
+		      maybeSendDataViaWifi();
+		    }
+		    syncPowerOnLoraMode();
+		    writeDisplayByMode(actconf);
     machine_state1_executeOnce = false;
     machine_state0_executeOnce = true;
     delay(500);
   }
 
-  if (String(actconf.loraOperationMode) == "Always" || String(actconf.loraOperationMode) == "PowerOn") {
+	  syncPowerOnLoraMode();
+	  if (powerOnLoraRuntimeActive) {
     lora_loop();
     static unsigned long lastPrintTime = 0;
     const bool timeCriticalJobs = os_queryTimeCriticalJobs(ms2osticksRound((TX_INTERVAL * 1000)));
@@ -1303,21 +1630,25 @@ void state1(){
       GOTO_DEEPSLEEP = false;
     }
   }
+  maintainAlwaysOnWifi();
   //httpServer.handleClient();   // HTTP Server-handler for HTTP update server
   //old Voltage Offset: 6.47301
 
-  maybeSendDataViaWifi();
+		  if (!powerOnLoraRuntimeActive || !(LMIC.opmode & OP_TXRXPEND)) {
+	    maybeSendDataViaWifi();
+	  }
   VEdirectSend();
 
   // Read measuring data and display on OLED all 1s
-  if(millis() > starttime1 + 1000){
-    starttime1 = millis();        // Read actual time
+  static unsigned long lastMeasurementMillis = 0;
+  if (millis() - lastMeasurementMillis >= 1000UL) {
+    lastMeasurementMillis = millis();
 
     // BME280 measuerement
     if (String(actconf.envSensor) == "BME280") {
       bme.takeForcedMeasurement(); // has no effect in normal mode
     }
-    writeDisplayValues(actconf);
+	    writeDisplayByMode(actconf);
     if (actconf.WebSerialDebug == 1) {
       WebSerial.loop();
       //DebugPrintln(3, "Update Display.");
@@ -1328,40 +1659,23 @@ void state1(){
   
   // TCP-Server for NMEA0183
   WiFiClient client = server.available();// Check if a client is connected
-  int i = 0;
+  static unsigned long nmeaPacketCounter = 0;
   //client = server.available();// Check if a client is connected
 
   //DebugPrint(3, "client.connected(): " + String(client.connected()));
   //DebugPrintln(3, ", client.available(): " + String(client.available()));
-  // Only keep this loop for active TCP clients; serial mode must return to loop()
-  // so standby/alarm state changes are reevaluated continuously.
-  while (client.connected() && !client.available()) {
+  // Never wait for an idle TCP client here. LMIC, OTA and standby handling all
+  // depend on returning to loop() within a few milliseconds.
+  if (client.connected()) {
     //DebugPrint(3, "While client connected.");
     //httpServer.handleClient();      // HTTP Server-handler for HTTP update server
 
-    if ((i == 0) && ((int(actconf.serverMode) == 0) || (int(actconf.serverMode) == 4))) {
-      DebugPrintln(3, "TCP client connected");
-      DebugPrintln(3, "");
-    }
-
-    // Read measuring data and display on OLED all 1s
-    if(millis() > starttime2 + 1000){
-      starttime2 = millis();        // Read actual time
-
-      // BME280 measuerement
-      if (String(actconf.envSensor) == "BME280") {
-        bme.takeForcedMeasurement();  // has no effect in normal mode
-      }  
-      //readValues();
-      writeDisplay();
-    }
-
     // Sending XDR data
     if (flag1 == true){
-      i++;
+      nmeaPacketCounter++;
       DebugPrintln(3, "");
       DebugPrint(3, "Send package:");
-      DebugPrintln(3, i);
+      DebugPrintln(3, nmeaPacketCounter);
 
       if((int(actconf.serverMode) == 0) || (int(actconf.serverMode) == 1) || (int(actconf.serverMode) == 4)){
          if(int(actconf.senddata) == 1){
@@ -1427,51 +1741,45 @@ void state1(){
   }*/
   //___________________________
 
-  if (flag2 == true) {
-    //readGPSValues();
+  if (Serial2.available() && !lora_activ && !loraEvent_activ) {
+    readGPSValues();
   }
 
   static unsigned long nextWebFilesDownloadAttempt = 0;
   if (runDownloadingFiles && WiFi.status() != WL_CONNECTED) {
-    webFilesDownloadStatusMessage = "Waiting for WiFi connection before downloading web files.";
-    writeDisplayStatusScreen("Web files", "Waiting WiFi", "before download");
-    if (webFilesDownloadStartedMillis > 0 && millis() - webFilesDownloadStartedMillis > 60000UL) {
+    setWebFilesUpdateMessage("Waiting for WiFi connection before downloading web files.");
+    writeDisplayStatusScreen("Web files", "Waiting WiFi", "before update");
+    const WebFilesUpdateSnapshot state = getWebFilesUpdateSnapshot();
+    if (state.startedMillis > 0 && millis() - state.startedMillis > 60000UL) {
       runDownloadingFiles = false;
       runDownloadingFilesStatus = false;
-      webFilesDownloadError = true;
-      webFilesDownloadStatusMessage = "Web files download cancelled because WiFi is not connected.";
-      writeDisplayStatusScreen("Web files", "Download cancel", "No WiFi");
+      setWebFilesUpdateError(true, "Web files download cancelled because WiFi is not connected.");
+      writeDisplayStatusScreen("Web files", "Download canceled", "No WiFi");
     }
   }
 
   if (runDownloadingFiles && WiFi.status() == WL_CONNECTED && millis() >= nextWebFilesDownloadAttempt) {
     runDownloadingFilesStatus = true;
-    webFilesDownloadError = false;
-    webFilesDownloadStatusMessage = "Downloading web files from server.";
+    setWebFilesUpdateError(false, "Downloading web files from server.");
     const bool webFilesCurrent = DownloadFilesFromWeb();
     if (webFilesCurrent) {
       runDownloadingFiles = false;
-      webFilesDownloadRetryCount = 0;
-      webFilesDownloadStatusMessage = "Web files updated successfully.";
-      writeDisplayStatusScreen("Web files", "Update done", String(actconf.fversion));
+      setWebFilesUpdateRetryCount(0);
+      setWebFilesUpdateMessage("Web files updated successfully.");
+      writeDisplayStatusScreen("Web files", "Update complete", String(actconf.fversion));
       nextWebFilesDownloadAttempt = 0;
     } else {
-      const String lastFailureReason = webFilesDownloadStatusMessage;
-      webFilesDownloadRetryCount++;
-      if (webFilesDownloadFatalError || webFilesDownloadRetryCount >= 3) {
+      const WebFilesUpdateSnapshot state = getWebFilesUpdateSnapshot();
+      const String lastFailureReason = state.message;
+      const uint8_t retryCount = incrementWebFilesUpdateRetryCount();
+      if (state.fatalError || retryCount >= 3) {
         runDownloadingFiles = false;
-        webFilesDownloadError = true;
-        if (!webFilesDownloadFatalError) {
-          webFilesDownloadStatusMessage = "Web files download failed. Last error: " + lastFailureReason;
-        }
+        setWebFilesUpdateError(true, state.fatalError ? lastFailureReason : "Web files download failed. Last error: " + lastFailureReason);
         writeDisplayStatusScreen("Web files", "Download failed", "Retry manual");
         nextWebFilesDownloadAttempt = 0;
       } else {
-        webFilesDownloadCompleted = 0;
-        webFilesDownloadTotal = 0;
-        webFilesDownloadCurrentName = "";
-        webFilesDownloadStatusMessage = "Web files download failed. Retrying shortly. Last error: " + lastFailureReason;
-        writeDisplayStatusScreen("Web files", "Retry shortly", webFilesDownloadCurrentName);
+        setWebFilesUpdateProgress(0, 0, "", "Web files download failed. Retrying shortly. Last error: " + lastFailureReason);
+        writeDisplayStatusScreen("Web files", "Retry shortly", "In 30 seconds");
         nextWebFilesDownloadAttempt = millis() + 30000UL;
       }
     }
@@ -1480,7 +1788,7 @@ void state1(){
 
   processPendingRemoteOta("Remote", false);
 
-  if(reboot){
+  if(reboot && scheduledRestartMillis == 0){
     DebugPrintln(3, "Reboot");
     ESP.restart(); // Restart ESP32
   }
@@ -1492,12 +1800,12 @@ has been awaken from sleep
 */
 const char* wakeupReasonToLabel(esp_sleep_wakeup_cause_t wakeup_reason) {
   switch (wakeup_reason) {
-    case ESP_SLEEP_WAKEUP_EXT0: return "Wakeup ext0";
-    case ESP_SLEEP_WAKEUP_EXT1: return "Wakeup ext1";
-    case ESP_SLEEP_WAKEUP_TIMER: return "Wakeup timer";
-    case ESP_SLEEP_WAKEUP_TOUCHPAD: return "Wakeup touchpad";
-    case ESP_SLEEP_WAKEUP_ULP: return "Wakeup ulp";
-    default: return "Wakeup unknown";
+    case ESP_SLEEP_WAKEUP_EXT0: return "Wakeup EXT0";
+    case ESP_SLEEP_WAKEUP_EXT1: return "Wakeup EXT1";
+    case ESP_SLEEP_WAKEUP_TIMER: return "Wakeup Timer";
+    case ESP_SLEEP_WAKEUP_TOUCHPAD: return "Wakeup Touch";
+    case ESP_SLEEP_WAKEUP_ULP: return "Wakeup ULP";
+    default: return "Wakeup Other";
   }
 }
 
@@ -1526,12 +1834,22 @@ void print_wakeup_reason(){
   pendingWakeReasonLabel = wakeupReasonToLabel(wakeup_reason);
   pendingWakeMdsEvent = isDeepSleepWakeup(wakeup_reason);
   standbyWakeDisplayActive = pendingWakeMdsEvent;
+  standbyWakeDisplayHoldUntilMillis = standbyWakeDisplayActive ? (millis() + STANDBY_WAKE_DISPLAY_HOLD_MS) : 0;
   currentWakeMdsEventCaptured = false;
+  currentWakeupBootMillisCaptured = false;
   nextWakeMdsRetryMillis = 0;
+  if (standbyWakeDisplayActive) {
+    writeDisplayStatusScreen("Standby wake",
+                             pendingWakeReasonLabel,
+                             "Device woke up",
+                             "Preparing...");
+  }
   if (pendingWakeMdsEvent && hasValidWakeSleepTime()) {
+    markWakeupBootMoment(pendingWakeReasonLabel.c_str());
     registerWakeupEvent(pendingWakeReasonLabel.c_str());
     DebugPrintln(3, "Wakeup timestamp captured immediately at boot: " + String(static_cast<unsigned long>(lastWakeupEventEpoch)));
   } else if (pendingWakeMdsEvent) {
+    markWakeupBootMoment(pendingWakeReasonLabel.c_str());
     DebugPrintln(2, "Wakeup detected, but reliable system time is not available yet. Timestamp capture will be retried later.");
   }
   switch(wakeup_reason)
@@ -1601,6 +1919,42 @@ bool sanitizeConfigOption(char *target, size_t targetLength, const char *fallbac
   return copyConfigString(target, targetLength, fallback);
 }
 
+bool repairKnownMdsUrl(char *target, size_t targetLength) {
+  if (!isPrintableConfigString(target, targetLength)) {
+    return copyConfigString(target, targetLength, defconf.MdsUrl);
+  }
+
+  String repaired = String(target);
+  repaired.trim();
+
+  if (repaired.length() == 0) {
+    return false;
+  }
+
+  if (repaired.indexOf("://") < 0) {
+    repaired = "https://" + repaired;
+  }
+
+  // Repair known corrupted/legacy hosts without touching custom user endpoints.
+  repaired.replace("https://s-git.derguntmar.de/", "https://mds-git.derguntmar.de/");
+  repaired.replace("https://git.derguntmar.de/", "https://mds-git.derguntmar.de/");
+
+  if (repaired == "https://mds-git.derguntmar.de" || repaired == "https://mds-git.derguntmar.de/") {
+    repaired = String(defconf.MdsUrl);
+  }
+
+  if (repaired == String(target)) {
+    return false;
+  }
+
+  if (repaired.length() >= targetLength) {
+    return copyConfigString(target, targetLength, defconf.MdsUrl);
+  }
+
+  repaired.toCharArray(target, targetLength);
+  return true;
+}
+
 template <typename T>
 bool sanitizeConfigRange(T &value, T fallback, T minValue, T maxValue) {
   if (value >= minValue && value <= maxValue) {
@@ -1614,16 +1968,25 @@ bool sanitizeConfigRange(T &value, T fallback, T minValue, T maxValue) {
 void sanitizeNewConfigFields() {
   bool changed = false;
 
-  changed = sanitizeConfigRange(actconf.timeout, defconf.timeout, 3, 240) || changed;
+  changed = sanitizeConfigRange(actconf.timeout, defconf.timeout, 3, 30) || changed;
   changed = sanitizeConfigRange(actconf.apchannel, defconf.apchannel, 1, 13) || changed;
   changed = sanitizeConfigRange(actconf.maxconnections, defconf.maxconnections, 1, 4) || changed;
   changed = sanitizeConfigRange(actconf.mDNS, defconf.mDNS, 0, 1) || changed;
-  changed = sanitizeConfigRange(actconf.dataport, defconf.dataport, 1, 65535) || changed;
-  changed = sanitizeConfigRange(actconf.httpport, defconf.httpport, 1, 65535) || changed;
+  if (actconf.dataport != defconf.dataport) {
+    actconf.dataport = defconf.dataport;
+    changed = true;
+  }
+  if (actconf.httpport != defconf.httpport) {
+    actconf.httpport = defconf.httpport;
+    changed = true;
+  }
   changed = sanitizeConfigRange(actconf.serverMode, defconf.serverMode, 0, 4) || changed;
   changed = sanitizeConfigRange(actconf.serspeed, defconf.serspeed, 300, 115200) || changed;
   changed = sanitizeConfigRange(actconf.WebSerialDebug, defconf.WebSerialDebug, 0, 1) || changed;
   changed = sanitizeConfigRange(actconf.deviceID, defconf.deviceID, 0, 9) || changed;
+  changed = sanitizeConfigRange(actconf.corder1, defconf.corder1, 0, 3) || changed;
+  changed = sanitizeConfigRange(actconf.corder2, defconf.corder2, 0, 3) || changed;
+  changed = sanitizeConfigRange(actconf.corder3, defconf.corder3, 0, 3) || changed;
   changed = sanitizeConfigRange(actconf.senddata, defconf.senddata, 0, 1) || changed;
   changed = sanitizeConfigRange(actconf.vaverage, defconf.vaverage, 1, 100) || changed;
   changed = sanitizeConfigRange(actconf.t1average, defconf.t1average, 1, 100) || changed;
@@ -1634,7 +1997,9 @@ void sanitizeNewConfigFields() {
   changed = sanitizeConfigRange(actconf.tinterval, defconf.tinterval, 1U, 255U) || changed;
   changed = sanitizeConfigRange(actconf.relay, defconf.relay, 0, 2) || changed;
   changed = sanitizeConfigRange(actconf.instrumentSize, defconf.instrumentSize, 200, 600) || changed;
+  changed = sanitizeConfigRange(actconf.skin, defconf.skin, 0, 2) || changed;
   changed = sanitizeConfigRange(actconf.standbySleepDuration, defconf.standbySleepDuration, 1, 1440) || changed;
+  changed = sanitizeConfigRange(actconf.standbyAutoUpdateIntervalHours, defconf.standbyAutoUpdateIntervalHours, 1, 720) || changed;
   changed = sanitizeConfigRange(actconf.MdsSensorIdBattery, defconf.MdsSensorIdBattery, 0, 1) || changed;
   changed = sanitizeConfigRange(actconf.MdsSensorIdTanks, defconf.MdsSensorIdTanks, 0, 1) || changed;
   changed = sanitizeConfigRange(actconf.MdsSensorIdStatus, defconf.MdsSensorIdStatus, 0, 1) || changed;
@@ -1656,16 +2021,26 @@ void sanitizeNewConfigFields() {
   const char *envSensorValues[] = {"Off", "BME280", "VEdirect-Read", "VEdirect-Send"};
   const char *standbyModeValues[] = {"Off", "On"};
   const char *loraModeValues[] = {"Off", "Standby", "PowerOn", "Always"};
+  const char *transmitPriorityValues[] = {"LoRaFirst", "WifiFirst"};
+  const char *oledDisplayModeValues[] = {"Values", "Status"};
   const char *loraFrequencyValues[] = {"EU868", "US915"};
 
   changed = sanitizeConfigOption(actconf.SendDataViaWifi, sizeof(actconf.SendDataViaWifi), defconf.SendDataViaWifi, yesNoValues, 2) || changed;
   changed = sanitizeConfigOption(actconf.WifiStandbyMode, sizeof(actconf.WifiStandbyMode), defconf.WifiStandbyMode, yesNoValues, 2) || changed;
+  changed = sanitizeConfigOption(actconf.standbyAutoUpdate, sizeof(actconf.standbyAutoUpdate), defconf.standbyAutoUpdate, yesNoValues, 2) || changed;
   changed = sanitizeConfigOption(actconf.tempSensorType, sizeof(actconf.tempSensorType), defconf.tempSensorType, tempSensorValues, 2) || changed;
   changed = sanitizeConfigOption(actconf.tempUnit, sizeof(actconf.tempUnit), defconf.tempUnit, tempUnitValues, 2) || changed;
   changed = sanitizeConfigOption(actconf.envSensor, sizeof(actconf.envSensor), defconf.envSensor, envSensorValues, 4) || changed;
   changed = sanitizeConfigOption(actconf.standbyMode, sizeof(actconf.standbyMode), defconf.standbyMode, standbyModeValues, 2) || changed;
   changed = sanitizeConfigOption(actconf.loraOperationMode, sizeof(actconf.loraOperationMode), defconf.loraOperationMode, loraModeValues, 4) || changed;
+  changed = sanitizeConfigOption(actconf.transmitPriority, sizeof(actconf.transmitPriority), defconf.transmitPriority, transmitPriorityValues, 2) || changed;
+  changed = sanitizeConfigOption(actconf.OledDisplayMode, sizeof(actconf.OledDisplayMode), defconf.OledDisplayMode, oledDisplayModeValues, 2) || changed;
   changed = sanitizeConfigOption(actconf.lorafrequency, sizeof(actconf.lorafrequency), defconf.lorafrequency, loraFrequencyValues, 2) || changed;
+
+  if (repairKnownMdsUrl(actconf.MdsUrl, sizeof(actconf.MdsUrl))) {
+    changed = true;
+    DebugPrintln(2, "MDS URL repaired");
+  }
 
   if (!isValidHttpsUrlString(actconf.MdsUrl, sizeof(actconf.MdsUrl))) {
     if (isPrintableConfigString(actconf.MdsUrl, sizeof(actconf.MdsUrl)) && strlen(actconf.MdsUrl) > 0 && strstr(actconf.MdsUrl, "://") == nullptr) {
@@ -1705,6 +2080,7 @@ void sanitizeNewConfigFields() {
 }
 
 void setup() {
+  initializeUpdateRuntimeState();
   LegacyConfigDataV16 legacyConfig;
   const bool hasLegacyConfig = readLegacyConfigFromEeprom(legacyConfig);
   if (hasLegacyConfig) {
@@ -1766,7 +2142,7 @@ void setup() {
   u8x8.setFlipMode(actconf.OledDisplayRotation);
 
   u8x8.setFont(u8x8_font_chroma48medium8_r);
-  u8x8.drawString(0,0,"Booting...");
+  u8x8.drawString(0,0,"Starting...");
   u8x8.refreshDisplay();    // Only required for SSD1606/7  
 
   //##### Start serial 0 and serial 2 connections #####
@@ -1783,35 +2159,46 @@ void setup() {
   macAddressTrunc = macAddress << 40;
   chipId = macAddressTrunc >> 40;
 
-  const bool hasGeneratedWebPassword = strncmp(actconf.password, "BM-", 3) == 0;
-  const bool hasLegacyDefaultWebPassword = strcmp(actconf.password, "12345678") == 0 || strcmp(actconf.password, "auto-generated") == 0;
-  if (hasLegacyDefaultWebPassword || hasGeneratedWebPassword || actconf.password[0] == '\0') {
-    strncpy(actconf.password, defconf.password, sizeof(actconf.password) - 1);
-    actconf.password[sizeof(actconf.password) - 1] = '\0';
+  bool credentialsChanged = false;
+  const String generatedWebPassword = buildDefaultWebPassword();
+  const bool shouldRefreshGeneratedWebPassword =
+    isGeneratedWebPassword(actconf.password) ||
+    actconf.password[0] == '\0' ||
+    strcmp(actconf.password, "12345678") == 0 ||
+    strcmp(actconf.password, "auto-generated") == 0;
+  if (shouldRefreshGeneratedWebPassword && generatedWebPassword.length() > 0) {
+    generatedWebPassword.toCharArray(actconf.password, sizeof(actconf.password));
     actconf.crypt = 1;
-    saveEEPROMConfig(actconf);
-    DebugPrintln(2, "Default web password set. Username: admin, password: " + String(defconf.password));
+    credentialsChanged = true;
+    DebugPrintln(2, "Default web credentials initialized for user admin");
   } else if (actconf.crypt != 1) {
     actconf.crypt = 1;
-    saveEEPROMConfig(actconf);
+    credentialsChanged = true;
     DebugPrintln(2, "Web authentication enabled for existing configuration");
   }
 
-  const bool hasGeneratedApPassword = strncmp(actconf.spassword, "AP-", 3) == 0;
-  const bool hasLegacyDefaultApPassword = strcmp(actconf.spassword, "12345678") == 0 || strcmp(actconf.spassword, "auto-generated") == 0;
-  if (hasLegacyDefaultApPassword || hasGeneratedApPassword || actconf.spassword[0] == '\0') {
-    strncpy(actconf.spassword, defconf.spassword, sizeof(actconf.spassword) - 1);
-    actconf.spassword[sizeof(actconf.spassword) - 1] = '\0';
+  const String generatedApPassword = buildDefaultApPassword();
+  const bool shouldRefreshGeneratedApPassword =
+    isGeneratedApPassword(actconf.spassword) ||
+    actconf.spassword[0] == '\0' ||
+    strcmp(actconf.spassword, "12345678") == 0 ||
+    strcmp(actconf.spassword, "auto-generated") == 0;
+  if (shouldRefreshGeneratedApPassword && generatedApPassword.length() > 0) {
+    generatedApPassword.toCharArray(actconf.spassword, sizeof(actconf.spassword));
+    credentialsChanged = true;
+    DebugPrintln(2, "Default access point credentials initialized");
+  }
+
+  if (credentialsChanged) {
     saveEEPROMConfig(actconf);
-    DebugPrintln(2, "Default access point password set: " + String(defconf.spassword));
   }
 
   //##### Start OLED #####
   u8x8.clearDisplay();
-  u8x8.drawString(0,0,"NoWa(C)OBP");
-  u8x8.drawString(0,1,"mod. by Gunni");
+  u8x8.drawString(0,0,"LoRa Monitor");
+  u8x8.drawString(0,1,"Starting up");
   u8x8.drawString(10,2,actconf.fversion);
-  u8x8.drawString(0,4,"Connecting to:");
+  u8x8.drawString(0,4,"WiFi target:");
   //u8x8.drawString(0,4,actconf.cssid1);
   u8x8.refreshDisplay();    // Only required for SSD1606/7
 
@@ -1917,7 +2304,6 @@ void setup() {
   }  
 
   //##### Cyclic timer #####
-  Timer1.attach_ms(5000, readGPSValuesFlag);     // Start timer 1 all 5s cyclic GPS data reading
   //Timer2.attach_ms(300000, relayTimerInterrupt);      // Start timer 2 all 5min cyclic counter increment
   //Timer3.attach_ms(SendPeriod, sendNMEA);    // Data transmission timer for NMEA
 
@@ -1932,10 +2318,10 @@ void setup() {
       DebugPrintln(3,"Could not find a valid BME280 sensor, check wiring!");
       //actconf.envSensor = "BME280";
 
-      u8x8.drawString(0,6,"Could not find a");
-      u8x8.drawString(0,7,"valid BME280!");
+      u8x8.drawString(0,6,"BME280 not");
+      u8x8.drawString(0,7,"detected");
       u8x8.refreshDisplay();    // Only required for SSD1606/7
-      delay(10000);
+      delay(2000);
 
       /*u8x8.setFont(u8x8_font_chroma48medium8_r);
       u8x8.drawString(0,0,"NoWa(C)OBP");
@@ -1993,18 +2379,6 @@ void setup() {
   // Set send interval
   TX_INTERVAL = actconf.tinterval * 60;
 
-  // Create task for LoRa code
-  xTaskCreatePinnedToCore(
-                    Task1code,  /* Task function */
-                    "Task1",    /* Name of task */
-                    10000,      /* Stack size of task */
-                    NULL,       /* Parameter of the task */
-                    1,          /* Priority of the task */
-                    &Task1,     /* Task handle to keep track of created task */
-                    0);         /* Pin task to core 0 */
-  //delay(500);
-  delay(5);
-
   // sleep config...
   //Increment boot number and print it every reboot
   ++bootCount;
@@ -2017,16 +2391,26 @@ void setup() {
 
   readValues(actconf);     // initial read after boot, to get the status of alarm pin.
   DebugPrintln(3, "Standby input GPIO " + String(alarmPin) + " raw: " + String(digitalRead(alarmPin) == LOW ? "LOW" : "HIGH") + ", state: " + String(alarm1 ? "Active" : "Inactive") + " (active LOW)");
+  DebugPrintln(3, "MDS upload config: SendDataViaWifi=" + String(actconf.SendDataViaWifi) +
+                    ", url=" + String(strlen(actconf.MdsUrl) > 0 ? "set" : "missing") +
+                    ", apiKey=" + String(strlen(actconf.MdsApiKey) > 0 ? "set" : "missing") +
+                    ", sensors[B/T/S/G/E/D/V]=" +
+                    String(actconf.MdsSensorIdBattery) + "/" +
+                    String(actconf.MdsSensorIdTanks) + "/" +
+                    String(actconf.MdsSensorIdStatus) + "/" +
+                    String(actconf.MdsSensorIdGps) + "/" +
+                    String(actconf.MdsSensorIdEnv) + "/" +
+                    String(actconf.MdsSensorIdDewpoint) + "/" +
+                    String(actconf.MdsSensorIdVedirect));
 
-  if (String(actconf.standbyMode) == "On" && !isDeepSleepWakeup(esp_sleep_get_wakeup_cause())) {
-    standbySleepBlockedUntilMillis = millis() + 180000UL;
-    DebugPrintln(2, "Standby sleep blocked for 180 seconds after reboot so the web interface stays reachable.");
-  }
+  keepAwakeAfterUpdateRestart = false;
 
   if(!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED)){
     DebugPrintln(1, "LittleFS Mount Failed");
     return;
   }
+
+  cleanupStaleWebBundleArtifacts();
 
   if (!areWebFilesCurrent(actconf.fversion)) {
     DebugPrintln(2, "Web files version mismatch detected. Use 'Get Files from Server' in the File Manager to update them.");
@@ -2036,6 +2420,8 @@ void setup() {
 }
 
 void loop() {
+  maintainLocalOtaUpload();
+
   if (scheduledRestartMillis > 0 && millis() >= scheduledRestartMillis) {
     Serial.println("Scheduled restart now");
     Serial.flush();
@@ -2047,14 +2433,29 @@ void loop() {
     return;
   }
 
+  if (processPendingRemoteOta("Remote", false)) {
+    delay(20);
+    return;
+  }
+
+  if (processManualLoraSend()) {
+    lora_loop();
+    delay(20);
+    return;
+  }
+
   if ((alarm1 == true) || (String(actconf.standbyMode) == "Off")) {
     state1();
   }
 
   if ((alarm1 == false) && (String(actconf.standbyMode) == "On")) {
-    if (millis() < standbySleepBlockedUntilMillis) {
+    if (millis() < standbySleepBlockedUntilMillis && hasActiveStandbyKeepAwakeWork()) {
       state1();
     } else {
+      if (standbySleepBlockedUntilMillis > 0 && millis() < standbySleepBlockedUntilMillis) {
+        DebugPrintln(3, "Ignoring standby wake hold because no active update task is running");
+        standbySleepBlockedUntilMillis = 0;
+      }
       state0();
     }
   }

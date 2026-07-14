@@ -19,7 +19,6 @@ int ccounter;                       // Actual connection test counter
 int SendPeriod = 2000;              // SendPeriod in [ms], Attention! Range is limited [2000]
 volatile bool flag1 = false;        // Flag for data sending
 
-volatile bool flag2 = false;        // Flag for data sending
 
 // LoRa timeslot counter for different spreading factors
 long slotcounter = 0;               // Slot counter
@@ -30,7 +29,6 @@ byte rpayload[200];                 // Received LoRa payload over downlink (arra
 
 // Measuring values
 long starttime0 = millis();         // Timer0 value for measuring loop
-unsigned long starttime1 = millis();         // Timer1 value for measuring loop
 long starttime2 = millis();         // Timer2 value for measuring loop
 unsigned long loraSendDurationTime = 0;
 float fieldstrength;                // WLAN field strength
@@ -200,36 +198,38 @@ bool loraEvent_activ = false;
 int style = 1;                    // Toggle display between day (1) und night (0) illumination
 
 // Selection arrays (list of arguments in HTTP get response for index calculation)
-String usepassword[2] = {"0", "1"};
-String itype[2] = {"simple", "complex"};
-String isize[9] = {"200", "250", "300", "350", "400", "450", "500", "550", "600"};
-String timeout[11] = {"3", "5", "10", "30", "60", "90", "120", "150", "180", "210", "240"};
-String apchannel[13] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"};
-String servermode[5] = {"0", "1", "2", "3", "4"};
-String mdnsservice[2] = {"0", "1"};
-String lorafrequencys[2] = {"EU868", "US915"};
-String lchannel[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
-String spreadf[4] = {"7", "8", "9", "10"};
-String dynsf[2] = {"0", "1"};
-String relay[3] = {"0", "1", "2"};
-String debugmode[4] = {"0", "1", "2", "3"};
-String serspeed[10] = {"300", "1200", "2400", "4800", "9600", "19200", "38400", "57600", "74880", "115200"};
-String WebSerialDebug[2] = {"0", "1"};
-String deviceid[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
-String senddata[2] = {"0", "1"};
-String vaverage[10] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
-String t1average[10] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
-String t2average[10] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
-String dwrange[9] = {"20", "25", "30", "35", "40", "45", "50", "55", "60"};
-String tstype[2] = {"Off", "DS18B20"};
-String tempunits[2] = {"C", "F"};
-String envSensor[4] = {"Off", "BME280", "VEdirect-Read", "VEdirect-Send"};
-String standbyMode[2] = {"Off", "On"};
-String loraOperationMode[4] = {"Off", "Standby", "PowerOn", "Always"};    // [Off|Standby|PowerOn|Always] rename from "loraStandbyMode" to "loraSendingMode" to "loraOperationMode"
-String WifiStandbyMode[2] = {"Yes", "No"};
-String cssStyle[3] = {"0", "1", "2"};
-String OledDisplayRotation[2] = {"0", "1"};
-String SendDataViaWifi[2] = {"Yes", "No"};
+String usepassword[3] = {"0", "1", ""};
+String itype[3] = {"simple", "complex", ""};
+String isize[10] = {"200", "250", "300", "350", "400", "450", "500", "550", "600", ""};
+String timeout[12] = {"3", "5", "10", "30", "60", "90", "120", "150", "180", "210", "240", ""};
+String apchannel[14] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", ""};
+String servermode[6] = {"0", "1", "2", "3", "4", ""};
+String mdnsservice[3] = {"0", "1", ""};
+String lorafrequencys[3] = {"EU868", "US915", ""};
+String lchannel[11] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ""};
+String spreadf[5] = {"7", "8", "9", "10", ""};
+String dynsf[3] = {"0", "1", ""};
+String relay[4] = {"0", "1", "2", ""};
+String debugmode[5] = {"0", "1", "2", "3", ""};
+String serspeed[11] = {"300", "1200", "2400", "4800", "9600", "19200", "38400", "57600", "74880", "115200", ""};
+String WebSerialDebug[3] = {"0", "1", ""};
+String deviceid[11] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ""};
+String senddata[3] = {"0", "1", ""};
+String vaverage[11] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", ""};
+String t1average[11] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", ""};
+String t2average[11] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", ""};
+String dwrange[10] = {"20", "25", "30", "35", "40", "45", "50", "55", "60", ""};
+String tstype[3] = {"Off", "DS18B20", ""};
+String tempunits[3] = {"C", "F", ""};
+String envSensor[5] = {"Off", "BME280", "VEdirect-Read", "VEdirect-Send", ""};
+String standbyMode[3] = {"Off", "On", ""};
+String loraOperationMode[5] = {"Off", "Standby", "PowerOn", "Always", ""};    // [Off|Standby|PowerOn|Always] rename from "loraStandbyMode" to "loraSendingMode" to "loraOperationMode"
+String WifiStandbyMode[3] = {"Yes", "No", ""};
+String transmitPriority[3] = {"LoRaFirst", "WifiFirst", ""};
+String cssStyle[4] = {"0", "1", "2", ""};
+String OledDisplayRotation[3] = {"0", "1", ""};
+String OledDisplayMode[3] = {"Values", "Status", ""};
+String SendDataViaWifi[3] = {"Yes", "No", ""};
 
 boolean sendLoraQueue = false;
 #endif

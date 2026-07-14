@@ -3,16 +3,19 @@
 
 #include <stdint.h>
 
+static constexpr const char *FIRMWARE_RELEASE_CHANNEL = "beta";
+static constexpr const char *FIRMWARE_RELEASE_LABEL = "Beta";
+
 // Default configuration
 // Types 'byte' und 'word' doesn't work!
 typedef struct {
-  int valid = 17;                            // Number of configuration (Please change when the structure or values are changed)
+  int valid = 18;                            // Number of configuration (Please change when the structure or values are changed)
   int crypt = 1;                            // Activate for critical webside a password query [0 = off|1 = on]
   char username[31] = "admin";
-  char password[31] = "boatmonitor";        // Password for critical websites (settings, update and reboot)
+  char password[31] = "auto-generated";     // Password for critical websites (settings, update and reboot)
   char devname[21] = "LoRa Boat Monitor";   // Device name for web configuration
   char crights[29] = "NoWa (C) (mod by Gunni) 2023";       // Copy rights
-  char fversion[7] = "V1.14s";               // Firmware version
+  char fversion[8] = "V1.15k";               // Firmware version
   char license[12] = "GPL3";                // License type
   int debug = 3;                            // Debug mode 0=off 1=Errors 2=Errors + Warnings 3=Errors + Warnings + Messages
   int corder1 = 1;                          // Set the Order or Priority for connecting to wifi
@@ -26,7 +29,7 @@ typedef struct {
   char cpassword3[31] = "";                 // Password of WiFi Client
   int timeout = 10;                         // Connection timeout for client in [s] [3|5|10|30|90|120|150|180|210|240]
   char sssid[31] = "LoRaBoatMonitor";       // SSID of WiFi Server
-  char spassword[31] = "LoRaBoatMonitor";   // Password of WiFi Server
+  char spassword[31] = "auto-generated";    // Password of WiFi Server
   int apchannel = 1;                        // Assess Point channel [1...13]
   int maxconnections = 2;                   // Max number of connection for WiFi clients [1...4]
   int mDNS = 1;                             // Using mDNS service [0|1] 0=off, 1=on
@@ -80,8 +83,11 @@ typedef struct {
   char loraOperationMode[8] = "Standby";    // Select if Lora only sends in Standby mode [Off|Standby|PowerOn|Always]
   char WifiStandbyMode[8] = "No";           // Select if Wifi used in Standby mode [Yes|No]
   char SendDataViaWifi[8] = "No";           // Select if Wifi sends in Standby mode data to MDS [Yes|No]
+  char transmitPriority[10] = "LoRaFirst";   // Select transmit order [LoRaFirst|WifiFirst]
+  char standbyAutoUpdate[8] = "Yes";        // Check and install firmware/web updates during standby wakeups [Yes|No]
+  int standbyAutoUpdateIntervalHours = 24;  // Minimum time between automatic firmware checks during standby wakeups.
 
-  char MdsUrl[100] = "https://yourservername/ingest/receivejson.php";
+  char MdsUrl[100] = "https://mds-git.derguntmar.de/ingest/receivejson.php";
   char MdsApiKey[30] = "";
 
   // MDS sensor switches (set >0 to enable sending for this sensor group)
@@ -96,6 +102,7 @@ typedef struct {
   // Web configs
   int cssStyle = 0;                         // css Style: 0 = black, 1 = red, 2 = white
   int OledDisplayRotation = 0;              // OLED Display Rotation: 0 = 0°, 1 = 180°
+  char OledDisplayMode[8] = "Values";        // OLED normal screen [Values|Status]
   char mdsOtaUrl[100] = "https://mds-git.derguntmar.de/ota/getupdate.php"; // MDS OTA endpoint
   char mdsOtaSecret[65] = "";                // Shared secret for the MDS OTA endpoint
 } configData;

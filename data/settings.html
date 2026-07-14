@@ -36,8 +36,15 @@
             standbySleepDuration: %standbySleepDuration%,
             loraOperationMode: %loraOperationMode%,
             WifiStandbyMode: %WifiStandbyMode%,
+            transmitPriority: %transmitPriority%,
             cssStyle: %cssStyle%,
             OledDisplayRotation: %OledDisplayRotation%,
+            OledDisplayMode: %OledDisplayMode%,
+            standbyAutoUpdate: %standbyAutoUpdate%,
+            standbyAutoUpdateIntervalHours: %standbyAutoUpdateIntervalHours%,
+            corder1: %corder1%,
+            corder2: %corder2%,
+            corder3: %corder3%,
             SendDataViaWifi: %SendDataViaWifi%,
             MdsSensorIdBattery: %MdsSensorIdBattery%,
             MdsSensorIdTanks: %MdsSensorIdTanks%,
@@ -56,29 +63,27 @@
     <div id="myDiv" class="animate-bottom" style="display:block;">
     <section class="settings-overview">
         <h2>Settings</h2>
-        <p>Configure network, MDS upload, standby behavior and LoRa transmission. Empty password and secret fields keep their currently stored value.</p>
-        <div class="settings-map">
-            <span>Network</span>
-            <span>MDS</span>
-            <span>Firmware Updates</span>
-            <span>LoRa</span>
-            <span>Sensors</span>
-            <span>Standby</span>
-            <span>Calibration</span>
-            <span>Security</span>
-        </div>
+        <p>Configure access, connectivity, MDS upload, standby behavior, LoRa transmission and sensor calibration. Empty password fields keep their stored value. API keys, OTA secrets and Wi-Fi client passwords can also be cleared explicitly.</p>
+        <nav class="settings-quicknav" aria-label="Settings sections">
+            <a class="settings-jump" href="#panel-access" data-target="PasswordSettingsPage">Device &amp; Access</a>
+            <a class="settings-jump" href="#panel-network" data-target="NetworkSettingsPage">Network &amp; MDS</a>
+            <a class="settings-jump" href="#panel-lora" data-target="LoRaSettingsPage">LoRa</a>
+            <a class="settings-jump" href="#panel-device" data-target="DeviceSettingsPage">Sensors &amp; Logs</a>
+            <a class="settings-jump" href="#panel-standby" data-target="StandbyModeSettingsPage">Standby</a>
+            <a class="settings-jump" href="#panel-calibration" data-target="CalibrationSettingsPage">Calibration</a>
+        </nav>
     </section>
     <form id='form1' name='SetForm' method='post' action='/savesettings'>
         <input type='hidden' name='csrf' value='%csrfToken%'>
 
         <input class="myToggleButton myAllToggleButton" type="button" value="+" id="btAllSettingsPage"> Expand all settings
 
-        <div class="settings-panel"><div class="mydiv">
+        <div class="settings-panel" id="panel-access"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btPasswordSettingsPage" data-target="PasswordSettingsPage">Access Protection
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btPasswordSettingsPage" data-target="PasswordSettingsPage">Device and Access
             </h3>
             <div class="collapsible initially-hidden" id="PasswordSettingsPage">
-                <div class="section-note">Controls login protection for settings, update and reboot pages.</div>
+                <div class="section-note">Controls login protection, visual appearance and local device presentation in the browser.</div>
                 <div class="row">
                     <div class="firstColumn">Password Protect Settings Pages</div>
                     <div class="secondColumn">
@@ -94,14 +99,9 @@
                     <div class="firstColumn">Web Login Password</div>
                     <div class="secondColumn"><input type='password' name='pagepasswd' size='20' value='' placeholder='%passwordMasked%' maxlength='20' onchange='check_passwd("pagepasswd")'></div>
                 </div>
-            </div>
-        </div></div>
-
-        <div class="settings-panel"><div class="mydiv">
-            <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btWebInterfaceSettingsPage" data-target="WebInterfaceSettingsPage">Web Interface
-            </h3>
-            <div class="collapsible initially-hidden" id="WebInterfaceSettingsPage" >
+                <div class="row section-subtitle">
+                    <h5 class="section-heading">Web Interface</h5>
+                </div>
                 <div class="row">
                     <div class="firstColumn">Web Theme</div>
                     <div class="secondColumn">
@@ -112,14 +112,9 @@
                         </select>
                     </div>
                 </div>
-            </div>
-        </div></div>
-
-        <div class="settings-panel"><div class="mydiv">
-            <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btOledDisplaySettingsPage" data-target="OledDisplaySettingsPage">OLED Display
-            </h3>
-            <div class="collapsible initially-hidden" id="OledDisplaySettingsPage" >
+                <div class="row section-subtitle">
+                    <h5 class="section-heading">OLED Display</h5>
+                </div>
                 <div class="row">
                     <div class="firstColumn">Display Orientation</div>
                     <div class="secondColumn">
@@ -129,12 +124,21 @@
                         </select>
                     </div>
                 </div>
+                <div class="row">
+                    <div class="firstColumn"><span class="labelText">OLED Screen Content <span class="infoBadge" tabindex="0">i<span class="infoPopover">Values zeigt die Messwerte im normalen Betrieb. Status zeigt kompaktere Zustandsinfos wie WLAN, MDS, LoRa, Standby-Eingang und Firmware.</span></span></span></div>
+                    <div class="secondColumn">
+                        <select name='OledDisplayMode' size='1'>
+                            <option value='Values'>Sensor values</option>
+                            <option value='Status'>Device status</option>
+                        </select>
+                    </div>
+                </div>
             </div>
         </div></div>
 
-        <div class="settings-panel"><div class="mydiv">
+        <div class="settings-panel" id="panel-network"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btNetworkSettingsPage" data-target="NetworkSettingsPage">Connectivity, MDS and Update Source
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btNetworkSettingsPage" data-target="NetworkSettingsPage">Network, MDS and OTA
             </h3>
             <div class="collapsible initially-hidden" id="NetworkSettingsPage" >
                 <div class="row">
@@ -144,7 +148,7 @@
                     </div>
                 </div>
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Data Output Mode <span class="infoBadge" tabindex="0">i<span class="infoPopover">Legt fest, wie das Geraet seine Daten bereitstellt. Im normalen Betrieb ist meist HTTP (JSON, NMEA) richtig.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Data Output <span class="infoBadge" tabindex="0">i<span class="infoPopover">Legt fest, wie das Geraet seine Daten bereitstellt. Im normalen Betrieb ist meist HTTP (JSON, NMEA) richtig.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='servermode' size='1'>
                             <option value='0'>HTTP (JSON, NMEA)</option>
@@ -166,11 +170,11 @@
                 </div>
 
                 <div class="row section-subtitle">
-                    <h5 class="section-heading">MDS Settings</h5>
+                    <h5 class="section-heading">MDS Upload</h5>
                 </div>
-                <div class="section-note">Uploads selected sensor groups to the Maritime Data Server when Wi-Fi is connected. The device sends sensorType and sensorName, not legacy numeric sensor IDs.</div>
+                <div class="section-note">Uploads selected sensor groups to the Maritime Data Server when Wi-Fi is connected. The device sends sensorType and sensorName instead of legacy numeric sensor IDs.</div>
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Enable MDS Upload <span class="infoBadge" tabindex="0">i<span class="infoPopover">Sendet Sensordaten nur bei aktiver WLAN-Verbindung an den Maritime Data Server. Zieladresse und API-Key muessen unten passend konfiguriert sein.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Enable MDS Upload <span class="infoBadge" tabindex="0">i<span class="infoPopover">Aktiviert den Upload zum Maritime Data Server. Es werden nur Daten gesendet, wenn WLAN verbunden ist und die MDS-Zieladresse korrekt gesetzt wurde.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='SendDataViaWifi' size='1'>
                             <option value='Yes'>On</option>
@@ -180,24 +184,31 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">MDS Ingest URL <span class="infoBadge" tabindex="0">i<span class="infoPopover">Aus Sicherheitsgruenden werden MDS-Daten nur noch an HTTPS-Ziele gesendet. Die Server-Zertifikate werden gegen das eingebettete Root-CA-Bundle geprueft.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">MDS Ingest URL <span class="infoBadge" tabindex="0">i<span class="infoPopover">Zieladresse fuer den normalen MDS-Datenempfang. Aus Sicherheitsgruenden werden nur HTTPS-Ziele akzeptiert und gegen das eingebaute Root-CA-Bundle geprueft.</span></span></span></div>
                     <div class="secondColumn">
                         <input type='text' required name='MdsUrl' size='20' value='%MdsUrl%' maxlength='100'>
                     </div>
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">MDS API Key <span class="infoBadge" tabindex="0">i<span class="infoPopover">Der API-Key wird beim Upload im JSON an <code>board.apiKey</code> gesendet. In den Geraete-Statusdaten wird er nicht mehr im Klartext zurueckgegeben.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">MDS API Key <span class="infoBadge" tabindex="0">i<span class="infoPopover">Der API-Key wird beim Upload als <code>board.apiKey</code> im JSON uebertragen. In den Web-Statusdaten wird er nicht mehr im Klartext ausgegeben.</span></span></span></div>
                     <div class="secondColumn">
-                        <input type='password' name='MdsApiKey' size='20' value='' placeholder='%MdsApiKeyMasked%' maxlength='30'>
+                        <div class="fieldStack">
+                            <input type='password' name='MdsApiKey' size='20' value='' placeholder='%MdsApiKeyMasked%' maxlength='30'>
+                            <label class="clearSecretOption"><input type='checkbox' name='clearMdsApiKey' value='1'> Clear stored API key</label>
+                        </div>
                     </div>
                 </div>
 
-                <div class="row">
-                    <div class="firstColumn"><span class="labelText">MDS Sensor Groups <span class="infoBadge" tabindex="0">i<span class="infoPopover">Diese Schalter aktivieren einzelne Datengruppen fuer den MDS-Upload. Es werden keine numerischen Sensor-IDs mehr verschickt, sondern sensorType und sensorName.</span></span></span></div>
+                <div class="row mds-groups-intro">
+                    <div class="firstColumn"><span class="labelText">MDS Sensor Groups <span class="infoBadge" tabindex="0">i<span class="infoPopover">Diese Schalter aktivieren einzelne Datengruppen fuer den MDS-Upload. Gesendet werden sensorType und sensorName statt alter numerischer Sensor-IDs.</span></span></span></div>
+                    <div class="secondColumn"><span class="settingHint">Turn on only the groups you really want to publish.</span></div>
+                </div>
+                <div class="row section-subtitle compact-subtitle">
+                    <h5 class="section-heading">Core Device Data</h5>
                 </div>
                 <div class="row">
-                    <div class="firstColumn">Send Battery Status <span class="settingHint">(sensorType=ADC, v1=V, v2=capacity)</span></div>
+                    <div class="firstColumn">Battery Status <span class="settingHint">(sensorType=ADC, v1=V, v2=capacity)</span></div>
                     <div class="secondColumn">
                         <select name='MdsSensorIdBattery' size='1'>
                             <option value='0'>Off</option>
@@ -206,7 +217,7 @@
                     </div>
                 </div>
                 <div class="row">
-                    <div class="firstColumn">Send Tank Levels <span class="settingHint">(sensorType=ADC, v1=t1%%, v2=t1adc, v3=t2%%, v4=t2adc)</span></div>
+                    <div class="firstColumn">Tank Levels <span class="settingHint">(sensorType=ADC, v1=t1%%, v2=t1adc, v3=t2%%, v4=t2adc)</span></div>
                     <div class="secondColumn">
                         <select name='MdsSensorIdTanks' size='1'>
                             <option value='0'>Off</option>
@@ -215,7 +226,7 @@
                     </div>
                 </div>
                 <div class="row">
-                    <div class="firstColumn">Send Alarm and Relay Status <span class="settingHint">(sensorType=Digital, v1=alarm, v2=relay, v3=temp1wire)</span></div>
+                    <div class="firstColumn">Alarm and Relay Status <span class="settingHint">(sensorType=Digital, v1=alarm, v2=relay, v3=temp1wire)</span></div>
                     <div class="secondColumn">
                         <select name='MdsSensorIdStatus' size='1'>
                             <option value='0'>Off</option>
@@ -223,8 +234,11 @@
                         </select>
                     </div>
                 </div>
+                <div class="row section-subtitle compact-subtitle">
+                    <h5 class="section-heading">Navigation and Environment</h5>
+                </div>
                 <div class="row">
-                    <div class="firstColumn">Send GPS Position <span class="settingHint">(sensorType=GPS, v1=lat, v2=lon, v3=speed, v4=course)</span></div>
+                    <div class="firstColumn">GPS Position <span class="settingHint">(sensorType=GPS, v1=lat, v2=lon, v3=speed, v4=course)</span></div>
                     <div class="secondColumn">
                         <select name='MdsSensorIdGps' size='1'>
                             <option value='0'>Off</option>
@@ -233,7 +247,7 @@
                     </div>
                 </div>
                 <div class="row">
-                    <div class="firstColumn">Send Environment Data <span class="settingHint">(sensorType=BME280, v1=temp, v2=hum, v3=press, v4=alt)</span></div>
+                    <div class="firstColumn">Environment Data <span class="settingHint">(sensorType=BME280, v1=temp, v2=hum, v3=press, v4=alt)</span></div>
                     <div class="secondColumn">
                         <select name='MdsSensorIdEnv' size='1'>
                             <option value='0'>Off</option>
@@ -242,7 +256,7 @@
                     </div>
                 </div>
                 <div class="row">
-                    <div class="firstColumn">Send Dew Point <span class="settingHint">(sensorType=BME280, v1=dewpoint)</span></div>
+                    <div class="firstColumn">Dew Point <span class="settingHint">(sensorType=BME280, v1=dewpoint)</span></div>
                     <div class="secondColumn">
                         <select name='MdsSensorIdDewpoint' size='1'>
                             <option value='0'>Off</option>
@@ -250,8 +264,11 @@
                         </select>
                     </div>
                 </div>
+                <div class="row section-subtitle compact-subtitle">
+                    <h5 class="section-heading">External Source</h5>
+                </div>
                 <div class="row">
-                    <div class="firstColumn">Send VE.Direct Data <span class="settingHint">(sensorType=DS2438, v1=V, v2=A, v3=temp)</span></div>
+                    <div class="firstColumn">VE.Direct Data <span class="settingHint">(sensorType=DS2438, v1=V, v2=A, v3=temp)</span></div>
                     <div class="secondColumn">
                         <select name='MdsSensorIdVedirect' size='1'>
                             <option value='0'>Off</option>
@@ -261,48 +278,92 @@
                 </div>
 
                 <div class="row section-subtitle">
-                    <h5 class="section-heading">Station Settings</h5>
+                    <h5 class="section-heading">Wi-Fi Client Networks</h5>
                 </div>
-                <div class="section-note">Saved Wi-Fi client networks are tried in this order. Leave password fields empty to keep the stored password.</div>
+                <div class="section-note">Set unused networks to Off. Enabled networks are tried by priority, and the device automatically promotes the last successful Wi-Fi to priority 1.</div>
                 <div class="row">
-                    <div class="firstColumn">Preferred Wi-Fi SSID 1</div>
+                    <div class="firstColumn">Wi-Fi 1 Mode</div>
                     <div class="secondColumn">
-                        <input type='text' required name='cssid1' size='20' value='%cssid1%' maxlength='30' onchange='check_ssid("cssid1")'>
+                        <select name='corder1' size='1'>
+                            <option value='0'>Off</option>
+                            <option value='1'>On / Priority 1</option>
+                            <option value='2'>On / Priority 2</option>
+                            <option value='3'>On / Priority 3</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="firstColumn">Wi-Fi SSID 1</div>
+                    <div class="secondColumn">
+                        <input type='text' name='cssid1' size='20' value='%cssid1%' maxlength='30' onchange='check_ssid("cssid1")'>
                     </div>
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn">Preferred Wi-Fi Password 1</div>
+                    <div class="firstColumn">Wi-Fi Password 1</div>
                     <div class="secondColumn">
-                        <input type='password' name='cpasswd1' size='20' value='' placeholder='%cpassword1Masked%' maxlength='30' onchange='check_passwd("cpasswd1")'>
+                        <div class="fieldStack">
+                            <input type='password' name='cpasswd1' size='20' value='' placeholder='%cpassword1Masked%' maxlength='30' onchange='check_passwd("cpasswd1")'>
+                            <label class="clearSecretOption"><input type='checkbox' name='clearCPassword1' value='1'> Clear stored Wi-Fi password</label>
+                        </div>
                     </div>
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn">Preferred Wi-Fi SSID 2</div>
+                    <div class="firstColumn">Wi-Fi 2 Mode</div>
                     <div class="secondColumn">
-                        <input type='text' required name='cssid2' size='20' value='%cssid2%' maxlength='30' onchange='check_ssid("cssid2")'>
+                        <select name='corder2' size='1'>
+                            <option value='0'>Off</option>
+                            <option value='1'>On / Priority 1</option>
+                            <option value='2'>On / Priority 2</option>
+                            <option value='3'>On / Priority 3</option>
+                        </select>
                     </div>
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn">Preferred Wi-Fi Password 2</div>
+                    <div class="firstColumn">Wi-Fi SSID 2</div>
                     <div class="secondColumn">
-                        <input type='password' name='cpasswd2' size='20' value='' placeholder='%cpassword2Masked%' maxlength='30' onchange='check_passwd("cpasswd2")'>
+                        <input type='text' name='cssid2' size='20' value='%cssid2%' maxlength='30' onchange='check_ssid("cssid2")'>
                     </div>
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn">Preferred Wi-Fi SSID 3</div>
+                    <div class="firstColumn">Wi-Fi Password 2</div>
                     <div class="secondColumn">
-                        <input type='text' required name='cssid3' size='20' value='%cssid3%' maxlength='30' onchange='check_ssid("cssid3")'>
+                        <div class="fieldStack">
+                            <input type='password' name='cpasswd2' size='20' value='' placeholder='%cpassword2Masked%' maxlength='30' onchange='check_passwd("cpasswd2")'>
+                            <label class="clearSecretOption"><input type='checkbox' name='clearCPassword2' value='1'> Clear stored Wi-Fi password</label>
+                        </div>
                     </div>
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn">Preferred Wi-Fi Password 3</div>
+                    <div class="firstColumn">Wi-Fi 3 Mode</div>
                     <div class="secondColumn">
-                        <input type='password' name='cpasswd3' size='20' value='' placeholder='%cpassword3Masked%' maxlength='30' onchange='check_passwd("cpasswd3")'>
+                        <select name='corder3' size='1'>
+                            <option value='0'>Off</option>
+                            <option value='1'>On / Priority 1</option>
+                            <option value='2'>On / Priority 2</option>
+                            <option value='3'>On / Priority 3</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Wi-Fi SSID 3</div>
+                    <div class="secondColumn">
+                        <input type='text' name='cssid3' size='20' value='%cssid3%' maxlength='30' onchange='check_ssid("cssid3")'>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn">Wi-Fi Password 3</div>
+                    <div class="secondColumn">
+                        <div class="fieldStack">
+                            <input type='password' name='cpasswd3' size='20' value='' placeholder='%cpassword3Masked%' maxlength='30' onchange='check_passwd("cpasswd3")'>
+                            <label class="clearSecretOption"><input type='checkbox' name='clearCPassword3' value='1'> Clear stored Wi-Fi password</label>
+                        </div>
                     </div>
                 </div>
 
@@ -324,27 +385,28 @@
                         </select>
                     </div>
                 </div>
+                <div class="section-note">Recommended: 30s for normal use. Shorter values save power in standby, but may fail on slow marina or router networks.</div>
 
                 <div class="row section-subtitle">
-                    <h5 class="section-heading">Access Point Settings</h5>
+                    <h5 class="section-heading">Fallback Hotspot</h5>
                 </div>
                 <div class="section-note">The fallback hotspot is used for direct local access when no configured Wi-Fi is available.</div>
                 <div class="row">
-                    <div class="firstColumn">Device Hotspot Name (SSID)</div>
+                    <div class="firstColumn">Hotspot Name (SSID)</div>
                     <div class="secondColumn">
                         <input type='text' required name='sssid' size='20' value='%sssid%' maxlength='30' onchange='check_ssid("sssid")'>
                     </div>
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn">Device Hotspot Password</div>
+                    <div class="firstColumn">Hotspot Password</div>
                     <div class="secondColumn">
                         <input type='password' name='spasswd' size='20' value='' placeholder='%spasswordMasked%' maxlength='30' onchange='check_passwd("spasswd")'>
                     </div>
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn">Device Hotspot Channel</div>
+                    <div class="firstColumn">Hotspot Channel</div>
                     <div class="secondColumn">
                         <select name='apchannel' size='1'>
                             <option value='1'>1</option>
@@ -365,36 +427,64 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">MDS OTA Endpoint <span class="infoBadge" tabindex="0">i<span class="infoPopover">Optionaler MDS-Endpunkt fuer Firmware-Pull. Beispiel: <code>https://mds-git.derguntmar.de/ota/getupdate.php</code>.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">MDS OTA Endpoint <span class="infoBadge" tabindex="0">i<span class="infoPopover">Optionaler MDS-Endpunkt fuer Firmware-Updates. Beispiel: <code>https://mds-git.derguntmar.de/ota/getupdate.php</code>. Daraus wird auch der Pfad fuer passende Web-Dateien abgeleitet.</span></span></span></div>
                     <div class="secondColumn">
                         <input type='text' name='mdsOtaUrl' size='50' value='%mdsOtaUrl%' maxlength='99' onchange='check_mds_ota_url("mdsOtaUrl")'>
                     </div>
                 </div>
-                <div class="section-note">Web interface files are derived automatically from the MDS OTA endpoint. The ESP uses the matching web release below <code>/ota/bin/web/</code>, so no separate web update host is required.</div>
+                <div class="section-note">Web interface files are derived automatically from the MDS OTA endpoint. The ESP uses the matching web release below <code>/ota/bin/web/</code>, so no separate web update host is needed.</div>
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">MDS OTA Secret <span class="infoBadge" tabindex="0">i<span class="infoPopover">Shared Secret fuer den Header <code>X-MDS-OTA-Secret</code>. Leer lassen, um den gespeicherten Wert beizubehalten.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">MDS OTA Secret <span class="infoBadge" tabindex="0">i<span class="infoPopover">Shared Secret fuer den Header <code>X-MDS-OTA-Secret</code>. Leer lassen, um den gespeicherten Wert beizubehalten, oder unten explizit loeschen.</span></span></span></div>
                     <div class="secondColumn">
-                        <input type='password' name='mdsOtaSecret' size='30' value='' placeholder='%mdsOtaSecretMasked%' maxlength='64'>
+                        <div class="fieldStack">
+                            <input type='password' name='mdsOtaSecret' size='30' value='' placeholder='%mdsOtaSecretMasked%' maxlength='64'>
+                            <label class="clearSecretOption"><input type='checkbox' name='clearMdsOtaSecret' value='1'> Clear stored OTA secret</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="firstColumn"><span class="labelText">Standby Auto Update <span class="infoBadge" tabindex="0">i<span class="infoPopover">Wenn aktiv, prueft das Geraet nach einem Standby-Wakeup intervallgesteuert den MDS OTA Server. Neue Firmware wird installiert, danach werden passende Webdateien geladen.</span></span></span></div>
+                    <div class="secondColumn">
+                        <select name='standbyAutoUpdate' size='1'>
+                            <option value='Yes'>On</option>
+                            <option value='No'>Off</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="firstColumn"><span class="labelText">Auto Update Interval [h] <span class="infoBadge" tabindex="0">i<span class="infoPopover">Mindestabstand zwischen automatischen Firmware-Checks im Standby-Wakeup. Webdateien werden trotzdem aktualisiert, wenn sie nicht zur installierten Firmware passen.</span></span></span></div>
+                    <div class="secondColumn">
+                        <input type='number' name='standbyAutoUpdateIntervalHours' min='1' max='720' value='%standbyAutoUpdateIntervalHours%'>
                     </div>
                 </div>
 
             </div>
         </div></div>
 
-        <div class="settings-panel"><div class="mydiv">
+        <div class="settings-panel" id="panel-lora"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btLoRaSettingsPage" data-target="LoRaSettingsPage">LoRaWAN Transmission
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btLoRaSettingsPage" data-target="LoRaSettingsPage">LoRaWAN
             </h3>
             <div class="collapsible initially-hidden" id="LoRaSettingsPage" >
                 <div class="section-note">ABP credentials and radio behavior for LoRaWAN transmission.</div>
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">LoRa Send Mode <span class="infoBadge" tabindex="0">i<span class="infoPopover">Begrenzt, wann das Geraet aktiv per LoRa senden darf. Fuer den normalen Schlafbetrieb ist meist "Only in Standby" sinnvoll.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">LoRa Active Mode <span class="infoBadge" tabindex="0">i<span class="infoPopover">Begrenzt, wann das Geraet aktiv per LoRa senden darf. Fuer den normalen Schlafbetrieb ist meist "Only in Standby" sinnvoll.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='loraOperationMode' size='1'>
                             <option value='Off'>Off</option>
                             <option value='Standby'>Only in Standby</option>
                             <option value='PowerOn'>Only in PowerOn</option>
                             <option value='Always'>Always</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="firstColumn"><span class="labelText">Transmit Priority <span class="infoBadge" tabindex="0">i<span class="infoPopover">Legt fest, ob bei aktiver LoRa- und WLAN/MDS-Uebertragung zuerst LoRa oder zuerst WLAN/MDS abgearbeitet wird. Gilt im Standby und im dauerhaft eingeschalteten Betrieb.</span></span></span></div>
+                    <div class="secondColumn">
+                        <select name='transmitPriority' size='1'>
+                            <option value='LoRaFirst'>LoRa first</option>
+                            <option value='WifiFirst'>Wi-Fi/MDS first</option>
                         </select>
                     </div>
                 </div>
@@ -421,7 +511,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn">Frequency Region</div>
+                    <div class="firstColumn">LoRa Region</div>
                     <div class="secondColumn">
                         <select name='lorafrequency' size='1'>
                             <option value='EU868'>EU868</option>
@@ -431,7 +521,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">LoRa Channel Selection <span class="infoBadge" tabindex="0">i<span class="infoPopover">0 bis 7 waehlen einen festen Kanal. Die dynamischen Optionen wechseln automatisch zwischen mehreren Kanaelen.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">LoRa Channel Plan <span class="infoBadge" tabindex="0">i<span class="infoPopover">0 bis 7 waehlen einen festen Kanal. Die dynamischen Optionen wechseln automatisch zwischen mehreren Kanaelen.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='lchannel' size='1'>
                             <option value='0'>0</option>
@@ -449,7 +539,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn">Fixed Spreading Factor</div>
+                    <div class="firstColumn">Spreading Factor</div>
                     <div class="secondColumn">
                         <select name='spreadf' size='1'>
                             <option value='7'>7</option>
@@ -471,7 +561,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">LoRa Send Interval <span class="infoBadge" tabindex="0">i<span class="infoPopover">Der eingetragene Wert wird mit 60 Sekunden multipliziert. Beispiel: 10 bedeutet eine Sendung alle 10 Minuten.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Send Interval <span class="infoBadge" tabindex="0">i<span class="infoPopover">Der eingetragene Wert wird mit 60 Sekunden multipliziert. Beispiel: 10 bedeutet eine Sendung alle 10 Minuten.</span></span></span></div>
                     <div class="secondColumn">
                         <input type='text' required name='tinterval' size='20' value='%tinterval%' maxlength='20'
                             onchange='check_tinterval("tinterval")'>
@@ -491,14 +581,14 @@
             </div>
         </div></div>
 
-        <div class="settings-panel"><div class="mydiv">
+        <div class="settings-panel" id="panel-device"><div class="mydiv">
             <h3 class="settings-card-title">
                 <input class="myToggleButton section-toggle" type="button" value="+" id="btDeviceSettingsPage" data-target="DeviceSettingsPage">Sensors, Device and Logs
             </h3>
             <div class="collapsible initially-hidden" id="DeviceSettingsPage" >
                 <div class="section-note">Local serial output, sensor input options and averaging behavior.</div>
                 <div class="row section-subtitle">
-                    <h5 class="section-heading">Serial and Debug Output</h5>
+                    <h5 class="section-heading">Logs and Serial Output</h5>
                 </div>
                 <div class="row">
                     <div class="firstColumn">Serial Log Detail</div>
@@ -531,7 +621,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn">Show Serial Logs in Browser <span class="settingHint">(WebSerial)</span></div>
+                    <div class="firstColumn">Browser Serial Console <span class="settingHint">(WebSerial)</span></div>
                     <div class="secondColumn">
                         <select name='WebSerialDebug' size='1'>
                             <option value='0'>No</option>
@@ -559,10 +649,10 @@
                 </div>
 
                 <div class="row section-subtitle">
-                    <h5 class="section-heading">Averaging and Sensor Inputs</h5>
+                    <h5 class="section-heading">Sensors and Averaging</h5>
                 </div>
                 <div class="row">
-                    <div class="firstColumn">Send NMEA0183 over Serial</div>
+                    <div class="firstColumn">NMEA0183 on Serial</div>
                     <div class="secondColumn">
                         <select name='senddata' size='1'>
                             <option value='0'>Off</option>
@@ -572,7 +662,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn">Battery Voltage Averaging Samples</div>
+                    <div class="firstColumn">Battery Averaging Samples</div>
                     <div class="secondColumn">
                         <select name='vaverage' size='1'>
                             <option value='1'>1</option>
@@ -626,7 +716,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn">1-Wire Temperature Sensor Type</div>
+                    <div class="firstColumn">1-Wire Temperature Sensor</div>
                     <div class="secondColumn">
                         <select name='tstype' size='1'>
                             <option value='Off'>Off</option>
@@ -659,14 +749,14 @@
             </div>
         </div></div>
 
-        <div class="settings-panel"><div class="mydiv">
+        <div class="settings-panel" id="panel-standby"><div class="mydiv">
             <h3 class="settings-card-title">
                 <input class="myToggleButton section-toggle" type="button" value="+" id="btStandbyModeSettingsPage" data-target="StandbyModeSettingsPage">Standby and Power Saving
             </h3>
             <div class="collapsible initially-hidden" id="StandbyModeSettingsPage" >
-                <div class="section-note">Power-saving behavior while the device is waiting in standby. Keep Wi-Fi off here unless you explicitly need web access or MDS uploads during standby.</div>
+                <div class="section-note">Power-saving behavior controlled by the Operation Mode Input. When 12 V is present on that input, the device stays always on. Without 12 V, standby/wakeup mode is active when enabled below.</div>
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Enable Standby Mode <span class="infoBadge" tabindex="0">i<span class="infoPopover">Im Standby-Modus kann das Geraet schlafen und bei Alarmzustand wieder aufwachen. Der Alarm-Eingang an GPIO39 ist dabei zugleich der Standby-/Wakeup-Eingang und arbeitet active-low.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Standby/Wakeup Mode <span class="infoBadge" tabindex="0">i<span class="infoPopover">This enables automatic sleep/wakeup behavior. The Operation Mode Input decides whether sleep is allowed: 12 V keeps the device always on, no 12 V enables standby/wakeup mode.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='standbyMode' size='1' onchange='check_alarmState(event)'>
                             <option value='Off'>Off</option>
@@ -683,7 +773,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Keep Wi-Fi Active in Standby <span class="infoBadge" tabindex="0">i<span class="infoPopover">Wenn aktiv, bleibt WLAN auch im Standby verfuegbar. Das erhoeht den Stromverbrauch, ermoeglicht aber weiterhin Webzugriff und MDS-Uploads.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Keep Wi-Fi in Standby <span class="infoBadge" tabindex="0">i<span class="infoPopover">When enabled, Wi-Fi remains available during standby/wakeup operation. This increases power consumption, but allows web access and MDS uploads.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='WifiStandbyMode' size='1'>
                             <option value='Yes'>On</option>
@@ -694,14 +784,14 @@
             </div>
         </div></div>
 
-        <div class="settings-panel"><div class="mydiv">
+        <div class="settings-panel" id="panel-calibration"><div class="mydiv">
             <h3 class="settings-card-title">
                 <input class="myToggleButton section-toggle" type="button" value="+" id="btCalibrationSettingsPage" data-target="CalibrationSettingsPage">Calibration
             </h3>
             <div class="collapsible initially-hidden" id="CalibrationSettingsPage" >
                 <div class="section-note">Curve coefficients and offsets used to convert ADC values into voltage and tank readings.</div>
                 <div class="calibration-help">
-                    <h5>Easy battery calibration</h5>
+                    <h5>Quick Battery Calibration</h5>
                     <p>Use the helper below for a simple one-point correction. Measure the real battery voltage with a multimeter, enter that value, and the firmware will rebuild the battery curve as a safe linear mapping automatically.</p>
                     <p>This helper is meant for the analog battery input. If you use <code>VEdirect-Read</code>, the battery value comes from the external device and should not be calibrated here.</p>
                 </div>
@@ -731,7 +821,7 @@
                     <div class="calibration-feedback" id="batteryCalibrationFeedback">Read the current live values, measure the battery with a multimeter, then apply the correction.</div>
                 </div>
                 <div class="calibration-help">
-                    <h5>Advanced battery curve</h5>
+                    <h5>Advanced Battery Curve</h5>
                     <p>The firmware calculates battery voltage with this formula:</p>
                     <code>Voltage = A2 * ADC * ADC + A1 * ADC + Offset</code>
                     <p>For the default linear setup, keep <code>A2 = 0</code>. Only change the coefficients manually if you deliberately want a custom curve.</p>
@@ -809,13 +899,14 @@
     </form>
     <br>
     
-    <div class="settings-panel"><div class="mydiv">
+    <div class="settings-panel settings-utility-panel"><div class="mydiv">
+        <h3 class="settings-card-title">Config Tools</h3>
         <form id='form4' action='/reseteeprom' method='post'>
             <input type='hidden' name='csrf' value='%csrfToken%'>
             <div class="settings-actions">
             <button type="button" id="downloadConfigButton">Download Config</button>
             <button type="button" id="restoreConfigBackupButton" class="button-spacing">Restore OTA Backup</button>
-            <button type='submit' class="button-spacing">Reset to Factory Settings</button>
+            <button type='submit' class="button-spacing">Factory Reset</button>
             <label for="file" class="btn custom-file-upload button-spacing">Upload Config</label>
             <input type="file" id="file" accept=".json">
             </div>

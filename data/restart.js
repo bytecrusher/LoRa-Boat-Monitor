@@ -55,24 +55,64 @@ function setRestartState(isRestarting) {
     restartToggleClass("myDiv", "hidden", isRestarting);
 }
 
+function restartResponseMessage(response, fallback) {
+    if (response && response.json && response.json.message) {
+        return response.json.message;
+    }
+
+    if (response && response.text) {
+        return response.text;
+    }
+
+    if (response && response.status) {
+        return fallback + " (HTTP " + response.status + ")";
+    }
+
+    return fallback;
+}
+
+function pollRestartUntilOnline() {
+    var deviceWasOffline = false;
+
+    async function checkDevice() {
+        restartPollInterval = null;
+
+        try {
+            var response = await restartRequest("/health?ts=" + Date.now(), { cache: "no-store" });
+            if (!response.ok) {
+                deviceWasOffline = true;
+            } else if (deviceWasOffline) {
+                setRestartState(false);
+                window.location.replace("/");
+                return;
+            }
+        } catch (error) {
+            deviceWasOffline = true;
+        }
+
+        restartPollInterval = window.setTimeout(checkDevice, 900);
+    }
+
+    restartPollInterval = window.setTimeout(checkDevice, 300);
+}
+
 async function restartDevice() {
     if (!window.confirm("Are you sure you want to restart the device?")) {
         return;
     }
 
     setRestartState(true);
-    restartRequest("/restart", { method: "POST" }).catch(function () {
-        // The device may reboot before the browser receives the response.
-    });
-
-    restartPollInterval = window.setInterval(function () {
-        var statusLed = restartById("myping");
-        if (statusLed && statusLed.classList.contains("led-green")) {
-            setRestartState(false);
-            clearInterval(restartPollInterval);
-            window.location.replace("/");
+    try {
+        var response = await restartRequest("/restart", { method: "POST" });
+        if (!response.ok) {
+            throw new Error(restartResponseMessage(response, "Restart request failed."));
         }
-    }, 900);
+
+        pollRestartUntilOnline();
+    } catch (error) {
+        setRestartState(false);
+        window.alert(error && error.message ? error.message : "Restart request failed.");
+    }
 }
 
 document.addEventListener("DOMContentLoaded", function () {

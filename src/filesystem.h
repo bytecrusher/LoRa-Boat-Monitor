@@ -8,6 +8,39 @@
    
 #define FORMAT_LITTLEFS_IF_FAILED false
 
+inline String filesystemHtmlEscape(const String &value) {
+    String escaped;
+    escaped.reserve(value.length() + 8);
+    for (size_t i = 0; i < value.length(); ++i) {
+        switch (value[i]) {
+            case '&': escaped += "&amp;"; break;
+            case '<': escaped += "&lt;"; break;
+            case '>': escaped += "&gt;"; break;
+            case '\"': escaped += "&quot;"; break;
+            case '\'': escaped += "&#39;"; break;
+            default: escaped += value[i]; break;
+        }
+    }
+    return escaped;
+}
+
+inline String filesystemUrlEncode(const String &value) {
+    static const char hex[] = "0123456789ABCDEF";
+    String encoded;
+    encoded.reserve(value.length() * 3);
+    for (size_t i = 0; i < value.length(); ++i) {
+        const uint8_t c = static_cast<uint8_t>(value[i]);
+        if (isalnum(c) || c == '/' || c == '-' || c == '_' || c == '.') {
+            encoded += char(c);
+        } else {
+            encoded += '%';
+            encoded += hex[c >> 4];
+            encoded += hex[c & 0x0F];
+        }
+    }
+    return encoded;
+}
+
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
     DebugPrintln(3, "Listing directory: " + String(dirname));
 
@@ -328,9 +361,10 @@ void testFileIO(fs::FS &fs, const char * path){
 
             String timestamp = String((tmstruct->tm_year)+1900) + String("-") + String(( tmstruct->tm_mon)+1) + String("-") + String(tmstruct->tm_mday) + String(" ") + String(tmstruct->tm_hour) + String(":") + String(tmstruct->tm_min) + String(":") + String(tmstruct->tm_sec);
 
+            const String safeName = filesystemHtmlEscape(String(file.name()));
             response += String("<tr>") +
                         String("<td>Dir</td>") +
-                        String("<td>") + String(file.name()) + String("</td>") +
+                        String("<td>") + safeName + String("</td>") +
                         String("<td>""</td>") +
                         String("<td>") + timestamp + String("</td>") +
                         String("</tr>");
@@ -354,9 +388,11 @@ void testFileIO(fs::FS &fs, const char * path){
 
             String timestamp = String((tmstruct->tm_year)+1900) + String("-") + String(( tmstruct->tm_mon)+1) + String("-") + String(tmstruct->tm_mday) + String(" ") + String(tmstruct->tm_hour) + String(":") + String(tmstruct->tm_min) + String(":") + String(tmstruct->tm_sec);
 
+            const String safeName = filesystemHtmlEscape(String(file.name()));
+            const String safeUrl = filesystemHtmlEscape(filesystemUrlEncode(String(file.name())));
             response += String("<tr>") +
                         String("<td>FILE</td>") +
-                        String("<td><a href='") + String(file.name()) + String("'>") + String(file.name()) + String("</a></td>") +
+                        String("<td><a href='") + safeUrl + String("'>") + safeName + String("</a></td>") +
                         String("<td>") + file.size() + String("</td>") +
                         String("<td>") + timestamp + String("</td>") +
                         String("</tr>");
@@ -396,9 +432,10 @@ String getMyDirAsString(fs::FS &fs, const char * dirname, uint8_t levels){
 
             String timestamp = String((tmstruct->tm_year)+1900) + String("-") + String(( tmstruct->tm_mon)+1) + String("-") + String(tmstruct->tm_mday) + String(" ") + String(tmstruct->tm_hour) + String(":") + String(tmstruct->tm_min) + String(":") + String(tmstruct->tm_sec);
 
+            const String safeName = filesystemHtmlEscape(String(file.name()));
             response += String("<tr>") +
                         String("<td>Dir</td>") +
-                        String("<td>") + String(file.name()) + String("</td>") +
+                        String("<td>") + safeName + String("</td>") +
                         String("<td>""</td>") +
                         String("<td>") + timestamp + String("</td>") +
                         String("</tr>");
@@ -416,9 +453,11 @@ String getMyDirAsString(fs::FS &fs, const char * dirname, uint8_t levels){
 
             String timestamp = String((tmstruct->tm_year)+1900) + String("-") + String(( tmstruct->tm_mon)+1) + String("-") + String(tmstruct->tm_mday) + String(" ") + String(tmstruct->tm_hour) + String(":") + String(tmstruct->tm_min) + String(":") + String(tmstruct->tm_sec);
 
+            const String safeName = filesystemHtmlEscape(String(file.name()));
+            const String safeUrl = filesystemHtmlEscape(filesystemUrlEncode(String(file.name())));
             response += String("<tr>") +
                         String("<td>FILE</td>") +
-                        String("<td><a href='") + String(file.name()) + String("'>") + String(file.name()) + String("</a></td>") +
+                        String("<td><a href='") + safeUrl + String("'>") + safeName + String("</a></td>") +
                         String("<td>") + float(file.size() / 1024.0) + String("</td>") +
                         String("<td>") + timestamp + String("</td>") +
                         String("</tr>");

@@ -4,10 +4,11 @@
 #include <Arduino.h>
 #include <Configuration.h>
 
-bool DownloadFile(const char *fileName, const char *fversion, const String &expectedSha256 = "");
+bool DownloadFile(const char *fileName, const char *webFilesBasePath, const String &expectedSha256 = "");
 bool DownloadFilesFromWeb();
-bool sendToMDS(configData actconf);
-bool sendMdsDeviceEvent(configData actconf, const char *sensorName);
+bool sendToMDS(const configData &actconf);
+bool sendMdsDeviceEvent(const configData &actconf, const char *sensorName);
+bool sendMdsOtaStatus(const configData &actconf, const char *phase, int percent, const String &targetVersion, const String &message);
 String getLastMdsStatus();
 //StaticJsonDocument<200> collectJsonData();
 

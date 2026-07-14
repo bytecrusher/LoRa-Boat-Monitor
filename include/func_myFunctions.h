@@ -10,6 +10,7 @@
 #include <DallasTemperature.h>  // DS18B20 lib
 #include <U8x8lib.h>            // OLED Lib
 #include <LittleFS.h>
+#include <time.h>
 #include <Configuration.h>
 
 #define SEALEVELPRESSURE_HPA (1023.0) // Adjustment for altitude calculation
@@ -56,7 +57,6 @@ extern unsigned TX_INTERVAL;
 extern float latitude;
 extern float longitude;
 extern U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8;
-extern volatile bool flag2;
 extern bool rmc_finish;
 extern int c_counter;
 extern bool lora_activ;
@@ -113,8 +113,8 @@ void DebugPrint(int type, unsigned long x);
 void DebugPrint(int type, String x);
 void DebugPrint(int type, IPAddress x);
 void DebugPrint(int type, unsigned int num, int base);
-void eraseEEPROMConfig(configData cfg);
-void saveEEPROMConfig(configData cfg);
+void eraseEEPROMConfig(const configData &cfg);
+bool saveEEPROMConfig(const configData &cfg);
 configData loadEEPROMConfig();
 bool hasEEPROMConfigHeader();
 bool saveConfigBackupToLittleFS(const configData &cfg);
@@ -122,7 +122,24 @@ bool restoreConfigBackupFromLittleFS(configData &cfg);
 bool hasConfigBackupInLittleFS();
 bool saveWebFilesVersion(const char *version);
 String getStoredWebFilesVersion();
-bool areWebFilesCurrent(const char *version);
+String getStoredWebFilesVersionOnly();
+String getStoredWebFilesChannel();
+String getFirmwareReleaseChannel();
+String getFirmwareReleaseLabel();
+String buildWebFilesVersionTag(const char *version, const char *channel = nullptr);
+bool areWebFilesCurrent(const char *version, const char *channel = nullptr);
+String buildDefaultWebPassword();
+String buildDefaultApPassword();
+bool isGeneratedWebPassword(const char *value);
+bool isGeneratedApPassword(const char *value);
+bool isLegacyWeakWebPassword(const char *value);
+bool isLegacyWeakApPassword(const char *value);
+bool normalizeMdsOtaEndpoint(const String &configuredValue, String &normalizedEndpoint);
+String buildMdsOtaMetadataUrl(const String &endpoint, const char *fileName);
+String buildMdsOtaWebBaseUrl(const String &endpoint);
+String normalizeSha256String(const String &sha256);
+String sha256ToHexString(const uint8_t digest[32]);
+bool hasReasonableSystemTime();
 float calculateBatteryVoltageFromAdc(const configData &cfg, uint16_t rawAdc);
 bool sanitizeBatteryCalibration(configData &cfg, const configData &defaults);
 int boolToInt(bool value);
@@ -151,6 +168,7 @@ bool CheckNMEA(String NMEAstring);
 void readValues(configData myactconf);
 void writeDisplay();
 void writeDisplayValues(configData myactconf);
+void writeDisplayByMode(configData myactconf);
 void writeDisplayStatusScreen(const String &title,
                              const String &line1 = "",
                              const String &line2 = "",
@@ -165,11 +183,10 @@ void writeDisplayProgressScreen(const String &title,
                                size_t total,
                                const String &detail = "",
                                const String &footer = "");
-void readGPSValuesFlag();
-void readGPSValues(configData myactconf);
+void readGPSValues();
 void relayTimerInterrupt();
 void sendNMEA();
-void handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
+bool handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
 String humanReadableSize(const size_t bytes);
 String getheader(configData myactconf);
 void printLocalTime();

@@ -11,7 +11,7 @@ jobs:
     
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with: 
           submodules: "recursive"
       - name: Install deps
@@ -19,6 +19,10 @@ jobs:
           #apt-get install -y python3-pip
           python3 -m pip install --upgrade pip
           pip install -U platformio
+      - name: Validate project contracts
+        run: |
+          python3 scripts/validate_project.py
+          for file in data/*.js src/Payload_Formats_*.js; do node --check "$file"; done
       - name: Build
         run: |
           pio run

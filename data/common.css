@@ -330,12 +330,8 @@ body > h3 {
 }
 
 .sensor-values-section {
-    overflow: hidden;
-}
-
-.sensor-values-section canvas {
-    max-width: min(300px, 42vw);
-    max-height: 300px;
+    overflow-x: auto;
+    overflow-y: visible;
 }
 
 .sensor-values-section td:nth-child(2) {
@@ -346,6 +342,336 @@ body > h3 {
 .sensor-values-section td:nth-child(3) {
     color: var(--heading, #fff);
     font-weight: 750;
+}
+
+.tank-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    gap: 16px;
+    margin: 16px 0 22px;
+    padding: 0 clamp(10px, 2vw, 22px);
+    box-sizing: border-box;
+}
+
+.tank-card {
+    position: relative;
+    overflow: hidden;
+    padding: 20px;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.16));
+    border-radius: 20px;
+    background:
+        radial-gradient(circle at 20% 0%, rgba(101, 213, 243, 0.17), transparent 34%),
+        linear-gradient(145deg, rgba(15, 44, 55, 0.95), rgba(8, 29, 38, 0.98));
+    box-shadow: 0 16px 35px rgba(0, 0, 0, 0.22);
+}
+
+.tank-card::after {
+    content: "";
+    position: absolute;
+    inset: auto 18px -36px auto;
+    width: 120px;
+    height: 120px;
+    border-radius: 999px;
+    background: rgba(93, 213, 242, 0.08);
+    pointer-events: none;
+}
+
+.tank-card__header,
+.tank-card__meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.tank-card__header strong {
+    display: block;
+    margin-top: 4px;
+    color: var(--heading, #fff);
+}
+
+.tank-card__eyebrow,
+.tank-card__meta span {
+    color: var(--muted, #b2c7d1);
+    font-size: 0.78rem;
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.tank-card__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    flex: 0 0 auto;
+    border-radius: 16px;
+    color: #65d5f3;
+    background: rgba(101, 213, 243, 0.12);
+    box-shadow: inset 0 0 0 1px rgba(101, 213, 243, 0.2);
+}
+
+.tank-level-display {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 22px 0 14px;
+    color: var(--heading, #fff);
+    font-size: clamp(2.6rem, 9vw, 4.6rem);
+    font-weight: 950;
+    line-height: 0.95;
+    letter-spacing: -0.06em;
+}
+
+.tank-level-display span {
+    color: var(--muted, #b2c7d1);
+    font-size: 0.42em;
+    letter-spacing: -0.02em;
+}
+
+.tank-instrument {
+    --tank-level: 0;
+    display: grid;
+    place-items: center;
+    margin: 4px auto 8px;
+    width: min(100%, 260px);
+    max-width: 260px;
+    aspect-ratio: 1;
+}
+
+.tank-instrument__bezel {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 50%;
+    background:
+        linear-gradient(145deg, rgba(238, 249, 252, 0.24), rgba(8, 25, 33, 0.8) 28%, rgba(235, 249, 252, 0.12) 58%, rgba(0, 0, 0, 0.72)),
+        radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.22), transparent 18%),
+        #0f2833;
+    box-shadow:
+        0 18px 42px rgba(0, 0, 0, 0.35),
+        inset 0 2px 4px rgba(255, 255, 255, 0.23),
+        inset 0 -10px 18px rgba(0, 0, 0, 0.48);
+}
+
+.tank-instrument__bezel::before {
+    content: "";
+    position: absolute;
+    inset: 8px;
+    border-radius: inherit;
+    background:
+        radial-gradient(circle at 50% 58%, rgba(2, 14, 20, 0.96) 0 43%, transparent 44%),
+        conic-gradient(from 230deg,
+            #e85454 0deg 38deg,
+            #f2b550 38deg 74deg,
+            #58d8f2 74deg 196deg,
+            #2ea36d 196deg 260deg,
+            transparent 260deg 360deg);
+    filter: drop-shadow(0 0 12px rgba(88, 216, 242, 0.22));
+}
+
+.tank-instrument__face {
+    position: absolute;
+    inset: 18px;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 36% 28%, rgba(255, 255, 255, 0.12), transparent 20%),
+        radial-gradient(circle at 50% 57%, rgba(13, 40, 50, 0.18), rgba(1, 12, 18, 0.96) 54%),
+        repeating-radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 5px);
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+        inset 0 0 35px rgba(0, 0, 0, 0.72);
+}
+
+.tank-instrument__ticks {
+    position: absolute;
+    inset: 12px;
+    border-radius: 50%;
+    background:
+        conic-gradient(from 229deg,
+            rgba(239, 249, 252, 0.95) 0deg 1.5deg,
+            transparent 1.5deg 12.5deg,
+            rgba(239, 249, 252, 0.52) 12.5deg 14deg,
+            transparent 14deg 26deg);
+    mask: radial-gradient(circle, transparent 0 58%, #000 59% 66%, transparent 67%);
+}
+
+.tank-instrument__label {
+    position: absolute;
+    color: rgba(237, 250, 253, 0.9);
+    font-size: 0.74rem;
+    font-weight: 900;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 5px rgba(0, 0, 0, 0.55);
+}
+
+.tank-instrument__label--min {
+    left: 21%;
+    bottom: 30%;
+}
+
+.tank-instrument__label--mid {
+    top: 18%;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.tank-instrument__label--max {
+    right: 16%;
+    bottom: 30%;
+}
+
+.tank-instrument__needle {
+    position: absolute;
+    left: 50%;
+    bottom: 49%;
+    width: 4px;
+    height: 36%;
+    border-radius: 999px;
+    transform: translateX(-50%) rotate(-130deg);
+    transform-origin: 50% 100%;
+    background: linear-gradient(180deg, #f5fbfd, #68d9f3 78%, #2a7488);
+    box-shadow:
+        0 0 12px rgba(104, 217, 243, 0.38),
+        0 2px 6px rgba(0, 0, 0, 0.5);
+    transition: transform 520ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.tank-instrument__needle::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: -5px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    transform: translateX(-50%);
+    background: #f5fbfd;
+}
+
+.tank-instrument__hub {
+    position: absolute;
+    left: 50%;
+    bottom: 46%;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    transform: translateX(-50%);
+    background:
+        radial-gradient(circle at 35% 30%, #fff, #78dff5 32%, #173c49 68%, #071820);
+    box-shadow:
+        0 0 0 4px rgba(7, 22, 29, 0.95),
+        0 0 0 6px rgba(255, 255, 255, 0.1),
+        0 5px 14px rgba(0, 0, 0, 0.5);
+}
+
+.tank-instrument__readout {
+    position: absolute;
+    left: 50%;
+    bottom: 16%;
+    display: grid;
+    min-width: 92px;
+    padding: 8px 10px 7px;
+    border: 1px solid rgba(103, 217, 244, 0.2);
+    border-radius: 12px;
+    transform: translateX(-50%);
+    color: var(--heading, #fff);
+    text-align: center;
+    background: rgba(2, 15, 21, 0.72);
+    box-shadow: inset 0 0 18px rgba(75, 210, 242, 0.08);
+}
+
+.tank-instrument__readout strong {
+    font-size: 1.15rem;
+    font-weight: 950;
+    line-height: 1;
+}
+
+.tank-instrument__readout span {
+    margin-top: 3px;
+    color: rgba(178, 199, 209, 0.86);
+    font-size: 0.58rem;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+}
+
+.tank-card__meta {
+    margin-top: 14px;
+    color: var(--heading, #fff);
+}
+
+.tank-card--low .tank-instrument__needle,
+.tank-card--empty .tank-instrument__needle {
+    background: linear-gradient(180deg, #fff3df, #ffb85c 72%, #8d3d2f);
+    box-shadow: 0 0 14px rgba(255, 184, 92, 0.35);
+}
+
+.tank-card--low .tank-card__icon,
+.tank-card--empty .tank-card__icon {
+    color: #ffb45f;
+    background: rgba(255, 180, 95, 0.12);
+    box-shadow: inset 0 0 0 1px rgba(255, 180, 95, 0.22);
+}
+
+.battery-card-grid {
+    grid-template-columns: minmax(min(100%, 280px), 420px);
+}
+
+.battery-card {
+    background:
+        radial-gradient(circle at 78% 0%, rgba(120, 255, 171, 0.15), transparent 30%),
+        radial-gradient(circle at 16% 12%, rgba(101, 213, 243, 0.17), transparent 34%),
+        linear-gradient(145deg, rgba(15, 44, 55, 0.95), rgba(8, 29, 38, 0.98));
+}
+
+.battery-card__icon {
+    color: #8cffb2;
+    background: rgba(140, 255, 178, 0.12);
+    box-shadow: inset 0 0 0 1px rgba(140, 255, 178, 0.22);
+}
+
+.battery-level-display {
+    letter-spacing: -0.05em;
+}
+
+.battery-instrument__bezel::before {
+    background:
+        radial-gradient(circle at 50% 58%, rgba(2, 14, 20, 0.96) 0 43%, transparent 44%),
+        conic-gradient(from 230deg,
+            #e85454 0deg 44deg,
+            #f2b550 44deg 92deg,
+            #58d8f2 92deg 182deg,
+            #55e58d 182deg 236deg,
+            #a9f28b 236deg 260deg,
+            transparent 260deg 360deg);
+}
+
+.battery-card--low .tank-instrument__needle,
+.battery-card--warning .tank-instrument__needle {
+    background: linear-gradient(180deg, #fff3df, #ffb85c 72%, #8d3d2f);
+    box-shadow: 0 0 14px rgba(255, 184, 92, 0.35);
+}
+
+.battery-card--low .battery-card__icon,
+.battery-card--warning .battery-card__icon {
+    color: #ffb45f;
+    background: rgba(255, 180, 95, 0.12);
+    box-shadow: inset 0 0 0 1px rgba(255, 180, 95, 0.22);
+}
+
+.battery-card--charge .tank-instrument__needle {
+    background: linear-gradient(180deg, #f6fff8, #8cffb2 76%, #27764a);
+    box-shadow: 0 0 16px rgba(140, 255, 178, 0.36);
+}
+
+.battery-card--charge .battery-card__icon {
+    color: #8cffb2;
+    background: rgba(140, 255, 178, 0.14);
+    box-shadow: inset 0 0 0 1px rgba(140, 255, 178, 0.28);
 }
 
 .diagnostics-panel code {
@@ -755,6 +1081,42 @@ body > h3 {
     font-size: 0.9rem;
 }
 
+.lora-manual-panel .table-toolbar {
+    align-items: flex-start;
+}
+
+.lora-inline-notice {
+    width: 100%;
+    margin: var(--space-3) 0 0;
+}
+
+.lora-result-grid {
+    margin-top: var(--space-3);
+}
+
+.lora-debug-log {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.lora-debug-log li {
+    display: grid;
+    grid-template-columns: minmax(88px, max-content) minmax(0, 1fr);
+    gap: var(--space-3);
+    padding: 10px 12px;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.16));
+    border-radius: var(--radius-sm);
+    background: var(--surface-soft, rgba(255, 255, 255, 0.05));
+}
+
+.lora-debug-log time {
+    color: var(--accent-strong, #78ddff);
+    font-variant-numeric: tabular-nums;
+}
+
 .button-secondary,
 .button-ghost {
     color: var(--text, #edf8fb);
@@ -1015,4 +1377,13 @@ body > h3 {
     .progress-dialog-card {
         padding: 13px;
     }
+
+    .lora-debug-log li {
+        grid-template-columns: 1fr;
+        gap: 4px;
+    }
+}
+
+.file-manager-page input[type="file"] {
+    display: none;
 }

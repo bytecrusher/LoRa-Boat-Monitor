@@ -14,6 +14,35 @@ bool GOTO_DEEPSLEEP = false;
 
 // Saves the LMIC structure during DeepSleep
 RTC_DATA_ATTR lmic_t RTC_LMIC;
+RTC_DATA_ATTR uint32_t RTC_LMIC_CONFIG_FINGERPRINT = 0;
+constexpr uint32_t LORA_FRAME_COUNTER_RESERVATION_SIZE = 32;
+
+bool ensureLoraFrameCounterReservation() {
+  if (LMIC.seqnoUp < actconf.fcnt) {
+    return true;
+  }
+  if (LMIC.seqnoUp > UINT32_MAX - LORA_FRAME_COUNTER_RESERVATION_SIZE) {
+    DebugPrintln(1, "LoRaWAN frame counter exhausted; refusing uplink");
+    return false;
+  }
+
+  actconf.fcnt = LMIC.seqnoUp + LORA_FRAME_COUNTER_RESERVATION_SIZE;
+  saveEEPROMConfig(actconf);
+  DebugPrintln(3, "Reserved LoRaWAN frame counters through " + String(actconf.fcnt - 1));
+  return true;
+}
+
+uint32_t currentLoraConfigFingerprint() {
+  uint32_t hash = 2166136261UL;
+  const uint8_t *devaddrBytes = reinterpret_cast<const uint8_t *>(&actconf.devaddr);
+  for (size_t i = 0; i < sizeof(actconf.devaddr); ++i) hash = (hash ^ devaddrBytes[i]) * 16777619UL;
+  for (uint8_t value : actconf.nskey) hash = (hash ^ value) * 16777619UL;
+  for (uint8_t value : actconf.appkey) hash = (hash ^ value) * 16777619UL;
+  hash = (hash ^ uint32_t(actconf.lchannel)) * 16777619UL;
+  hash = (hash ^ uint32_t(actconf.spreadf)) * 16777619UL;
+  hash = (hash ^ uint32_t(actconf.dynsf)) * 16777619UL;
+  return hash;
+}
 
 void PrintRuntime()
 {
@@ -557,6 +586,11 @@ void do_send(osjob_t *j)
 
     //        flashLED(100);  // Flash white LED on LoRa board
     loraSendDurationTime = millis();
+    if (!ensureLoraFrameCounterReservation()) {
+      lora_activ = false;
+      failManualLoraSend("LoRaWAN frame counter exhausted.");
+      return;
+    }
     LMIC_setTxData2(1, mydata, sizeof(mydata), 0);
     DebugPrintln(3, "Packet queued");
   }
@@ -605,10 +639,15 @@ void onEvent(ev_t ev) {
     case EV_REJOIN_FAILED:
       DebugPrintln(3, "EV_REJOIN_FAILED");
       break;
-    case EV_TXCOMPLETE:
+    case EV_TXCOMPLETE: {
       DebugPrintln(3, "EV_TXCOMPLETE (includes waiting for RX windows)");
-      if (LMIC.txrxFlags & TXRX_ACK)
+      if (LMIC.txrxFlags & TXRX_ACK) {
         DebugPrintln(3, "Received ack");
+      }
+      const bool standaloneManualUplink = completeManualLoraSend(
+        (LMIC.txrxFlags & TXRX_ACK) != 0,
+        LMIC.dataLen
+      );
       if (LMIC.dataLen) {
         // data received in rx slot after tx
         DebugPrint(3, "Received ");
@@ -721,10 +760,15 @@ void onEvent(ev_t ev) {
           DebugPrintln(1, "Downlink Message: unknown");
         }
       }
-      // Schedule next transmission
-      os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(TX_INTERVAL), do_send);
-      GOTO_DEEPSLEEP = true;
+      // A standalone manual test must not silently enable periodic LoRa sends.
+      if (!standaloneManualUplink) {
+        os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(TX_INTERVAL), do_send);
+      } else {
+        os_clearCallback(&sendjob);
+      }
+      GOTO_DEEPSLEEP = !standaloneManualUplink;
       break;
+    }
     case EV_LOST_TSYNC:
       DebugPrintln(3, "EV_LOST_TSYNC");
       break;
@@ -743,9 +787,11 @@ void onEvent(ev_t ev) {
       break;
     case EV_TXSTART:
       DebugPrintln(3, "EV_TXSTART");
+      noteManualLoraTxStarted();
       break;
     case EV_TXCANCELED:
       DebugPrintln(3, "EV_TXCANCELED");
+      failManualLoraSend("LMIC canceled the manual LoRa transmission.");
       break;
     case EV_RXSTART:
       /* do not print anything -- it wrecks timing */
@@ -865,10 +911,10 @@ void SaveLMICToRTC(int deepsleep_sec)
 {
     DebugPrintln(3, "Save LMIC to RTC");
     RTC_LMIC = LMIC;
+    RTC_LMIC_CONFIG_FINGERPRINT = currentLoraConfigFingerprint();
 
-    // save LMIC counter to config.
-    actconf.fcnt = LMIC.seqnoUp;
-    saveEEPROMConfig(actconf);
+    // The persistent high-water mark is reserved before transmission. RTC
+    // keeps the exact counter across deep sleep without another flash write.
 
     // ESP32 can't track millis during DeepSleep and no option to advanced millis after DeepSleep.
     // Therefore reset DutyCyles

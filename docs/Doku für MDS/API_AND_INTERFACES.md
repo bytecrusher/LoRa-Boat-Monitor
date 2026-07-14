@@ -208,7 +208,8 @@ Pflichtstruktur:
     "macAddress": "string",
     "protocolVersion": "1",
     "firmwareVersion": "V1.13h",
-    "standbyEnabled": true
+    "standbyEnabled": true,
+    "standbyState": "wakeup"
   },
   "sensors": [
     {
@@ -299,6 +300,9 @@ Verhalten bei neuen oder unvollstaendig provisionierten Boards:
 - `board.macAddress` wird auf `boardConfig` aufgeloest
 - `board.firmwareVersion` ist optional und kann von ESP32-Geraeten zur Diagnose/Versionsanzeige mitgesendet werden
 - `board.standbyEnabled` ist optional und wird als Boolean interpretiert
+- `board.standbyState` ist optional und beschreibt den aktuellen Zustand explizit
+  - erlaubte Werte: `always_online`, `wakeup`, `standby`
+  - wenn vorhanden, ist dieses Feld eindeutiger als `standbyEnabled`
 - akzeptierte Werte fuer `board.standbyEnabled` sind `true/false`, `1/0`, `yes/no`, `on/off`, `enabled/disabled`
 - die Alias-Felder `standby_enabled`, `standbyModeEnabled` und `sleepEnabled` werden gleich behandelt
 - `alwaysOnline` wird ebenfalls akzeptiert, aber invertiert interpretiert
@@ -325,6 +329,38 @@ Aktuell verwendet:
 
 - `1` = direkt / WiFi / generischer Device-Import
 - `2` = LoRa / TTN
+
+### OTA status logging
+
+ESP32-Geraete koennen den Fortschritt eines serverseitig gestarteten
+OTA-Updates ueber denselben `receivejson.php`-Ingest protokollieren. Dafuer
+wird ein eigener Sensor-Datensatz verwendet:
+
+- `sensorType`: `OtaStatus`
+- `sensorName`: `OtaUpdate`
+- `value1`: OTA-Phase, z. B. `download-firmware`, `finalizing`, `complete`, `error`
+- `value2`: Fortschritt in Prozent
+- `value3`: Ziel-Firmware-Version
+- `value4`: Kurzmeldung oder Fehlertext
+
+Die Firmware sendet diese Datensaetze gedrosselt, damit der OTA-Download nicht
+durch zu viele zusaetzliche HTTPS-Verbindungen instabil wird.
+
+### WakeupStan Ereignisse
+
+ESP32-Geraete senden Wakeup-/Standby-Ereignisse explizit als:
+
+- `sensorType`: `WakeupStan`
+- `sensorName`: `WakeupLog`
+- `value1`: Standby-Ursache
+- `value2`: Standby-Zeitstempel
+- `value3`: Wakeup-Ursache
+- `value4`: Wakeup-Zeitstempel
+
+Wenn ein Payload einen solchen expliziten `WakeupStan`-Datensatz enthaelt,
+darf MDS keine zusaetzlichen Wakeup-/Standby-Zeilen aus Payload-Luecken
+ableiten. Explizite Device-Ereignisse haben Vorrang vor serverseitiger
+Inferenz.
 
 
 ## Browser APIs
@@ -515,6 +551,12 @@ Pflicht-Header:
 
 Weitere Header werden geloggt, aber nicht zwingend validiert.
 
+Optionale Channel-Auswahl:
+
+- Query-Parameter `channel=beta|stable|release`
+- oder Header `x-ESP32-OTA-Channel: beta|stable|release`
+- `release` wird wie `stable` behandelt
+
 ### Verhalten
 
 - `403`
@@ -525,12 +567,23 @@ Weitere Header werden geloggt, aber nicht zwingend validiert.
   - wenn eine neue Firmware geliefert wird
   - Muss den Response-Header `x-SHA256` oder `X-SHA256` mit der SHA256-Pruefsumme der ausgelieferten Firmware enthalten.
   - Sollte den Response-Header `x-Firmware-Version` mit der ausgelieferten Firmware-Version enthalten, damit der ESP die MDS-OTA-Version im Webinterface anzeigen kann.
+  - Sollte den Response-Header `x-MDS-OTA-Channel` mit `stable` oder `beta` enthalten.
 - `304`
   - wenn keine neuere Firmware vorhanden ist
+  - sollte ebenfalls `x-Firmware-Version`, `x-SHA256` und `x-MDS-OTA-Channel` liefern, damit das ESP-Webinterface die Serverversion anzeigen kann.
 
 ### Dateipfade
 
 - Firmware-Binaerdateien: `var/ota/bin/`
+- Channel-Metadaten fuer ESP-Webinterface und automatischen Download:
+  - `public/ota/bin/web/stable.json`
+  - `public/ota/bin/web/beta.json`
+  - `public/ota/bin/web/firmware-manifest.json`
+- Channel-Binaerdateien und Webpakete:
+  - `public/ota/bin/web/release/<version>/firmware.bin`
+  - `public/ota/bin/web/beta/<version>/firmware.bin`
+  - `public/ota/bin/web/release/<version>/webui-package.tar`
+  - `public/ota/bin/web/beta/<version>/webui-package.tar`
 - Empfohlene Metadateien fuer automatische Deploys:
   - `var/ota/bin/firmware.version`
   - `var/ota/bin/firmware.sha256`

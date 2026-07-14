@@ -10,6 +10,7 @@ import json
 import os
 import posixpath
 import re
+import shlex
 import ssl
 import subprocess
 import sys
@@ -233,6 +234,17 @@ def download_text(ftp: FTP, remote_path: str) -> str:
     return payload.getvalue().decode("utf-8")
 
 
+def download_optional_text(ftp: FTP, remote_path: str) -> str:
+    remote_dir = posixpath.dirname(remote_path)
+    remote_name = posixpath.basename(remote_path)
+    ensure_remote_dir(ftp, remote_dir)
+    ftp_cwd(ftp, remote_dir)
+
+    if remote_name not in {posixpath.basename(name) for name in ftp.nlst()}:
+        return ""
+    return download_text(ftp, remote_path)
+
+
 def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as source:
@@ -241,14 +253,20 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def channel_folder(channel: str) -> str:
+    return "release" if channel == "stable" else "beta"
+
+
 def build_web_file_hashes(release_files: list[tuple[Path, str]], version: str) -> dict[str, str]:
     hashes: dict[str, str] = {}
-    version_prefix = f"{version}/"
+    version_suffix = f"/{version}/"
     for local_path, remote_path in release_files:
-        if remote_path == posixpath.join(version, "firmware.bin"):
+        if remote_path.endswith("/firmware.bin"):
             continue
-        if remote_path.startswith(version_prefix):
-            hashes[remote_path[len(version_prefix):]] = file_sha256(local_path)
+        version_index = remote_path.find(version_suffix)
+        if version_index >= 0:
+            relative_path = remote_path[version_index + len(version_suffix):]
+            hashes[relative_path] = file_sha256(local_path)
     return hashes
 
 
@@ -259,20 +277,36 @@ def build_manifest(
     firmware_sha256: str,
     web_file_hashes: dict[str, str],
 ) -> str:
-    try:
-        manifest = json.loads(existing_manifest) if existing_manifest.strip() else {}
-    except json.JSONDecodeError:
-        manifest = {}
+    manifest = json.loads(existing_manifest) if existing_manifest.strip() else {}
 
+    channel_path = channel_folder(channel)
     manifest[channel] = {
         "version": version,
-        "firmware": f"{version}/firmware.bin",
+        "firmware": f"{channel_path}/{version}/firmware.bin",
         "sha256": firmware_sha256,
         "webFileHashes": web_file_hashes,
-        "webFiles": f"{version}/",
+        "webFiles": f"{channel_path}/{version}",
     }
 
     return json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+
+
+def build_channel_metadata(
+    channel: str,
+    version: str,
+    firmware_sha256: str,
+    web_file_hashes: dict[str, str],
+) -> str:
+    channel_path = channel_folder(channel)
+    metadata = {
+        "channel": channel,
+        "firmware": f"{channel_path}/{version}/firmware.bin",
+        "sha256": firmware_sha256,
+        "version": version,
+        "webFileHashes": web_file_hashes,
+        "webFiles": f"{channel_path}/{version}",
+    }
+    return json.dumps(metadata, indent=2, sort_keys=True) + "\n"
 
 
 def upload_mds_ota_files(
@@ -333,21 +367,38 @@ def run_command(command: list[str], dry_run: bool) -> None:
 def download_text_ssh(target: str, remote_path: str) -> str:
     host, remote_dir = split_scp_target(target)
     full_path = f"{remote_dir.rstrip('/')}/{remote_path.lstrip('/')}"
+    quoted_path = shlex.quote(full_path)
     result = subprocess.run(
-        ["ssh", host, "cat", full_path],
-        check=True,
+        [
+            "ssh",
+            host,
+            f"if [ -f {quoted_path} ]; then cat -- {quoted_path}; "
+            f"elif [ ! -e {quoted_path} ]; then exit 3; else exit 4; fi",
+        ],
+        check=False,
         capture_output=True,
         text=True,
     )
+    if result.returncode == 3:
+        return ""
+    if result.returncode != 0:
+        raise subprocess.CalledProcessError(
+            result.returncode,
+            result.args,
+            output=result.stdout,
+            stderr=result.stderr,
+        )
     return result.stdout
 
 
 def upload_mds_ota_files_ssh(
     target: str,
     public_target: str,
+    channel: str,
     version: str,
     firmware_sha256: str,
     manifest_text: str,
+    channel_metadata_text: str,
     dry_run: bool,
 ) -> None:
     if not target:
@@ -356,6 +407,7 @@ def upload_mds_ota_files_ssh(
 
     host, remote_dir = split_scp_target(target)
     public_host, public_remote_dir = split_scp_target(public_target or target)
+    public_channel_dir = channel_folder(channel)
     print(f"Preparing MDS OTA firmware files via SSH in {host}:{remote_dir}")
     print(f"Preparing public MDS OTA web files via SSH in {public_host}:{public_remote_dir}")
     run_command(["ssh", host, "mkdir", "-p", remote_dir], dry_run)
@@ -370,36 +422,42 @@ def upload_mds_ota_files_ssh(
         version_file.write_text(version + "\n", encoding="utf-8")
         sha256_file.write_text(firmware_sha256 + "\n", encoding="utf-8")
         manifest_file.write_text(manifest_text, encoding="utf-8")
-        run_command(["scp", str(version_file), f"{host}:{remote_dir}/firmware.version"], dry_run)
-        run_command(["scp", str(sha256_file), f"{host}:{remote_dir}/firmware.sha256"], dry_run)
         run_command(["ssh", public_host, "mkdir", "-p", public_remote_dir], dry_run)
-        run_command(["scp", str(version_file), f"{public_host}:{public_remote_dir}/firmware.version"], dry_run)
-        run_command(["scp", str(sha256_file), f"{public_host}:{public_remote_dir}/firmware.sha256"], dry_run)
         run_command(["scp", str(FIRMWARE_BIN), f"{public_host}:{public_remote_dir}/firmware.bin"], dry_run)
         run_command(["scp", str(FIRMWARE_BIN), f"{public_host}:{public_remote_dir}/{version}.bin"], dry_run)
-        run_command(["ssh", public_host, "mkdir", "-p", f"{public_remote_dir}/web/{version}"], dry_run)
-        run_command(["scp", str(manifest_file), f"{public_host}:{public_remote_dir}/web/{MANIFEST_FILE}"], dry_run)
+        run_command(["ssh", public_host, "mkdir", "-p", f"{public_remote_dir}/web/{public_channel_dir}/{version}"], dry_run)
+        channel_manifest_file = temp_dir / f"{channel}.json"
+        channel_manifest_file.write_text(channel_metadata_text, encoding="utf-8")
+        run_command(["scp", str(FIRMWARE_BIN), f"{public_host}:{public_remote_dir}/web/{public_channel_dir}/{version}/firmware.bin"], dry_run)
 
         for web_file in collect_web_files():
-            remote_web_path = f"{public_host}:{public_remote_dir}/web/{version}/{web_file.relative_to(DATA_DIR).as_posix()}"
+            remote_web_path = f"{public_host}:{public_remote_dir}/web/{public_channel_dir}/{version}/{web_file.relative_to(DATA_DIR).as_posix()}"
             run_command(["scp", str(web_file), remote_web_path], dry_run)
 
         if WEBUI_PACKAGE.exists():
-            run_command(["scp", str(WEBUI_PACKAGE), f"{public_host}:{public_remote_dir}/web/{version}/webui-package.tar"], dry_run)
-            run_command(["scp", str(WEBUI_PACKAGE), f"{public_host}:{public_remote_dir}/web/webui-package.tar"], dry_run)
+            run_command(["scp", str(WEBUI_PACKAGE), f"{public_host}:{public_remote_dir}/web/{public_channel_dir}/{version}/webui-package.tar"], dry_run)
+            run_command(["scp", str(WEBUI_PACKAGE), f"{public_host}:{public_remote_dir}/web/{public_channel_dir}/webui-package.tar"], dry_run)
         else:
             print(f"Warning: {WEBUI_PACKAGE} does not exist. Skipping MDS web package upload.")
 
+        run_command(["scp", str(version_file), f"{host}:{remote_dir}/firmware.version"], dry_run)
+        run_command(["scp", str(sha256_file), f"{host}:{remote_dir}/firmware.sha256"], dry_run)
+        run_command(["scp", str(version_file), f"{public_host}:{public_remote_dir}/firmware.version"], dry_run)
+        run_command(["scp", str(sha256_file), f"{public_host}:{public_remote_dir}/firmware.sha256"], dry_run)
+        run_command(["scp", str(channel_manifest_file), f"{public_host}:{public_remote_dir}/web/{channel}.json"], dry_run)
+        run_command(["scp", str(manifest_file), f"{public_host}:{public_remote_dir}/web/{MANIFEST_FILE}"], dry_run)
 
-def collect_release_files(version: str) -> list[tuple[Path, str]]:
+
+def collect_release_files(version: str, channel: str) -> list[tuple[Path, str]]:
     if not FIRMWARE_BIN.exists():
         raise FileNotFoundError(f"Missing firmware image: {FIRMWARE_BIN}")
 
-    release_files: list[tuple[Path, str]] = [(FIRMWARE_BIN, posixpath.join(version, "firmware.bin"))]
+    remote_version_dir = posixpath.join(channel_folder(channel), version)
+    release_files: list[tuple[Path, str]] = [(FIRMWARE_BIN, posixpath.join(remote_version_dir, "firmware.bin"))]
 
     for web_file in collect_web_files():
         relative_path = web_file.relative_to(DATA_DIR).as_posix()
-        release_files.append((web_file, posixpath.join(version, relative_path)))
+        release_files.append((web_file, posixpath.join(remote_version_dir, relative_path)))
 
     return release_files
 
@@ -411,9 +469,10 @@ def main() -> int:
     firmware_sha256 = file_sha256(FIRMWARE_BIN)
     marker_files = STABLE_MARKERS if args.channel == "stable" else BETA_MARKERS
     remote_root = args.remote_dir.strip("/")
-    release_files = collect_release_files(version)
+    release_files = collect_release_files(version, args.channel)
     web_file_hashes = build_web_file_hashes(release_files, version)
     manifest_text = build_manifest("", args.channel, version, firmware_sha256, web_file_hashes)
+    channel_metadata_text = build_channel_metadata(args.channel, version, firmware_sha256, web_file_hashes)
 
     print(f"Preparing release {version} for channel '{args.channel}'")
     if has_ftp_config(args):
@@ -438,6 +497,12 @@ def main() -> int:
                     args.dry_run,
                 )
 
+            manifest_remote_path = posixpath.join(remote_root, MANIFEST_FILE)
+            existing_manifest = ""
+            if not args.dry_run and ftp is not None:
+                existing_manifest = download_optional_text(ftp, manifest_remote_path)
+
+            manifest_text = build_manifest(existing_manifest, args.channel, version, firmware_sha256, web_file_hashes)
             for marker in marker_files:
                 upload_text(
                     ftp,  # type: ignore[arg-type]
@@ -445,16 +510,12 @@ def main() -> int:
                     posixpath.join(remote_root, marker),
                     args.dry_run,
                 )
-
-            manifest_remote_path = posixpath.join(remote_root, MANIFEST_FILE)
-            existing_manifest = ""
-            if not args.dry_run and ftp is not None:
-                try:
-                    existing_manifest = download_text(ftp, manifest_remote_path)
-                except error_perm:
-                    existing_manifest = ""
-
-            manifest_text = build_manifest(existing_manifest, args.channel, version, firmware_sha256, web_file_hashes)
+            upload_text(
+                ftp,  # type: ignore[arg-type]
+                channel_metadata_text,
+                posixpath.join(remote_root, f"{args.channel}.json"),
+                args.dry_run,
+            )
             upload_text(
                 ftp,  # type: ignore[arg-type]
                 manifest_text,
@@ -473,18 +534,27 @@ def main() -> int:
                 args.dry_run,
             )
         else:
-            if not has_ftp_config(args) and not args.dry_run:
-                try:
-                    existing_mds_manifest = download_text_ssh(args.mds_ota_target, f"web/{MANIFEST_FILE}")
-                except Exception:
-                    existing_mds_manifest = ""
-                manifest_text = build_manifest(existing_mds_manifest, args.channel, version, firmware_sha256, web_file_hashes)
+            mds_manifest_text = manifest_text
+            if args.mds_ota_target and not args.dry_run:
+                existing_mds_manifest = download_text_ssh(
+                    args.mds_public_target or args.mds_ota_target,
+                    f"web/{MANIFEST_FILE}",
+                )
+                mds_manifest_text = build_manifest(
+                    existing_mds_manifest,
+                    args.channel,
+                    version,
+                    firmware_sha256,
+                    web_file_hashes,
+                )
             upload_mds_ota_files_ssh(
                 args.mds_ota_target,
                 args.mds_public_target,
+                args.channel,
                 version,
                 firmware_sha256,
-                manifest_text,
+                mds_manifest_text,
+                channel_metadata_text,
                 args.dry_run,
             )
     finally:

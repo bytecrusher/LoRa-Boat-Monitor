@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Filesystem - %devname%</title>
+  <link rel='stylesheet' type='text/css' href='/styles.css'>
+  <link rel='stylesheet' type='text/css' href='/common.css'>
+  <meta http-equiv='content-type' content='text/html; charset=UTF-8'>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name='csrf-token' content='%csrfToken%'>
+</head>
+<body class="file-manager-page">
+  <div class="header-layout">
+    <div class="header-title-group"><h2>%devname%</h2></div>
+    <div class="header-status-group">
+      <div id='myping' class="led"></div>
+      <span class="header-status-text" id="mypingtxt">Checking...</span>
+    </div>
+  </div>
+  <div class="header-meta">%crights%, %fversion%, CQ: <data id='quality'>%quality%</data>%</div>
+  <div class="notice hidden" id="infoNotice"><data class="blink" id='info'></data></div>
+
+  <div id='loader'></div>
+  <div id='myDiv' class='animate-bottom file-manager-shell hidden'>
+    <section class="page-section" data-used-bytes="%USED_FILESYSTEM_BYTES%" data-total-bytes="%TOTAL_FILESYSTEM_BYTES%">
+      <div class="page-hero">
+        <h3>File Manager</h3>
+        <p class="muted-text">Manage the local LittleFS storage on the device. Web interface files should match the installed firmware version.</p>
+      </div>
+      <div class="metric-grid compact-metrics">
+        <article class="metric-card"><span class="status-label">Free</span><strong id="freefilesystem">%FREE_FILESYSTEM%</strong></article>
+        <article class="metric-card"><span class="status-label">Used</span><strong id="usedfilesystem">%USED_FILESYSTEM%</strong></article>
+        <article class="metric-card"><span class="status-label">Total</span><strong id="totalfilesystem">%TOTAL_FILESYSTEM%</strong></article>
+      </div>
+      <div class="section-spacer progress-inline compact">
+        <div class="progress-track"><div class="progress-fill" id="filesystemUsageBar" style="width:0%;"></div></div>
+        <div class="progress-text">Used storage: <span id="filesystemUsageText">0%</span></div>
+      </div>
+    </section>
+
+    <section class="page-section">
+      <div class="table-toolbar">
+        <div><h4>Stored Files</h4><p class="muted-text">Load the current file list from the device when you need it.</p></div>
+        <div class="button-group"><button type='button' class="button-secondary" id="showFilesButton">Show Files</button></div>
+      </div>
+      <div id='table' class='file-table-shell'></div>
+    </section>
+
+    <section class="page-section toolbar-stack">
+      <div class="table-toolbar">
+        <div><h4>Maintenance</h4><p class="muted-text">Download matching web files or maintain local storage.</p></div>
+      </div>
+      <div class="toolbar-row maintenance-actions">
+        <div class="action-card">
+          <strong>Sync Web Files</strong>
+          <p>Loads the web interface files that match the installed firmware version.</p>
+          <button type='button' id='updatefilesbutton' class="button-primary">Get Files from Server</button>
+        </div>
+        <div class="action-card">
+          <strong>Upload One File</strong>
+          <p>Use this only when you want to replace a single file manually.</p>
+          <form method='POST' action='/upload' enctype='multipart/form-data' id='upload_form' class="inline-upload-form">
+            <input type='hidden' name='csrf' value='%csrfToken%'>
+            <label for='upload' class='custom-file-upload'>Upload Single File</label>
+            <input type='file' id='upload' name='upload'>
+          </form>
+        </div>
+        <div class="action-card">
+          <strong>Reset Storage</strong>
+          <p>Deletes all files in LittleFS. Use carefully.</p>
+          <button type='button' class="button-danger" id="formatFilesystemButton">Format Filesystem</button>
+        </div>
+        <div class="action-card">
+          <strong>Navigation</strong>
+          <p>Return to the overview page without changing any files.</p>
+          <button type='button' class="button-secondary" id="filesystemOverviewButton">Back to Overview</button>
+        </div>
+      </div>
+      <div id='updatefilesinfo' class="status-inline-note">Checking whether the installed web files match the firmware version.</div>
+      <div class="progress-inline compact">
+        <div id="updatefilesprogress" class="hidden">
+          <div class="progress-track"><div id="updatefilesprogressfill" class="progress-fill" style="width:0%;"></div></div>
+        </div>
+        <span id="updatefilesprogresstext" class="progress-text"></span>
+      </div>
+    </section>
+  </div>
+  <script src='/common.js?v=%fversion%' type='text/javascript'></script>
+  <script src='/header.js?v=%fversion%' type='text/javascript'></script>
+  <script src='/filesystem.js?v=%fversion%' type='text/javascript'></script>
+</body>
+</html>

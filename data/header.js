@@ -20,7 +20,7 @@ function scheduleHeaderOfflineState() {
     headerOfflineTimer = window.setTimeout(function () {
         headerOfflineTimer = 0;
         setHeaderStatus(false);
-    }, 1100);
+    }, 12000);
 }
 
 function pingHeaderStatus() {
@@ -41,17 +41,12 @@ function pingHeaderStatus() {
           headerOfflineTimer = 0;
         }
         setHeaderStatus(true);
-        window.setTimeout(function () {
-            var led = document.getElementById("myping");
-            if (led) {
-                led.classList.remove("led-green");
-            }
-        }, 400);
     };
 
-    request.open("GET", "/getdata?ts=" + Date.now(), true);
+    request.open("GET", "/health?ts=" + Date.now(), true);
+    request.timeout = 3000;
     request.send();
 }
 
-window.setInterval(pingHeaderStatus, 1000);
+window.setInterval(pingHeaderStatus, 5000);
 pingHeaderStatus();
