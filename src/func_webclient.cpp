@@ -37,13 +37,18 @@ String getLastMdsStatus()
 namespace {
 StaticSemaphore_t mdsUploadMutexBuffer;
 SemaphoreHandle_t mdsUploadMutex = nullptr;
+portMUX_TYPE mdsUploadMutexInitMux = portMUX_INITIALIZER_UNLOCKED;
 
 class MdsUploadGuard {
 public:
   MdsUploadGuard()
   {
     if (mdsUploadMutex == nullptr) {
-      mdsUploadMutex = xSemaphoreCreateMutexStatic(&mdsUploadMutexBuffer);
+      taskENTER_CRITICAL(&mdsUploadMutexInitMux);
+      if (mdsUploadMutex == nullptr) {
+        mdsUploadMutex = xSemaphoreCreateMutexStatic(&mdsUploadMutexBuffer);
+      }
+      taskEXIT_CRITICAL(&mdsUploadMutexInitMux);
     }
     locked = mdsUploadMutex != nullptr && xSemaphoreTake(mdsUploadMutex, 0) == pdTRUE;
   }
@@ -215,7 +220,7 @@ JsonObject findManifestReleaseForVersion(JsonDocument &manifest, const char *fve
     return JsonObject();
   }
 
-  const String preferredChannel = normalizeManifestChannelName(getFirmwareReleaseChannel());
+  const String preferredChannel = normalizeManifestChannelName(getConfiguredUpdateChannel());
   const char *channels[] = {"stable", "beta"};
 
   for (const char *channel : channels) {
@@ -261,17 +266,22 @@ String getManifestWebFilesBasePath(JsonDocument &manifest, const char *fversion)
 bool downloadAndInstallWebBundle(String &errorMessage) {
   JsonDocument manifest;
   const bool manifestAvailable = fetchFirmwareManifest(manifest);
-  bool verifyWithManifest = manifestAvailable;
-  String webFilesBasePath = manifestAvailable ? getManifestWebFilesBasePath(manifest, actconf.fversion) : "";
+  if (!manifestAvailable) {
+    errorMessage = "Manifest is unavailable; using verified single-file download.";
+    return false;
+  }
+
+  String webFilesBasePath = getManifestWebFilesBasePath(manifest, actconf.fversion);
   if (webFilesBasePath.length() == 0) {
-    const String channel = normalizeManifestChannelName(getFirmwareReleaseChannel());
-    if (channel == "beta") {
-      webFilesBasePath = "beta/" + String(actconf.fversion);
-    } else {
-      webFilesBasePath = String(actconf.fversion);
-    }
-    verifyWithManifest = false;
-    DebugPrintln(2, "Manifest has no matching web files entry; trying direct web bundle path: " + webFilesBasePath);
+    errorMessage = "Manifest has no matching web files entry; using verified single-file download.";
+    return false;
+  }
+
+  JsonObject release = findManifestReleaseForVersion(manifest, actconf.fversion);
+  const String expectedBundleSha256 = normalizeSha256String(release["webBundleSha256"] | "");
+  if (expectedBundleSha256.length() == 0) {
+    errorMessage = "Manifest has no web package checksum; using verified single-file download.";
+    return false;
   }
 
   const String baseUrl = buildMdsOtaWebBaseUrl(String(actconf.mdsOtaUrl));
@@ -319,6 +329,10 @@ bool downloadAndInstallWebBundle(String &errorMessage) {
     return false;
   }
 
+  mbedtls_sha256_context shaContext;
+  mbedtls_sha256_init(&shaContext);
+  mbedtls_sha256_starts_ret(&shaContext, 0);
+
   WiFiClient *stream = http.getStreamPtr();
   uint8_t buffer[1024];
   size_t written = 0;
@@ -329,6 +343,7 @@ bool downloadAndInstallWebBundle(String &errorMessage) {
     if (availableBytes == 0) {
       if (millis() - lastProgressMillis > 15000UL) {
         targetFile.close();
+        mbedtls_sha256_free(&shaContext);
         LittleFS.remove(WEB_BUNDLE_DOWNLOAD_PATH);
         http.end();
         errorMessage = "Web bundle download timed out.";
@@ -348,12 +363,14 @@ bool downloadAndInstallWebBundle(String &errorMessage) {
 
     if (targetFile.write(buffer, bytesRead) != bytesRead) {
       targetFile.close();
+      mbedtls_sha256_free(&shaContext);
       LittleFS.remove(WEB_BUNDLE_DOWNLOAD_PATH);
       http.end();
       errorMessage = "Could not write downloaded web bundle.";
       return false;
     }
     written += bytesRead;
+    mbedtls_sha256_update_ret(&shaContext, buffer, bytesRead);
     lastProgressMillis = millis();
     setWebFilesUpdateProgress(written, static_cast<size_t>(contentLength), "webui-package.tar", "Downloading web package.");
     const int displayPercent = int((written * 100U) / static_cast<size_t>(contentLength));
@@ -372,8 +389,18 @@ bool downloadAndInstallWebBundle(String &errorMessage) {
   http.end();
 
   if (written != static_cast<size_t>(contentLength)) {
+    mbedtls_sha256_free(&shaContext);
     LittleFS.remove(WEB_BUNDLE_DOWNLOAD_PATH);
     errorMessage = "Downloaded web bundle is incomplete.";
+    return false;
+  }
+
+  uint8_t bundleDigest[32];
+  mbedtls_sha256_finish_ret(&shaContext, bundleDigest);
+  mbedtls_sha256_free(&shaContext);
+  if (sha256ToHexString(bundleDigest) != expectedBundleSha256) {
+    LittleFS.remove(WEB_BUNDLE_DOWNLOAD_PATH);
+    errorMessage = "Downloaded web package checksum mismatch.";
     return false;
   }
 
@@ -384,14 +411,10 @@ bool downloadAndInstallWebBundle(String &errorMessage) {
     return false;
   }
 
-  if (verifyWithManifest) {
-    String verificationError;
-    if (!verifyInstalledWebFiles(manifest, actconf.fversion, verificationError)) {
-      errorMessage = verificationError;
-      return false;
-    }
-  } else {
-    DebugPrintln(2, "Skipping manifest hash verification for direct web bundle fallback.");
+  String verificationError;
+  if (!verifyInstalledWebFiles(manifest, actconf.fversion, verificationError)) {
+    errorMessage = verificationError;
+    return false;
   }
 
   setWebFilesUpdateProgress(1, 1, "", "Web package installed successfully.");
@@ -459,7 +482,7 @@ bool fetchFirmwareManifest(JsonDocument &manifest) {
     DebugPrintln(1, "MDS OTA endpoint is not configured");
     return false;
   }
-  const String preferredChannel = normalizeManifestChannelName(getFirmwareReleaseChannel());
+  const String preferredChannel = normalizeManifestChannelName(getConfiguredUpdateChannel());
   const String candidateUrls[] = {
     baseUrl + "/" + preferredChannel + ".json",
     baseUrl + "/firmware-manifest.json"
@@ -811,6 +834,136 @@ bool postMdsPayload(const configData &actconf, JsonDocument &docpayload, const c
 }
 }
 
+namespace {
+const char WEB_FILES_TRANSACTION_JOURNAL[] = "/webfiles-update.journal";
+
+struct PendingWebFileUpdate {
+  String targetPath;
+  String tempPath;
+  String backupPath;
+  bool hadOriginal = false;
+};
+
+bool downloadWebFileToPath(const char *fileName,
+                           const char *webFilesBasePath,
+                           const String &expectedSha256,
+                           const String &destinationPath);
+
+void cleanupPendingWebFiles(PendingWebFileUpdate *updates, size_t count) {
+  for (size_t i = 0; i < count; ++i) {
+    LittleFS.remove(updates[i].tempPath);
+    LittleFS.remove(updates[i].backupPath);
+  }
+}
+
+void rollbackPendingWebFiles(PendingWebFileUpdate *updates, size_t count) {
+  for (size_t i = 0; i < count; ++i) {
+    if (LittleFS.exists(updates[i].backupPath)) {
+      LittleFS.remove(updates[i].targetPath);
+      LittleFS.rename(updates[i].backupPath, updates[i].targetPath);
+    } else if (!updates[i].hadOriginal) {
+      LittleFS.remove(updates[i].targetPath);
+    }
+    LittleFS.remove(updates[i].tempPath);
+  }
+  LittleFS.remove(WEB_FILES_TRANSACTION_JOURNAL);
+}
+
+bool writeWebFilesTransactionJournal(PendingWebFileUpdate *updates, size_t count) {
+  LittleFS.remove(WEB_FILES_TRANSACTION_JOURNAL);
+  File journal = LittleFS.open(WEB_FILES_TRANSACTION_JOURNAL, FILE_WRITE);
+  if (!journal) return false;
+
+  for (size_t i = 0; i < count; ++i) {
+    const String line = String(updates[i].hadOriginal ? "1" : "0") + "|" +
+      updates[i].targetPath + "|" + updates[i].backupPath + "|" + updates[i].tempPath + "\n";
+    if (journal.print(line) != line.length()) {
+      journal.close();
+      LittleFS.remove(WEB_FILES_TRANSACTION_JOURNAL);
+      return false;
+    }
+  }
+  journal.close();
+  return true;
+}
+
+bool commitPendingWebFiles(PendingWebFileUpdate *updates, size_t count, String &errorMessage) {
+  for (size_t i = 0; i < count; ++i) {
+    updates[i].hadOriginal = LittleFS.exists(updates[i].targetPath);
+  }
+  if (!writeWebFilesTransactionJournal(updates, count)) {
+    errorMessage = "Could not create web files transaction journal.";
+    cleanupPendingWebFiles(updates, count);
+    return false;
+  }
+
+  for (size_t i = 0; i < count; ++i) {
+    LittleFS.remove(updates[i].backupPath);
+    if (updates[i].hadOriginal && !LittleFS.rename(updates[i].targetPath, updates[i].backupPath)) {
+      errorMessage = "Could not back up " + updates[i].targetPath + ".";
+      rollbackPendingWebFiles(updates, count);
+      return false;
+    }
+    if (!LittleFS.rename(updates[i].tempPath, updates[i].targetPath)) {
+      errorMessage = "Could not install " + updates[i].targetPath + ".";
+      rollbackPendingWebFiles(updates, count);
+      return false;
+    }
+  }
+
+  // Removing the journal marks the complete set as committed. Backups can then
+  // be discarded without risking a mixed old/new web interface after reboot.
+  LittleFS.remove(WEB_FILES_TRANSACTION_JOURNAL);
+  for (size_t i = 0; i < count; ++i) {
+    LittleFS.remove(updates[i].backupPath);
+  }
+  return true;
+}
+}  // namespace
+
+void recoverInterruptedWebFilesUpdate() {
+  const bool transactionWasInterrupted = LittleFS.exists(WEB_FILES_TRANSACTION_JOURNAL);
+  if (transactionWasInterrupted) {
+    PendingWebFileUpdate recovered[WEB_INTERFACE_FILE_COUNT];
+    size_t recoveredCount = 0;
+    File journal = LittleFS.open(WEB_FILES_TRANSACTION_JOURNAL, FILE_READ);
+    while (journal && journal.available() && recoveredCount < WEB_INTERFACE_FILE_COUNT) {
+      String line = journal.readStringUntil('\n');
+      line.trim();
+      const int first = line.indexOf('|');
+      if (first <= 0) continue;
+      const int second = line.indexOf('|', first + 1);
+      if (second <= first) continue;
+      const int third = line.indexOf('|', second + 1);
+      if (third <= second) continue;
+
+      PendingWebFileUpdate &entry = recovered[recoveredCount++];
+      entry.hadOriginal = line.substring(0, first) == "1";
+      entry.targetPath = line.substring(first + 1, second);
+      entry.backupPath = line.substring(second + 1, third);
+      entry.tempPath = line.substring(third + 1);
+    }
+    if (journal) journal.close();
+    rollbackPendingWebFiles(recovered, recoveredCount);
+    DebugPrintln(2, "Recovered interrupted web files transaction.");
+  }
+
+  for (size_t i = 0; i < WEB_INTERFACE_FILE_COUNT; ++i) {
+    const String name = String(WEB_INTERFACE_FILES[i]);
+    const String targetPath = "/" + name;
+    const String tempPath = "/." + name + ".download";
+    const String backupPath = "/." + name + ".previous";
+    LittleFS.remove(tempPath);
+    if (transactionWasInterrupted && LittleFS.exists(backupPath)) {
+      LittleFS.remove(targetPath);
+      LittleFS.rename(backupPath, targetPath);
+    } else {
+      LittleFS.remove(backupPath);
+    }
+  }
+  LittleFS.remove(WEB_FILES_TRANSACTION_JOURNAL);
+}
+
 bool DownloadFilesFromWeb()
 {
   const char *fversion = actconf.fversion;
@@ -820,6 +973,7 @@ bool DownloadFilesFromWeb()
   String bundleError;
   writeDisplayProgressScreen("Web files", "Downloading bundle", 0, 1, "webui-package.tar");
   if (downloadAndInstallWebBundle(bundleError)) {
+    setWebFilesServerSupport(true, true);
     saveWebFilesVersion(fversion);
     setWebFilesUpdateMessage("Web files updated successfully.");
     writeDisplayStatusScreen("Web files", "Update complete", String(fversion));
@@ -831,6 +985,7 @@ bool DownloadFilesFromWeb()
 
   JsonDocument manifest;
   if (!fetchFirmwareManifest(manifest)) {
+    setWebFilesServerSupport(false, false);
     DebugPrintln(1, "Unable to fetch firmware manifest for web file hash validation");
     setWebFilesUpdateError(true, "Unable to fetch firmware manifest.");
     writeDisplayStatusScreen("Web files", "Manifest failed", "Check WiFi");
@@ -838,6 +993,7 @@ bool DownloadFilesFromWeb()
   }
 
   if (!hasManifestReleaseForVersion(manifest, fversion)) {
+    setWebFilesServerSupport(true, false);
     const String message = "Update server has no web files for " + String(fversion) + ". Use the local web package instead.";
     setWebFilesUpdateFatalError(true, message);
     DebugPrintln(1, message);
@@ -847,14 +1003,19 @@ bool DownloadFilesFromWeb()
 
   const String webFilesBasePath = getManifestWebFilesBasePath(manifest, fversion);
   if (webFilesBasePath.length() == 0) {
+    setWebFilesServerSupport(true, false);
     setWebFilesUpdateFatalError(true, "Manifest is missing the web files path for " + String(fversion) + ".");
     writeDisplayStatusScreen("Web files", "Manifest error", String(fversion), "Missing path");
     return false;
   }
 
+  setWebFilesServerSupport(true, true);
+
   setWebFilesUpdateProgress(0, WEB_INTERFACE_FILE_COUNT, "", "Checking web files.");
 
   bool allFilesUpdated = true;
+  PendingWebFileUpdate pendingUpdates[WEB_INTERFACE_FILE_COUNT];
+  size_t pendingUpdateCount = 0;
   String currentName;
   for (size_t i = 0; i < WEB_INTERFACE_FILE_COUNT; ++i) {
     currentName = String(WEB_INTERFACE_FILES[i]);
@@ -882,7 +1043,17 @@ bool DownloadFilesFromWeb()
                                    i,
                                    WEB_INTERFACE_FILE_COUNT,
                                    currentName);
-        allFilesUpdated = DownloadFile(WEB_INTERFACE_FILES[i], webFilesBasePath.c_str(), expectedSha256) && allFilesUpdated;
+        PendingWebFileUpdate &pending = pendingUpdates[pendingUpdateCount];
+        pending.targetPath = "/" + currentName;
+        pending.tempPath = "/." + currentName + ".download";
+        pending.backupPath = "/." + currentName + ".previous";
+        LittleFS.remove(pending.tempPath);
+        LittleFS.remove(pending.backupPath);
+        if (!downloadWebFileToPath(WEB_INTERFACE_FILES[i], webFilesBasePath.c_str(), expectedSha256, pending.tempPath)) {
+          allFilesUpdated = false;
+          break;
+        }
+        pendingUpdateCount++;
       }
     }
     setWebFilesUpdateProgress(i + 1, WEB_INTERFACE_FILE_COUNT, currentName, allFilesUpdated ? "File complete." : "File error.");
@@ -891,6 +1062,17 @@ bool DownloadFilesFromWeb()
                                i + 1,
                                WEB_INTERFACE_FILE_COUNT,
                                currentName);
+  }
+
+  if (allFilesUpdated && pendingUpdateCount > 0) {
+    String transactionError;
+    allFilesUpdated = commitPendingWebFiles(pendingUpdates, pendingUpdateCount, transactionError);
+    if (!allFilesUpdated) {
+      setWebFilesUpdateFatalError(true, transactionError);
+      currentName = "transaction";
+    }
+  } else if (!allFilesUpdated) {
+    cleanupPendingWebFiles(pendingUpdates, pendingUpdateCount);
   }
 
   if (allFilesUpdated) {
@@ -904,7 +1086,11 @@ bool DownloadFilesFromWeb()
   return allFilesUpdated;
 }
 
-bool DownloadFile(const char *fileName, const char *webFilesBasePath, const String &expectedSha256)
+namespace {
+bool downloadWebFileToPath(const char *fileName,
+                           const char *webFilesBasePath,
+                           const String &expectedSha256,
+                           const String &destinationPath)
 {
   const String normalizedExpectedSha256 = normalizeSha256String(expectedSha256);
   if (normalizedExpectedSha256.length() == 0) {
@@ -953,13 +1139,11 @@ bool DownloadFile(const char *fileName, const char *webFilesBasePath, const Stri
         return false;
       }
 
-      const String targetPath = "/" + String(fileName);
-      const String tempPath = targetPath + ".tmp";
-      if (LittleFS.exists(tempPath)) {
-        LittleFS.remove(tempPath);
+      if (LittleFS.exists(destinationPath)) {
+        LittleFS.remove(destinationPath);
       }
 
-      File targetFile = LittleFS.open(tempPath.c_str(), FILE_WRITE);
+      File targetFile = LittleFS.open(destinationPath.c_str(), FILE_WRITE);
       if (!targetFile) {
         DebugPrintln(1, "- failed to open file for writing");
         http.end();
@@ -981,7 +1165,7 @@ bool DownloadFile(const char *fileName, const char *webFilesBasePath, const Stri
             DebugPrintln(1, "- web file download timed out");
             targetFile.close();
             mbedtls_sha256_free(&shaContext);
-            LittleFS.remove(tempPath);
+            LittleFS.remove(destinationPath);
             http.end();
             return false;
           }
@@ -1001,7 +1185,7 @@ bool DownloadFile(const char *fileName, const char *webFilesBasePath, const Stri
           DebugPrintln(1, "- failed to write downloaded file");
           targetFile.close();
           mbedtls_sha256_free(&shaContext);
-          LittleFS.remove(tempPath);
+          LittleFS.remove(destinationPath);
           http.end();
           return false;
         }
@@ -1019,7 +1203,7 @@ bool DownloadFile(const char *fileName, const char *webFilesBasePath, const Stri
 
       if (written != static_cast<size_t>(contentLength)) {
         DebugPrintln(1, "- incomplete web file download");
-        LittleFS.remove(tempPath);
+        LittleFS.remove(destinationPath);
         http.end();
         return false;
       }
@@ -1028,17 +1212,7 @@ bool DownloadFile(const char *fileName, const char *webFilesBasePath, const Stri
       if (actualSha256 != normalizedExpectedSha256) {
         DebugPrint(1, "Web file checksum mismatch: ");
         DebugPrintln(1, fileName);
-        LittleFS.remove(tempPath);
-        http.end();
-        return false;
-      }
-
-      if (LittleFS.exists(targetPath)) {
-        LittleFS.remove(targetPath);
-      }
-      if (!LittleFS.rename(tempPath, targetPath)) {
-        DebugPrintln(1, "- failed to install verified web file");
-        LittleFS.remove(tempPath);
+        LittleFS.remove(destinationPath);
         http.end();
         return false;
       }
@@ -1055,6 +1229,7 @@ bool DownloadFile(const char *fileName, const char *webFilesBasePath, const Stri
   DebugPrintln(3, "end.");
   return downloadSuccess;
 }
+}  // namespace
 
 bool sendToMDS(const configData &actconf)
 {

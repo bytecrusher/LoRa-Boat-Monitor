@@ -9,13 +9,13 @@ static constexpr const char *FIRMWARE_RELEASE_LABEL = "Beta";
 // Default configuration
 // Types 'byte' und 'word' doesn't work!
 typedef struct {
-  int valid = 18;                            // Number of configuration (Please change when the structure or values are changed)
+  int valid = 19;                            // Number of configuration (Please change when the structure or values are changed)
   int crypt = 1;                            // Activate for critical webside a password query [0 = off|1 = on]
   char username[31] = "admin";
   char password[31] = "auto-generated";     // Password for critical websites (settings, update and reboot)
   char devname[21] = "LoRa Boat Monitor";   // Device name for web configuration
   char crights[29] = "NoWa (C) (mod by Gunni) 2023";       // Copy rights
-  char fversion[8] = "V1.15p";               // Firmware version
+  char fversion[8] = "V1.15z";               // Firmware version
   char license[12] = "GPL3";                // License type
   int debug = 3;                            // Debug mode 0=off 1=Errors 2=Errors + Warnings 3=Errors + Warnings + Messages
   int corder1 = 1;                          // Set the Order or Priority for connecting to wifi
@@ -83,7 +83,7 @@ typedef struct {
   char loraOperationMode[8] = "Standby";    // Select if Lora only sends in Standby mode [Off|Standby|PowerOn|Always]
   char WifiStandbyMode[8] = "No";           // Select if Wifi used in Standby mode [Yes|No]
   char SendDataViaWifi[8] = "No";           // Select if Wifi sends in Standby mode data to MDS [Yes|No]
-  char transmitPriority[10] = "LoRaFirst";   // Select transmit order [LoRaFirst|WifiFirst]
+  char transmitPriority[10] = "WifiFirst";   // Both strategies use the second transport only as fallback.
   char standbyAutoUpdate[8] = "Yes";        // Check and install firmware/web updates during standby wakeups [Yes|No]
   int standbyAutoUpdateIntervalHours = 24;  // Minimum time between automatic firmware checks during standby wakeups.
 
@@ -105,6 +105,7 @@ typedef struct {
   char OledDisplayMode[8] = "Values";        // OLED normal screen [Values|Status]
   char mdsOtaUrl[100] = "https://mds-git.derguntmar.de/ota/getupdate.php"; // MDS OTA endpoint
   char mdsOtaSecret[65] = "";                // Shared secret for the MDS OTA endpoint
+  char updateChannel[8] = "beta";            // Update source shared by firmware and web files [stable|beta]
 } configData;
 
 #endif

@@ -1,27 +1,65 @@
-name: release
-"on":
-  push:
-    branches:
-      - main
+name: Publish Firmware
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: OTA channel to publish
+        required: true
+        default: beta
+        type: choice
+        options:
+          - beta
+          - stable
+
+concurrency:
+  group: firmware-publish-${{ inputs.channel }}
+  cancel-in-progress: false
+
 jobs:
-  release:
-    name: release
-    runs-on: ubuntu-latest
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: ${{ inputs.channel }}
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          node-version: lts/*
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - run: rm .gitignore
-      - run: npx semantic-release
+          python-version: "3.12"
+      - name: Install pinned toolchain
+        run: python3 -m pip install platformio==6.1.19
+      - name: Test, build and validate
+        run: |
+          sh scripts/test_version_comparator.sh
+          node tests/payload_decoders_test.js
+          for file in data/*.js src/Payload_Formats_*.js; do node --check "$file"; done
+          ./scripts/build_release_artifacts.sh
+          python3 scripts/validate_project.py
+      - name: Publish to MDS OTA storage
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: >-
-          git push
-          https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git
-          HEAD:refs/heads/v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MDS_OTA_SSH_TARGET: ${{ secrets.MDS_OTA_SSH_TARGET }}
+          MDS_PUBLIC_OTA_SSH_TARGET: ${{ secrets.MDS_PUBLIC_OTA_SSH_TARGET }}
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          test -n "$MDS_OTA_SSH_TARGET"
+          test -n "$MDS_PUBLIC_OTA_SSH_TARGET"
+          test -n "$DEPLOY_SSH_PRIVATE_KEY"
+          test -n "$DEPLOY_SSH_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/known_hosts
+          python3 scripts/deploy_update_server.py --channel "${{ inputs.channel }}"
+      - name: Upload published artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: loraboatmonitor-${{ inputs.channel }}-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 90
+          path: |
+            firmware.bin
+            webui-package.tar

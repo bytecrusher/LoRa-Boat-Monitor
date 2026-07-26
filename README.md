@@ -1,5 +1,12 @@
 ## LoRa Boat Monitor
 
+Current project documentation:
+
+- [Production readiness and release process](docs/PRODUCTION.md)
+- [LoRaWAN payload contract](docs/LORAWAN_PAYLOADS.md)
+- [Security notes](docs/SECURITY.md)
+- [MDS API and interfaces](docs/Doku%20f%C3%BCr%20MDS/API_AND_INTERFACES.md)
+
 ![LoRa Boat Monitor](project/pictures/LoRa_Bootsmonitor.png)
 
 Image: LoRa Boat Monitor

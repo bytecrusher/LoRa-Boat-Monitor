@@ -42,6 +42,7 @@
             OledDisplayMode: %OledDisplayMode%,
             standbyAutoUpdate: %standbyAutoUpdate%,
             standbyAutoUpdateIntervalHours: %standbyAutoUpdateIntervalHours%,
+            updateChannel: %updateChannel%,
             corder1: %corder1%,
             corder2: %corder2%,
             corder3: %corder3%,
@@ -63,13 +64,13 @@
     <div id="myDiv" class="animate-bottom" style="display:block;">
     <section class="settings-overview">
         <h2>Settings</h2>
-        <p>Configure access, connectivity, MDS upload, standby behavior, LoRa transmission and sensor calibration. Empty password fields keep their stored value. API keys, OTA secrets and Wi-Fi client passwords can also be cleared explicitly.</p>
+        <p>Settings are grouped by device, connections, I/O, power and maintenance. Empty password fields keep their stored value; stored secrets can be cleared explicitly.</p>
         <nav class="settings-quicknav" aria-label="Settings sections">
-            <a class="settings-jump" href="#panel-access" data-target="PasswordSettingsPage">Device &amp; Access</a>
-            <a class="settings-jump" href="#panel-network" data-target="NetworkSettingsPage">Network &amp; MDS</a>
-            <a class="settings-jump" href="#panel-lora" data-target="LoRaSettingsPage">LoRa</a>
-            <a class="settings-jump" href="#panel-device" data-target="DeviceSettingsPage">Sensors &amp; Logs</a>
-            <a class="settings-jump" href="#panel-standby" data-target="StandbyModeSettingsPage">Standby</a>
+            <a class="settings-jump" href="#panel-access" data-target="PasswordSettingsPage">Device &amp; Interface</a>
+            <a class="settings-jump" href="#panel-network" data-target="NetworkSettingsPage">Connections &amp; Data</a>
+            <a class="settings-jump" href="#panel-lora" data-target="LoRaSettingsPage">LoRaWAN</a>
+            <a class="settings-jump" href="#panel-device" data-target="DeviceSettingsPage">I/O &amp; Sensors</a>
+            <a class="settings-jump" href="#panel-standby" data-target="StandbyModeSettingsPage">Power &amp; Standby</a>
             <a class="settings-jump" href="#panel-calibration" data-target="CalibrationSettingsPage">Calibration</a>
         </nav>
     </section>
@@ -80,7 +81,7 @@
 
         <div class="settings-panel" id="panel-access"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btPasswordSettingsPage" data-target="PasswordSettingsPage">Device and Access
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btPasswordSettingsPage" data-target="PasswordSettingsPage"><svg class="settings-section-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM5 21v-2a7 7 0 0 1 14 0v2" fill="none" stroke-width="1.8" stroke-linecap="round"/></svg>Device and Interface
             </h3>
             <div class="collapsible initially-hidden" id="PasswordSettingsPage">
                 <div class="section-note">Controls login protection, visual appearance and local device presentation in the browser.</div>
@@ -125,7 +126,7 @@
                     </div>
                 </div>
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">OLED Screen Content <span class="infoBadge" tabindex="0">i<span class="infoPopover">Values zeigt die Messwerte im normalen Betrieb. Status zeigt kompaktere Zustandsinfos wie WLAN, MDS, LoRa, Standby-Eingang und Firmware.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">OLED Screen Content <span class="infoBadge" tabindex="0">i<span class="infoPopover">Sensor Values shows live measurements. Device Status shows compact Wi-Fi, MDS, LoRa, operation mode and firmware information.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='OledDisplayMode' size='1'>
                             <option value='Values'>Sensor values</option>
@@ -138,17 +139,18 @@
 
         <div class="settings-panel" id="panel-network"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btNetworkSettingsPage" data-target="NetworkSettingsPage">Network, MDS and OTA
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btNetworkSettingsPage" data-target="NetworkSettingsPage"><svg class="settings-section-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9a12 12 0 0 1 16 0M7 13a8 8 0 0 1 10 0m-7 4a3 3 0 0 1 4 0M12 20h.01" fill="none" stroke-width="1.8" stroke-linecap="round"/></svg>Connections, Data and Updates
             </h3>
             <div class="collapsible initially-hidden" id="NetworkSettingsPage" >
+                <div class="section-note settings-section-map"><strong>In this section:</strong> device discovery, MDS data upload, Wi-Fi networks, fallback hotspot and the shared firmware/web update source.</div>
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Base Hostname <span class="infoBadge" tabindex="0">i<span class="infoPopover">Dieser Name wird fuer mDNS und den Access Point genutzt. Die Device-ID wird automatisch angehaengt, damit mehrere Geraete im selben Netz eindeutig bleiben.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Device Hostname <span class="infoBadge" tabindex="0">i<span class="infoPopover">Used for mDNS and the fallback hotspot. The device ID is appended automatically so multiple devices remain unique.</span></span></span></div>
                     <div class="secondColumn">
                         <input type='text' required name='hostname' size='20' value='%hostname%' maxlength='20'>
                     </div>
                 </div>
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Data Output <span class="infoBadge" tabindex="0">i<span class="infoPopover">Legt fest, wie das Geraet seine Daten bereitstellt. Im normalen Betrieb ist meist HTTP (JSON, NMEA) richtig.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Local Data Service <span class="infoBadge" tabindex="0">i<span class="infoPopover">Selects how the device provides data locally. HTTP (JSON, NMEA) is recommended for normal operation.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='servermode' size='1'>
                             <option value='0'>HTTP (JSON, NMEA)</option>
@@ -160,7 +162,7 @@
                     </div>
                 </div>
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">mDNS Device Discovery <span class="infoBadge" tabindex="0">i<span class="infoPopover">Wenn aktiv, ist das Geraet im lokalen Netzwerk zusaetzlich ueber seinen Hostnamen erreichbar, zum Beispiel <code>boatmonitor-1.local</code>.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">mDNS Device Discovery <span class="infoBadge" tabindex="0">i<span class="infoPopover">Makes the device reachable by hostname on the local network, for example <code>boatmonitor-1.local</code>.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='mdnsservice' size='1'>
                             <option value='0'>Off</option>
@@ -174,7 +176,7 @@
                 </div>
                 <div class="section-note">Uploads selected sensor groups to the Maritime Data Server when Wi-Fi is connected. The device sends sensorType and sensorName instead of legacy numeric sensor IDs.</div>
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Enable MDS Upload <span class="infoBadge" tabindex="0">i<span class="infoPopover">Aktiviert den Upload zum Maritime Data Server. Es werden nur Daten gesendet, wenn WLAN verbunden ist und die MDS-Zieladresse korrekt gesetzt wurde.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">MDS Upload <span class="infoBadge" tabindex="0">i<span class="infoPopover">Uploads enabled sensor groups to MDS whenever Wi-Fi is connected and the data endpoint is valid.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='SendDataViaWifi' size='1'>
                             <option value='Yes'>On</option>
@@ -184,14 +186,14 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">MDS Ingest URL <span class="infoBadge" tabindex="0">i<span class="infoPopover">Zieladresse fuer den normalen MDS-Datenempfang. Aus Sicherheitsgruenden werden nur HTTPS-Ziele akzeptiert und gegen das eingebaute Root-CA-Bundle geprueft.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">MDS Data Endpoint <span class="infoBadge" tabindex="0">i<span class="infoPopover">HTTPS destination for regular sensor uploads. Its certificate is checked against the built-in root CA bundle.</span></span></span></div>
                     <div class="secondColumn">
                         <input type='text' required name='MdsUrl' size='20' value='%MdsUrl%' maxlength='100'>
                     </div>
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">MDS API Key <span class="infoBadge" tabindex="0">i<span class="infoPopover">Der API-Key wird beim Upload als <code>board.apiKey</code> im JSON uebertragen. In den Web-Statusdaten wird er nicht mehr im Klartext ausgegeben.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">MDS API Key <span class="infoBadge" tabindex="0">i<span class="infoPopover">Sent as <code>board.apiKey</code> in the MDS JSON payload. The key is masked in web status data and logs.</span></span></span></div>
                     <div class="secondColumn">
                         <div class="fieldStack">
                             <input type='password' name='MdsApiKey' size='20' value='' placeholder='%MdsApiKeyMasked%' maxlength='30'>
@@ -201,7 +203,7 @@
                 </div>
 
                 <div class="row mds-groups-intro">
-                    <div class="firstColumn"><span class="labelText">MDS Sensor Groups <span class="infoBadge" tabindex="0">i<span class="infoPopover">Diese Schalter aktivieren einzelne Datengruppen fuer den MDS-Upload. Gesendet werden sensorType und sensorName statt alter numerischer Sensor-IDs.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">MDS Sensor Groups <span class="infoBadge" tabindex="0">i<span class="infoPopover">Enables individual data groups for MDS. Payloads use sensorType and sensorName instead of legacy numeric sensor IDs.</span></span></span></div>
                     <div class="secondColumn"><span class="settingHint">Turn on only the groups you really want to publish.</span></div>
                 </div>
                 <div class="row section-subtitle compact-subtitle">
@@ -282,7 +284,7 @@
                 </div>
                 <div class="section-note">Set unused networks to Off. Enabled networks are tried by priority, and the device automatically promotes the last successful Wi-Fi to priority 1.</div>
                 <div class="row">
-                    <div class="firstColumn">Wi-Fi 1 Mode</div>
+                    <div class="firstColumn">Wi-Fi Network 1</div>
                     <div class="secondColumn">
                         <select name='corder1' size='1'>
                             <option value='0'>Off</option>
@@ -310,7 +312,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn">Wi-Fi 2 Mode</div>
+                    <div class="firstColumn">Wi-Fi Network 2</div>
                     <div class="secondColumn">
                         <select name='corder2' size='1'>
                             <option value='0'>Off</option>
@@ -339,7 +341,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn">Wi-Fi 3 Mode</div>
+                    <div class="firstColumn">Wi-Fi Network 3</div>
                     <div class="secondColumn">
                         <select name='corder3' size='1'>
                             <option value='0'>Off</option>
@@ -426,15 +428,28 @@
                     </div>
                 </div>
 
+                <div class="row section-subtitle">
+                    <h5 class="section-heading">Firmware and Web Updates</h5>
+                </div>
+                <div class="section-note">Firmware and web interface files always use the same channel and MDS endpoint.</div>
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">MDS OTA Endpoint <span class="infoBadge" tabindex="0">i<span class="infoPopover">Optionaler MDS-Endpunkt fuer Firmware-Updates. Beispiel: <code>https://mds-git.derguntmar.de/ota/getupdate.php</code>. Daraus wird auch der Pfad fuer passende Web-Dateien abgeleitet.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Update Channel <span class="infoBadge" tabindex="0">i<span class="infoPopover">Release uses approved builds; Beta uses the current test build. This selection applies to both firmware and web files.</span></span></span></div>
+                    <div class="secondColumn">
+                        <select name='updateChannel' size='1'>
+                            <option value='stable'>Release</option>
+                            <option value='beta'>Beta</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="firstColumn"><span class="labelText">Update Endpoint <span class="infoBadge" tabindex="0">i<span class="infoPopover">MDS endpoint for firmware and web updates, for example <code>https://mds-git.derguntmar.de/ota/getupdate.php</code>.</span></span></span></div>
                     <div class="secondColumn">
                         <input type='text' name='mdsOtaUrl' size='50' value='%mdsOtaUrl%' maxlength='99' onchange='check_mds_ota_url("mdsOtaUrl")'>
                     </div>
                 </div>
                 <div class="section-note">Web interface files are derived automatically from the MDS OTA endpoint. The ESP uses the matching web release below <code>/ota/bin/web/</code>, so no separate web update host is needed.</div>
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">MDS OTA Secret <span class="infoBadge" tabindex="0">i<span class="infoPopover">Shared Secret fuer den Header <code>X-MDS-OTA-Secret</code>. Leer lassen, um den gespeicherten Wert beizubehalten, oder unten explizit loeschen.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Update Secret <span class="infoBadge" tabindex="0">i<span class="infoPopover">Shared secret sent in the <code>X-MDS-OTA-Secret</code> header. Leave empty to keep the stored value or clear it explicitly below.</span></span></span></div>
                     <div class="secondColumn">
                         <div class="fieldStack">
                             <input type='password' name='mdsOtaSecret' size='30' value='' placeholder='%mdsOtaSecretMasked%' maxlength='64'>
@@ -443,7 +458,7 @@
                     </div>
                 </div>
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Standby Auto Update <span class="infoBadge" tabindex="0">i<span class="infoPopover">Wenn aktiv, prueft das Geraet nach einem Standby-Wakeup intervallgesteuert den MDS OTA Server. Neue Firmware wird installiert, danach werden passende Webdateien geladen.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Automatic Standby Updates <span class="infoBadge" tabindex="0">i<span class="infoPopover">Checks the selected MDS update channel during scheduled standby wakeups. Firmware is installed first, followed by matching web files.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='standbyAutoUpdate' size='1'>
                             <option value='Yes'>On</option>
@@ -452,7 +467,7 @@
                     </div>
                 </div>
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Auto Update Interval [h] <span class="infoBadge" tabindex="0">i<span class="infoPopover">Mindestabstand zwischen automatischen Firmware-Checks im Standby-Wakeup. Webdateien werden trotzdem aktualisiert, wenn sie nicht zur installierten Firmware passen.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Update Check Interval [h] <span class="infoBadge" tabindex="0">i<span class="infoPopover">Minimum time between automatic firmware checks. Mismatched web files may still be updated earlier.</span></span></span></div>
                     <div class="secondColumn">
                         <input type='number' name='standbyAutoUpdateIntervalHours' min='1' max='720' value='%standbyAutoUpdateIntervalHours%'>
                     </div>
@@ -463,12 +478,12 @@
 
         <div class="settings-panel" id="panel-lora"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btLoRaSettingsPage" data-target="LoRaSettingsPage">LoRaWAN
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btLoRaSettingsPage" data-target="LoRaSettingsPage"><svg class="settings-section-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V10m0 0 3 3m-3-3-3 3M5 16a10 10 0 0 1 0-8m14 8a10 10 0 0 0 0-8M8 14a5 5 0 0 1 0-4m8 4a5 5 0 0 0 0-4" fill="none" stroke-width="1.8" stroke-linecap="round"/></svg>LoRaWAN
             </h3>
             <div class="collapsible initially-hidden" id="LoRaSettingsPage" >
                 <div class="section-note">ABP credentials and radio behavior for LoRaWAN transmission.</div>
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">LoRa Active Mode <span class="infoBadge" tabindex="0">i<span class="infoPopover">Begrenzt, wann das Geraet aktiv per LoRa senden darf. Fuer den normalen Schlafbetrieb ist meist "Only in Standby" sinnvoll.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">LoRa Active Mode <span class="infoBadge" tabindex="0">i<span class="infoPopover">Controls when LoRa transmission is allowed. Only in Standby is usually appropriate for normal power-saving operation.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='loraOperationMode' size='1'>
                             <option value='Off'>Off</option>
@@ -480,11 +495,11 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Transmit Priority <span class="infoBadge" tabindex="0">i<span class="infoPopover">Legt fest, ob bei aktiver LoRa- und WLAN/MDS-Uebertragung zuerst LoRa oder zuerst WLAN/MDS abgearbeitet wird. Gilt im Standby und im dauerhaft eingeschalteten Betrieb.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Transmission Strategy <span class="infoBadge" tabindex="0">i<span class="infoPopover">The selected transport is tried first. Wi-Fi First uses LoRa only if the MDS upload fails. LoRa First requests a LoRaWAN acknowledgement and uses Wi-Fi only if no acknowledgement arrives. Applies in standby and always-on operation.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='transmitPriority' size='1'>
-                            <option value='LoRaFirst'>LoRa first</option>
-                            <option value='WifiFirst'>Wi-Fi/MDS first</option>
+                            <option value='LoRaFirst'>LoRa first, Wi-Fi/MDS fallback</option>
+                            <option value='WifiFirst'>Wi-Fi/MDS first, LoRa fallback</option>
                         </select>
                     </div>
                 </div>
@@ -521,7 +536,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">LoRa Channel Plan <span class="infoBadge" tabindex="0">i<span class="infoPopover">0 bis 7 waehlen einen festen Kanal. Die dynamischen Optionen wechseln automatisch zwischen mehreren Kanaelen.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">LoRa Channel Plan <span class="infoBadge" tabindex="0">i<span class="infoPopover">Channels 0 to 7 use a fixed channel. Dynamic options rotate automatically across multiple channels.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='lchannel' size='1'>
                             <option value='0'>0</option>
@@ -551,7 +566,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Dynamic Spreading Factor <span class="infoBadge" tabindex="0">i<span class="infoPopover">Wenn aktiv, passt das Geraet den Spreading Factor ueber mehrere Sendungen automatisch an. Das kann Reichweite verbessern, verlaengert aber teils die Airtime.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Dynamic Spreading Factor <span class="infoBadge" tabindex="0">i<span class="infoPopover">Adjusts the spreading factor over several transmissions. This may improve range but can increase airtime.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='dynsf' size='1'>
                             <option value='0'>Off</option>
@@ -561,7 +576,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Send Interval <span class="infoBadge" tabindex="0">i<span class="infoPopover">Der eingetragene Wert wird mit 60 Sekunden multipliziert. Beispiel: 10 bedeutet eine Sendung alle 10 Minuten.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Send Interval <span class="infoBadge" tabindex="0">i<span class="infoPopover">The value is measured in minutes. For example, 10 sends one regular data packet every 10 minutes.</span></span></span></div>
                     <div class="secondColumn">
                         <input type='text' required name='tinterval' size='20' value='%tinterval%' maxlength='20'
                             onchange='check_tinterval("tinterval")'>
@@ -569,7 +584,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Relay Behavior <span class="infoBadge" tabindex="0">i<span class="infoPopover">"Control GPS Module" nutzt den Relaisausgang zum Ein- und Ausschalten des GPS-Moduls. Auf der aktuellen Hardware teilt sich dieser Ausgang GPIO25 mit der Heltec-Board-LED, daher folgt die LED dem Relaiszustand.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Relay Behavior <span class="infoBadge" tabindex="0">i<span class="infoPopover">Control GPS Module uses the relay output to switch GPS power. On this hardware, GPIO25 is shared with the Heltec board LED, so the LED follows the relay state.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='relay' size='1'>
                             <option value='0'>Off</option>
@@ -583,7 +598,7 @@
 
         <div class="settings-panel" id="panel-device"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btDeviceSettingsPage" data-target="DeviceSettingsPage">Sensors, Device and Logs
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btDeviceSettingsPage" data-target="DeviceSettingsPage"><svg class="settings-section-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v4m8-4v4M5 9h14v10H5zM9 13h6" fill="none" stroke-width="1.8" stroke-linecap="round"/></svg>I/O, Sensors and Diagnostics
             </h3>
             <div class="collapsible initially-hidden" id="DeviceSettingsPage" >
                 <div class="section-note">Local serial output, sensor input options and averaging behavior.</div>
@@ -631,7 +646,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Device ID <span class="infoBadge" tabindex="0">i<span class="infoPopover">Diese ID wird unter anderem an den Hostnamen angehaengt und hilft, mehrere Boot-Monitore auseinanderzuhalten.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Device ID <span class="infoBadge" tabindex="0">i<span class="infoPopover">Appended to the hostname and used to distinguish multiple Boat Monitor devices on the same network.</span></span></span></div>
                     <div class="secondColumn">
                         <select id='deviceid' name='deviceid' size='1'>
                             <option value='0'>0</option>
@@ -736,7 +751,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Environment Sensor Source <span class="infoBadge" tabindex="0">i<span class="infoPopover">Waehlt aus, ob Umgebungswerte vom optionalen BME280 oder von der VE.Direct-Schnittstelle kommen. Beide Varianten teilen sich die Pins GPIO17 und GPIO22 und koennen deshalb nicht gleichzeitig genutzt werden. "Off" deaktiviert diese Quelle.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Environment Sensor Source <span class="infoBadge" tabindex="0">i<span class="infoPopover">Selects the optional BME280 or VE.Direct source. Both share GPIO17 and GPIO22 and cannot be used at the same time. Off disables this source.</span></span></span></div>
                     <div class="secondColumn">
                         <select name='envSensor' size='1'>
                             <option value='Off'>Off</option>
@@ -751,7 +766,7 @@
 
         <div class="settings-panel" id="panel-standby"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btStandbyModeSettingsPage" data-target="StandbyModeSettingsPage">Standby and Power Saving
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btStandbyModeSettingsPage" data-target="StandbyModeSettingsPage"><svg class="settings-section-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 5 14h6l-1 8 9-13h-6z" fill="none" stroke-width="1.8" stroke-linejoin="round"/></svg>Power and Standby
             </h3>
             <div class="collapsible initially-hidden" id="StandbyModeSettingsPage" >
                 <div class="section-note">Power-saving behavior controlled by the Operation Mode Input. When 12 V is present on that input, the device stays always on. Without 12 V, standby/wakeup mode is active when enabled below.</div>
@@ -786,7 +801,7 @@
 
         <div class="settings-panel" id="panel-calibration"><div class="mydiv">
             <h3 class="settings-card-title">
-                <input class="myToggleButton section-toggle" type="button" value="+" id="btCalibrationSettingsPage" data-target="CalibrationSettingsPage">Calibration
+                <input class="myToggleButton section-toggle" type="button" value="+" id="btCalibrationSettingsPage" data-target="CalibrationSettingsPage"><svg class="settings-section-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10m4 0h2M4 17h2m4 0h10M14 4v6M10 14v6" fill="none" stroke-width="1.8" stroke-linecap="round"/></svg>Calibration
             </h3>
             <div class="collapsible initially-hidden" id="CalibrationSettingsPage" >
                 <div class="section-note">Curve coefficients and offsets used to convert ADC values into voltage and tank readings.</div>

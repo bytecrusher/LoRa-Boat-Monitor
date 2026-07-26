@@ -731,8 +731,46 @@ body > h3 {
 
 .dashboard-version {
     display: grid;
-    gap: 3px;
+    gap: 4px;
+    justify-items: end;
     text-align: right;
+}
+
+.dashboard-update-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 5px;
+    color: var(--muted, #aeb8c8);
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.dashboard-update-link:hover {
+    color: var(--accent-strong, #78ddff);
+}
+
+.update-indicator-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted, #8a8f98);
+    box-shadow: 0 0 0 4px rgba(138, 143, 152, 0.12);
+}
+
+.update-indicator-checking {
+    background: var(--accent-strong, #78ddff);
+}
+
+.update-indicator-available {
+    background: var(--warning, #ffd166);
+    box-shadow: 0 0 0 4px rgba(255, 209, 102, 0.14);
+}
+
+.update-indicator-current {
+    background: #74d66f;
+    box-shadow: 0 0 0 4px rgba(116, 214, 111, 0.14);
 }
 
 .status-grid,
@@ -808,6 +846,109 @@ body > h3 {
 .firmware-card-grid .page-section {
     width: 100%;
     margin: 0;
+}
+
+.update-primary-grid,
+.manual-update-grid {
+    width: min(var(--content-width), calc(100% - 24px));
+    margin: var(--space-4) auto 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+}
+
+.update-primary-grid .page-section {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+}
+
+.update-primary-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.update-primary-card .form-stack {
+    flex: 1;
+}
+
+.section-title-with-icon {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+}
+
+.section-title-with-icon h3,
+.section-title-with-icon h4,
+.section-title-with-icon p {
+    margin: 0;
+}
+
+.section-icon {
+    flex: 0 0 auto;
+    width: 24px;
+    height: 24px;
+    color: var(--accent-strong, #78ddff);
+}
+
+.update-details {
+    overflow: hidden;
+}
+
+.update-details > summary {
+    list-style: none;
+    cursor: pointer;
+}
+
+.update-details > summary::-webkit-details-marker {
+    display: none;
+}
+
+.update-details > summary::after {
+    content: "+";
+    float: right;
+    margin-top: -25px;
+    color: var(--accent-strong, #78ddff);
+    font-size: 1.35rem;
+    font-weight: 800;
+}
+
+.update-details[open] > summary::after {
+    content: "-";
+}
+
+.update-details summary small {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted, #8a8f98);
+    font-size: 0.86rem;
+    font-weight: 500;
+}
+
+.update-details .manual-update-grid {
+    width: 100%;
+    margin-top: var(--space-4);
+}
+
+.recovery-card {
+    padding: var(--space-4);
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.16));
+    border-radius: var(--radius);
+    background: var(--surface-soft, rgba(255, 255, 255, 0.055));
+}
+
+.update-details .compact-status-grid {
+    margin-top: var(--space-4);
+}
+
+.update-page-actions {
+    width: min(var(--content-width), calc(100% - 24px));
+    margin: var(--space-4) auto 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
 }
 
 .firmware-card {
@@ -1345,11 +1486,14 @@ body > h3 {
     }
 
     .dashboard-version {
+        justify-items: start;
         text-align: left;
     }
 
     .status-grid,
     .firmware-card-grid,
+    .update-primary-grid,
+    .manual-update-grid,
     .sensor-card-grid,
     .action-grid {
         grid-template-columns: 1fr;

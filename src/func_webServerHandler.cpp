@@ -2,10 +2,12 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <mbedtls/sha256.h>
+#include "versionComparator.h"
 #include <memory>
 #include <new>
 #include "func_webclient.h"
 #include "updateRuntimeState.h"
+#include "firmwareBootHealth.h"
 
 extern const uint8_t cert_cacert_pem_start[] asm("_binary_cert_cacert_pem_start");
 
@@ -90,24 +92,7 @@ struct WifiPrioritySnapshot {
   int corder3;
 };
 
-int webBundleUploadStatusCode = 500;
-String webBundleUploadResponse = "";
-bool webBundleUploadFinished = false;
-bool webBundleUploadFailed = false;
-bool singleFileUploadFinished = false;
-bool singleFileUploadSucceeded = false;
-String singleFileUploadMessage;
-TaskHandle_t webFilesDownloadTaskHandle = nullptr;
-TaskHandle_t webBundleInstallTaskHandle = nullptr;
-TaskHandle_t mdsTestTaskHandle = nullptr;
-TaskHandle_t otaDiagnosticsTaskHandle = nullptr;
-TaskHandle_t otaMetadataTaskHandle = nullptr;
 configData mdsTestConfig;
-String otaMetadataTaskChannel;
-String cachedStoredWebFilesVersion;
-String cachedStoredWebFilesChannel;
-unsigned long localOtaLastActivityMillis = 0;
-bool localOtaUpdateWriterActive = false;
 constexpr unsigned long LOCAL_OTA_STALL_TIMEOUT_MS = 30000UL;
 RTC_DATA_ATTR uint32_t webBundleInstallCheckpoint = 0;
 RTC_DATA_ATTR uint32_t webBundleInstallFreeHeap = 0;
@@ -124,13 +109,12 @@ void webBundleInstallTask(void *parameter) {
   String installedVersion;
   String errorMessage;
 
-  localOtaLastActivityMillis = millis();
+  touchLocalUpdate();
   updateOtaProgress("install-web-package", 0, 1, "Installing web package in background...");
   const bool success = installWebBundleFromTar(WEB_BUNDLE_UPLOAD_PATH, installedVersion, errorMessage);
   LittleFS.remove(WEB_BUNDLE_UPLOAD_PATH);
 
-  localOtaInProgress = false;
-  localOtaLastActivityMillis = 0;
+  finishLocalUpdate();
   if (success) {
     const String successMessage = "Web package installed successfully. Stored web file version: " + getStoredWebFilesVersion() + ".";
     finishOtaProgress(true, successMessage);
@@ -141,26 +125,19 @@ void webBundleInstallTask(void *parameter) {
   }
 
   releaseMaintenanceOperation(MaintenanceOperation::WebBundle);
-  webBundleInstallTaskHandle = nullptr;
   vTaskDelete(nullptr);
 }
 
 bool queueWebBundleInstallTask(String &errorMessage) {
-  if (webBundleInstallTaskHandle != nullptr) {
-    errorMessage = "A web package installation is already running.";
-    return false;
-  }
-
   const BaseType_t created = xTaskCreate(
     webBundleInstallTask,
     "webBundleInstall",
     16384,
     nullptr,
     1,
-    &webBundleInstallTaskHandle
+    nullptr
   );
   if (created != pdPASS) {
-    webBundleInstallTaskHandle = nullptr;
     errorMessage = "Could not start web package installation task.";
     return false;
   }
@@ -174,7 +151,6 @@ void mdsTestTask(void *parameter) {
   finishMdsTest(success,
                 success ? "MDS test upload sent successfully." : "MDS test upload failed.",
                 getLastMdsStatus());
-  mdsTestTaskHandle = nullptr;
   vTaskDelete(nullptr);
 }
 
@@ -186,9 +162,8 @@ bool queueMdsTest(String &errorMessage) {
 
   mdsTestConfig = actconf;
 
-  const BaseType_t created = xTaskCreate(mdsTestTask, "mdsTest", 12288, nullptr, 1, &mdsTestTaskHandle);
+  const BaseType_t created = xTaskCreate(mdsTestTask, "mdsTest", 12288, nullptr, 1, nullptr);
   if (created != pdPASS) {
-    mdsTestTaskHandle = nullptr;
     errorMessage = "Could not start MDS test task.";
     finishMdsTest(false, errorMessage, "Task allocation failed.");
     return false;
@@ -197,17 +172,11 @@ bool queueMdsTest(String &errorMessage) {
 }
 
 void resetWebBundleUploadState() {
-  webBundleUploadStatusCode = 500;
-  webBundleUploadResponse = buildOtaResponse("error", "Web package upload did not complete.", false, false, false);
-  webBundleUploadFinished = false;
-  webBundleUploadFailed = false;
+  resetWebBundleUploadResult(buildOtaResponse("error", "Web package upload did not complete.", false, false, false));
 }
 
 void setWebBundleUploadResult(int statusCode, const char *status, const String &message, bool backupSaved) {
-  webBundleUploadStatusCode = statusCode;
-  webBundleUploadResponse = buildOtaResponse(status, message, false, false, backupSaved);
-  webBundleUploadFinished = true;
-  webBundleUploadFailed = statusCode < 200 || statusCode >= 300;
+  setWebBundleUploadResultState(statusCode, buildOtaResponse(status, message, false, false, backupSaved));
 }
 
 String htmlEscape(const String &value) {
@@ -414,6 +383,7 @@ void cleanupStaleWebBundleArtifactsInternal(const String &preservePath) {
     }
     const bool isPreservedPath = preservePath.length() > 0 && normalizedPath == preservePath;
     const bool isBundleTemp = normalizedPath.startsWith("/.") && normalizedPath.endsWith(".bundle");
+    const bool isSingleFileUploadTemp = normalizedPath.endsWith(".upload");
     const bool isUploadTar = normalizedPath == WEB_BUNDLE_UPLOAD_PATH;
     const bool isRollback = normalizedPath.endsWith(".rollback");
 
@@ -426,7 +396,7 @@ void cleanupStaleWebBundleArtifactsInternal(const String &preservePath) {
       } else {
         LittleFS.rename(normalizedPath, targetPath);
       }
-    } else if (!isPreservedPath && (isBundleTemp || isUploadTar)) {
+    } else if (!isPreservedPath && (isBundleTemp || isSingleFileUploadTemp || isUploadTar)) {
       LittleFS.remove(normalizedPath);
     }
 
@@ -486,39 +456,44 @@ void sendLittleFsTextFile(AsyncWebServerRequest *request, const char *path, cons
 void webFilesDownloadTask(void *parameter) {
   (void)parameter;
 
-  runDownloadingFilesStatus = true;
+  setWebFilesUpdateActivity(true, false);
   setWebFilesUpdateError(false, "Downloading web files from server.");
   setWebFilesUpdateFatalError(false);
 
   bool success = false;
-  if (WiFi.status() != WL_CONNECTED) {
-    const String message = "No WiFi connection available for web files download.";
-    setWebFilesUpdateError(true, message);
-    finishOtaProgress(false, message);
-  } else {
+  String finalMessage;
+  for (uint8_t attempt = 0; attempt < 3 && !success; ++attempt) {
+    if (WiFi.status() != WL_CONNECTED) {
+      finalMessage = "No WiFi connection available for web files download.";
+      break;
+    }
+
+    setWebFilesUpdateActivity(true, attempt > 0);
+    setWebFilesUpdateRetryCount(attempt);
     success = DownloadFilesFromWeb();
     if (success) {
-      const String message = "Web files updated successfully.";
-      setWebFilesUpdateError(false, message);
+      finalMessage = "Web files updated successfully.";
+      setWebFilesUpdateError(false, finalMessage);
       setWebFilesUpdateRetryCount(0);
-      finishOtaProgress(true, message);
-    } else {
-      const WebFilesUpdateSnapshot state = getWebFilesUpdateSnapshot();
-      const String message = state.message.length() == 0 ? "Web files download failed." : state.message;
-      setWebFilesUpdateError(true, message);
-      finishOtaProgress(false, message);
+      break;
     }
+
+    const WebFilesUpdateSnapshot state = getWebFilesUpdateSnapshot();
+    finalMessage = state.message.length() == 0 ? "Web files download failed." : state.message;
+    if (state.fatalError || attempt == 2) break;
+    setWebFilesUpdateProgress(0, 0, "", "Web files download failed. Retrying in 3 seconds. Last error: " + finalMessage);
+    vTaskDelay(pdMS_TO_TICKS(3000));
   }
 
-  runDownloadingFiles = false;
-  runDownloadingFilesStatus = false;
+  setWebFilesUpdateActivity(false, false);
+  setWebFilesUpdateError(!success, finalMessage);
+  finishOtaProgress(success, finalMessage);
   releaseMaintenanceOperation(MaintenanceOperation::WebFiles);
-  webFilesDownloadTaskHandle = nullptr;
   vTaskDelete(nullptr);
 }
 
 bool queueWebFilesDownloadTask(String &errorMessage) {
-  if (webFilesDownloadTaskHandle != nullptr || runDownloadingFilesStatus || runDownloadingFiles) {
+  if (getWebFilesUpdateSnapshot().active) {
     errorMessage = "Web files download is already running.";
     return false;
   }
@@ -529,8 +504,7 @@ bool queueWebFilesDownloadTask(String &errorMessage) {
 
   resetWebFilesUpdateState(0, "", "Web files download queued.");
   setWebFilesUpdateStartedMillis(millis());
-  runDownloadingFiles = false;
-  runDownloadingFilesStatus = true;
+  setWebFilesUpdateActivity(true, false);
 
   BaseType_t created = xTaskCreate(
     webFilesDownloadTask,
@@ -538,12 +512,11 @@ bool queueWebFilesDownloadTask(String &errorMessage) {
     12288,
     nullptr,
     1,
-    &webFilesDownloadTaskHandle
+    nullptr
   );
 
   if (created != pdPASS) {
-    webFilesDownloadTaskHandle = nullptr;
-    runDownloadingFilesStatus = false;
+    setWebFilesUpdateActivity(false, false);
     errorMessage = "Could not start web files download task.";
     setWebFilesUpdateError(true, errorMessage);
     releaseMaintenanceOperation(MaintenanceOperation::WebFiles);
@@ -573,12 +546,8 @@ bool queueRemoteOtaUpdateFromMdsEndpoint(const String &source, bool forceReinsta
     return false;
   }
 
-  String channel = getFirmwareReleaseChannel();
-  if (source == "mds-beta") {
-    channel = "beta";
-  } else if (source == "mds-release" || source == "mds-stable") {
-    channel = "stable";
-  }
+  (void)source;
+  const String channel = getConfiguredUpdateChannel();
 
   RemoteOtaRequest otaRequest;
   otaRequest.url = normalizedEndpoint;
@@ -767,7 +736,7 @@ bool installWebBundleFromTarInternal(const String &bundlePath, String &installed
         }
         remaining -= chunk;
         bytesSinceYield += chunk;
-        localOtaLastActivityMillis = millis();
+        touchLocalUpdate();
         if (bytesSinceYield >= 4096U) {
           bytesSinceYield = 0;
           updateOtaProgress("install-web-package", bundleFile.position(), bundleSize,
@@ -816,7 +785,7 @@ bool installWebBundleFromTarInternal(const String &bundlePath, String &installed
   }
 
   String packageVersion = installedVersion;
-  String packageChannel = getFirmwareReleaseChannel();
+  String packageChannel = getConfiguredUpdateChannel();
   const int packageSeparator = packageVersion.indexOf('|');
   if (packageSeparator >= 0) {
     packageChannel = packageVersion.substring(packageSeparator + 1);
@@ -858,7 +827,7 @@ bool installWebBundleFromTarInternal(const String &bundlePath, String &installed
     pendingFiles[i].backupPath = pendingFiles[i].targetPath + ".rollback";
     pendingFiles[i].hadOriginal = LittleFS.exists(pendingFiles[i].targetPath);
     installJournal.println(String(pendingFiles[i].hadOriginal ? "1|" : "0|") + pendingFiles[i].targetPath);
-    localOtaLastActivityMillis = millis();
+    touchLocalUpdate();
     vTaskDelay(1);
   }
   installJournal.close();
@@ -881,7 +850,7 @@ bool installWebBundleFromTarInternal(const String &bundlePath, String &installed
         return false;
       }
     }
-    localOtaLastActivityMillis = millis();
+    touchLocalUpdate();
     noteWebBundleInstallCheckpoint(400 + i);
     vTaskDelay(1);
   }
@@ -892,7 +861,7 @@ bool installWebBundleFromTarInternal(const String &bundlePath, String &installed
       errorMessage = "Failed to install extracted web package files; previous files restored.";
       break;
     }
-    localOtaLastActivityMillis = millis();
+    touchLocalUpdate();
     noteWebBundleInstallCheckpoint(500 + installedCount);
     updateOtaProgress("install-web-package", installedCount + 1, pendingCount,
                       "Installing web interface files...");
@@ -952,8 +921,7 @@ bool installWebBundleFromTarInternal(const String &bundlePath, String &installed
 
   DebugPrintln(3, "Local web package installed successfully. Stored version: " + storedVersion);
   cleanupStaleWebBundleArtifactsInternal();
-  cachedStoredWebFilesVersion = packageVersion;
-  cachedStoredWebFilesChannel = packageChannel;
+  setStoredWebFilesVersionInfo(packageVersion, packageChannel);
   noteWebBundleInstallCheckpoint(800);
   webBundleInstallCheckpoint = 0;
 
@@ -1410,79 +1378,8 @@ bool resolveFirmwareFromManifest(const String &channel, String &firmwareUrl, Str
   return false;
 }
 
-void parseFirmwareVersion(const String &version, int &major, int &minor, String &suffix) {
-  major = 0;
-  minor = 0;
-  suffix = "";
-
-  String normalized = version;
-  normalized.trim();
-  if (normalized.startsWith("V") || normalized.startsWith("v")) {
-    normalized.remove(0, 1);
-  }
-
-  const int dotIndex = normalized.indexOf('.');
-  if (dotIndex < 0) {
-    major = normalized.toInt();
-    return;
-  }
-
-  major = normalized.substring(0, dotIndex).toInt();
-  int suffixStart = dotIndex + 1;
-  while (suffixStart < normalized.length() && isDigit(normalized.charAt(suffixStart))) {
-    suffixStart++;
-  }
-
-  minor = normalized.substring(dotIndex + 1, suffixStart).toInt();
-  suffix = normalized.substring(suffixStart);
-  suffix.toLowerCase();
-}
-
-int compareVersionSuffix(const String &leftSuffix, const String &rightSuffix) {
-  if (leftSuffix == rightSuffix) {
-    return 0;
-  }
-
-  if (leftSuffix.length() == 0) {
-    return -1;
-  }
-
-  if (rightSuffix.length() == 0) {
-    return 1;
-  }
-
-  const int minLength = min(leftSuffix.length(), rightSuffix.length());
-  for (int i = 0; i < minLength; i++) {
-    const char leftChar = leftSuffix.charAt(i);
-    const char rightChar = rightSuffix.charAt(i);
-    if (leftChar != rightChar) {
-      return leftChar > rightChar ? 1 : -1;
-    }
-  }
-
-  return leftSuffix.length() > rightSuffix.length() ? 1 : -1;
-}
-
 int compareFirmwareVersions(const String &leftVersion, const String &rightVersion) {
-  int leftMajor = 0;
-  int leftMinor = 0;
-  String leftSuffix;
-  int rightMajor = 0;
-  int rightMinor = 0;
-  String rightSuffix;
-
-  parseFirmwareVersion(leftVersion, leftMajor, leftMinor, leftSuffix);
-  parseFirmwareVersion(rightVersion, rightMajor, rightMinor, rightSuffix);
-
-  if (leftMajor != rightMajor) {
-    return leftMajor > rightMajor ? 1 : -1;
-  }
-
-  if (leftMinor != rightMinor) {
-    return leftMinor > rightMinor ? 1 : -1;
-  }
-
-  return compareVersionSuffix(leftSuffix, rightSuffix);
+  return compareFirmwareVersionStrings(leftVersion.c_str(), rightVersion.c_str());
 }
 
 bool fetchMdsOtaInfo(const String &requestedChannel, JsonDocument &response) {
@@ -1529,7 +1426,8 @@ bool fetchMdsOtaInfo(const String &requestedChannel, JsonDocument &response) {
 
   const String installedVersion = String(actconf.fversion);
   const String installedChannel = getFirmwareReleaseChannel();
-  const bool sameVersion = version == installedVersion;
+  const int versionComparison = compareFirmwareVersions(version, installedVersion);
+  const bool sameVersion = versionComparison == 0;
   const bool sameChannel = channel == installedChannel;
 
   response["version"] = version;
@@ -1543,6 +1441,12 @@ bool fetchMdsOtaInfo(const String &requestedChannel, JsonDocument &response) {
     return true;
   }
 
+  if (versionComparison < 0) {
+    response["status"] = "device-newer";
+    response["message"] = "The installed firmware is newer than the " + channelDisplayLabel(channel) + " server version.";
+    return true;
+  }
+
   response["status"] = "update-available";
   if (sameVersion && !sameChannel) {
     response["message"] = channelDisplayLabel(channel) + " build is available for the same version number.";
@@ -1553,15 +1457,14 @@ bool fetchMdsOtaInfo(const String &requestedChannel, JsonDocument &response) {
 }
 
 void otaMetadataTask(void *parameter) {
-  (void)parameter;
-  const String channel = otaMetadataTaskChannel;
+  const uintptr_t channelId = reinterpret_cast<uintptr_t>(parameter);
+  const String channel = channelId == 1U ? "beta" : "stable";
   JsonDocument response;
   fetchMdsOtaInfo(channel, response);
   String body;
   serializeJson(response, body);
   finishOtaMetadata(channel, body);
   releaseMaintenanceOperation(MaintenanceOperation::OtaMetadata);
-  otaMetadataTaskHandle = nullptr;
   vTaskDelete(nullptr);
 }
 
@@ -1575,10 +1478,16 @@ bool queueOtaMetadata(const String &channel, String &errorMessage) {
     errorMessage = "OTA metadata check is already running or the channel is invalid.";
     return false;
   }
-  otaMetadataTaskChannel = channel;
-  const BaseType_t created = xTaskCreate(otaMetadataTask, "otaMetadata", 12288, nullptr, 1, &otaMetadataTaskHandle);
+  const uintptr_t channelId = channel == "beta" ? 1U : 2U;
+  const BaseType_t created = xTaskCreate(
+    otaMetadataTask,
+    "otaMetadata",
+    12288,
+    reinterpret_cast<void *>(channelId),
+    1,
+    nullptr
+  );
   if (created != pdPASS) {
-    otaMetadataTaskHandle = nullptr;
     finishOtaMetadata(channel, "{\"status\":\"error\",\"message\":\"Could not start OTA metadata task.\"}");
     releaseMaintenanceOperation(MaintenanceOperation::OtaMetadata);
     errorMessage = "Could not start OTA metadata task.";
@@ -1604,6 +1513,8 @@ void buildOtaDiagnostics(JsonDocument &response) {
   response["installedVersion"] = String(actconf.fversion);
   response["installedChannel"] = getFirmwareReleaseChannel();
   response["installedChannelLabel"] = getFirmwareReleaseLabel();
+  response["updateChannel"] = getConfiguredUpdateChannel();
+  response["updateChannelLabel"] = getConfiguredUpdateLabel();
 
   const bool wifiConnected = WiFi.status() == WL_CONNECTED;
   addOtaDiagnosticCheck(response,
@@ -1632,31 +1543,22 @@ void buildOtaDiagnostics(JsonDocument &response) {
                         endpointOk ? baseUrl : "MDS OTA endpoint is not configured or invalid.");
 
   if (!wifiConnected || !endpointOk) {
-    addOtaDiagnosticCheck(response, "betaMetadata", "Beta Metadata", false, "Skipped", "Wi-Fi or endpoint is not ready.");
-    addOtaDiagnosticCheck(response, "releaseMetadata", "Release Metadata", false, "Skipped", "Wi-Fi or endpoint is not ready.");
+    addOtaDiagnosticCheck(response, "channelMetadata", "Channel Metadata", false, "Skipped", "Wi-Fi or endpoint is not ready.");
     addOtaDiagnosticCheck(response, "manifest", "Manifest", false, "Skipped", "Wi-Fi or endpoint is not ready.");
     return;
   }
 
   String payload;
   String errorMessage;
-  const bool betaOk = fetchHttpsText(baseUrl + "/beta.json", payload, &errorMessage, 7000);
+  const String updateChannel = getConfiguredUpdateChannel();
+  const String metadataName = updateChannel + ".json";
+  const bool channelMetadataOk = fetchHttpsText(baseUrl + "/" + metadataName, payload, &errorMessage, 7000);
   addOtaDiagnosticCheck(response,
-                        "betaMetadata",
-                        "Beta Metadata",
-                        betaOk,
-                        betaOk ? "OK" : "Error",
-                        betaOk ? ("beta.json OK, " + String(payload.length()) + " bytes") : errorMessage);
-
-  payload = "";
-  errorMessage = "";
-  const bool stableOk = fetchHttpsText(baseUrl + "/stable.json", payload, &errorMessage, 7000);
-  addOtaDiagnosticCheck(response,
-                        "releaseMetadata",
-                        "Release Metadata",
-                        stableOk,
-                        stableOk ? "OK" : "Fallback",
-                        stableOk ? ("stable.json OK, " + String(payload.length()) + " bytes") : ("stable.json unavailable; manifest fallback will be used. " + errorMessage));
+                        "channelMetadata",
+                        "Channel Metadata",
+                        channelMetadataOk,
+                        channelMetadataOk ? "OK" : "Fallback",
+                        channelMetadataOk ? (metadataName + " OK, " + String(payload.length()) + " bytes") : (metadataName + " unavailable; manifest fallback will be used. " + errorMessage));
 
   payload = "";
   errorMessage = "";
@@ -1677,7 +1579,6 @@ void otaDiagnosticsTask(void *parameter) {
   serializeJson(response, body);
   finishOtaDiagnostics(body);
   releaseMaintenanceOperation(MaintenanceOperation::OtaDiagnostics);
-  otaDiagnosticsTaskHandle = nullptr;
   vTaskDelete(nullptr);
 }
 
@@ -1691,9 +1592,8 @@ bool queueOtaDiagnostics(String &errorMessage) {
     errorMessage = "OTA diagnostics are already running.";
     return false;
   }
-  const BaseType_t created = xTaskCreate(otaDiagnosticsTask, "otaDiagnostics", 12288, nullptr, 1, &otaDiagnosticsTaskHandle);
+  const BaseType_t created = xTaskCreate(otaDiagnosticsTask, "otaDiagnostics", 12288, nullptr, 1, nullptr);
   if (created != pdPASS) {
-    otaDiagnosticsTaskHandle = nullptr;
     finishOtaDiagnostics("{\"status\":\"error\",\"message\":\"Could not start OTA diagnostics task.\"}");
     releaseMaintenanceOperation(MaintenanceOperation::OtaDiagnostics);
     errorMessage = "Could not start OTA diagnostics task.";
@@ -1751,23 +1651,24 @@ String settingsTemplateProcessor(const String &var) {
   if (var == "devname") return htmlEscape(String(actconf.devname));
   if (var == "cssid1") return htmlEscape(String(actconf.cssid1));
   if (var == "corder1") return String(actconf.corder1);
-  if (var == "cpassword1") return htmlEscape(String(actconf.cpassword1));
+  if (var == "cpassword1") return "";
   if (var == "cpassword1Masked") return maskSecret(String(actconf.cpassword1));
   if (var == "cssid2") return htmlEscape(String(actconf.cssid2));
   if (var == "corder2") return String(actconf.corder2);
-  if (var == "cpassword2") return htmlEscape(String(actconf.cpassword2));
+  if (var == "cpassword2") return "";
   if (var == "cpassword2Masked") return maskSecret(String(actconf.cpassword2));
   if (var == "cssid3") return htmlEscape(String(actconf.cssid3));
   if (var == "corder3") return String(actconf.corder3);
-  if (var == "cpassword3") return htmlEscape(String(actconf.cpassword3));
+  if (var == "cpassword3") return "";
   if (var == "cpassword3Masked") return maskSecret(String(actconf.cpassword3));
   if (var == "username") return htmlEscape(String(actconf.username));
-  if (var == "password") return htmlEscape(String(actconf.password));
+  if (var == "password") return "";
   if (var == "passwordMasked") return maskSecret(String(actconf.password));
   if (var == "SendDataViaWifi") return String(getindex(SendDataViaWifi, String(actconf.SendDataViaWifi)));
   if (var == "transmitPriority") return String(getindex(transmitPriority, String(actconf.transmitPriority)));
   if (var == "standbyAutoUpdate") return String(getindex(WifiStandbyMode, String(actconf.standbyAutoUpdate)));
   if (var == "standbyAutoUpdateIntervalHours") return String(actconf.standbyAutoUpdateIntervalHours);
+  if (var == "updateChannel") return getConfiguredUpdateChannel() == "stable" ? "0" : "1";
   if (var == "mdsOtaUrl") return htmlEscape(String(actconf.mdsOtaUrl));
   if (var == "mdsOtaSecretMasked") return maskSecret(String(actconf.mdsOtaSecret));
   if (var == "csrfToken") return getCsrfToken();
@@ -1784,7 +1685,7 @@ String settingsTemplateProcessor(const String &var) {
 
   if (var == "hostname") return htmlEscape(String(actconf.hostname));
   if (var == "sssid") return htmlEscape(String(actconf.sssid));
-  if (var == "spassword") return htmlEscape(String(actconf.spassword));
+  if (var == "spassword") return "";
   if (var == "spasswordMasked") return maskSecret(String(actconf.spassword));
 
   if (var == "crypt") return String(getindex(usepassword, String(actconf.crypt)));
@@ -1965,6 +1866,13 @@ bool applySettingsField(AsyncWebServerRequest *request, const String &fieldName,
   }
   if (fieldName == "mdsOtaSecret") {
     applyOptionalSecretValue(request, fieldValue, "clearMdsOtaSecret", actconf.mdsOtaSecret, sizeof(actconf.mdsOtaSecret));
+    return true;
+  }
+  if (fieldName == "updateChannel") {
+    String normalizedChannel = normalizeManifestChannel(fieldValue);
+    if (normalizedChannel.length() > 0) {
+      updateConfigStringField(actconf.updateChannel, sizeof(actconf.updateChannel), normalizedChannel);
+    }
     return true;
   }
   if (fieldName == "servermode") {
@@ -2605,12 +2513,13 @@ void registerMaintenanceRoutes() {
       if (!requireNonDefaultWebPassword(request)) {
         return;
       }
-      if (!singleFileUploadFinished) {
+      const UploadResultSnapshot uploadResult = getSingleFileUploadResult();
+      if (!uploadResult.finished) {
         request->send(500, "text/plain", "File upload did not complete.");
         return;
       }
-      if (!singleFileUploadSucceeded) {
-        request->send(400, "text/plain", singleFileUploadMessage.length() ? singleFileUploadMessage : "File upload failed.");
+      if (!uploadResult.succeeded) {
+        request->send(400, "text/plain", uploadResult.response.length() ? uploadResult.response : "File upload failed.");
         return;
       }
       request->redirect("/filesystem.html?upload=success");
@@ -2626,34 +2535,28 @@ void registerMaintenanceRoutes() {
                       return;
                     }
                     if (!index) {
-                      singleFileUploadFinished = false;
-                      singleFileUploadSucceeded = false;
-                      singleFileUploadMessage = "File upload failed.";
+                      resetSingleFileUploadResult("File upload failed.");
                       if (isDefaultWebPasswordActive()) {
-                        singleFileUploadFinished = true;
-                        singleFileUploadMessage = "Default web password must be changed before file uploads.";
+                        setSingleFileUploadResultState(false, "Default web password must be changed before file uploads.");
                         return;
                       }
                       if (!acquireMaintenanceOperation(MaintenanceOperation::SingleFileUpload)) {
-                        singleFileUploadFinished = true;
-                        singleFileUploadMessage = String("Device maintenance is busy with ") + maintenanceOperationName(getMaintenanceOperation()) + ".";
+                        setSingleFileUploadResultState(false, String("Device maintenance is busy with ") + maintenanceOperationName(getMaintenanceOperation()) + ".");
                         return;
                       }
                     }
-                    if (singleFileUploadFinished && !singleFileUploadSucceeded) {
+                    const UploadResultSnapshot uploadResult = getSingleFileUploadResult();
+                    if (uploadResult.finished && !uploadResult.succeeded) {
                       return;
                     }
                     const bool uploadOk = handleUpload(request, filename, index, data, len, final);
                     if (!uploadOk) {
-                      singleFileUploadFinished = true;
-                      singleFileUploadMessage = "File upload was rejected or could not be written.";
+                      setSingleFileUploadResultState(false, "File upload was rejected or could not be written.");
                       releaseMaintenanceOperation(MaintenanceOperation::SingleFileUpload);
                       return;
                     }
                     if (final) {
-                      singleFileUploadFinished = true;
-                      singleFileUploadSucceeded = true;
-                      singleFileUploadMessage = "File uploaded successfully.";
+                      setSingleFileUploadResultState(true, "File uploaded successfully.");
                       releaseMaintenanceOperation(MaintenanceOperation::SingleFileUpload);
                     }
                   }
@@ -2669,11 +2572,13 @@ void registerMaintenanceRoutes() {
       if (!requireCsrfToken(request)) {
         return;
       }
-      if (!webBundleUploadFinished) {
+      UploadResultSnapshot uploadResult = getWebBundleUploadResult();
+      if (!uploadResult.finished) {
         setWebBundleUploadResult(500, "error", "Web package upload did not complete.", false);
+        uploadResult = getWebBundleUploadResult();
       }
-      const int responseStatusCode = webBundleUploadStatusCode;
-      const String responseBody = webBundleUploadResponse;
+      const int responseStatusCode = uploadResult.statusCode;
+      const String responseBody = uploadResult.response;
       resetWebBundleUploadState();
       request->send(responseStatusCode, "application/json", responseBody);
     },
@@ -2694,7 +2599,8 @@ void registerMaintenanceRoutes() {
                         return;
                       }
                     }
-                    if (webBundleUploadFailed) {
+                    const UploadResultSnapshot uploadResult = getWebBundleUploadResult();
+                    if (uploadResult.finished && !uploadResult.succeeded) {
                       return;
                     }
 
@@ -2717,9 +2623,7 @@ void registerMaintenanceRoutes() {
                     }
 
                     if (!index) {
-                      localOtaInProgress = true;
-                      localOtaUpdateWriterActive = false;
-                      localOtaLastActivityMillis = millis();
+                      beginLocalUpdate(false);
                       standbySleepBlockedUntilMillis = millis() + 180000UL;
                       startOtaProgress("upload-web-package", request->contentLength(), "Uploading web package...");
                       if (LittleFS.exists(WEB_BUNDLE_UPLOAD_PATH)) {
@@ -2727,7 +2631,7 @@ void registerMaintenanceRoutes() {
                       }
                       request->_tempFile = LittleFS.open(WEB_BUNDLE_UPLOAD_PATH, FILE_WRITE);
                       if (!request->_tempFile) {
-                        localOtaInProgress = false;
+                        finishLocalUpdate();
                         finishOtaProgress(false, "Could not open temporary web package file.");
                         setWebBundleUploadResult(500, "error", "Could not open temporary web package file.", false);
                         releaseMaintenanceOperation(MaintenanceOperation::WebBundle);
@@ -2735,14 +2639,14 @@ void registerMaintenanceRoutes() {
                       }
                     }
 
-                    localOtaLastActivityMillis = millis();
+                    touchLocalUpdate();
 
                     if (len && (!request->_tempFile || request->_tempFile.write(data, len) != len)) {
                       if (request->_tempFile) {
                         request->_tempFile.close();
                       }
                       LittleFS.remove(WEB_BUNDLE_UPLOAD_PATH);
-                      localOtaInProgress = false;
+                      finishLocalUpdate();
                       finishOtaProgress(false, "Web package upload write failed.");
                       setWebBundleUploadResult(500, "error", "Web package upload write failed.", false);
                       releaseMaintenanceOperation(MaintenanceOperation::WebBundle);
@@ -2763,8 +2667,7 @@ void registerMaintenanceRoutes() {
                       String queueError;
                       if (!queueWebBundleInstallTask(queueError)) {
                         LittleFS.remove(WEB_BUNDLE_UPLOAD_PATH);
-                        localOtaInProgress = false;
-                        localOtaLastActivityMillis = 0;
+                        finishLocalUpdate();
                         finishOtaProgress(false, queueError);
                         setWebBundleUploadResult(500, "error", queueError, false);
                         releaseMaintenanceOperation(MaintenanceOperation::WebBundle);
@@ -2825,8 +2728,7 @@ void registerMaintenanceRoutes() {
 
   httpServer.on("/updatefilesstatus", HTTP_GET, [](AsyncWebServerRequest *request) {
     if (!requireAuthenticatedRequest(request)) return;
-    String test = String(runDownloadingFilesStatus || runDownloadingFiles);
-    request->send(200, "text/html", test);
+    request->send(200, "text/html", String(getWebFilesUpdateSnapshot().active));
   });
 
   httpServer.on("/updatefilesprogress", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -2848,7 +2750,7 @@ void registerMaintenanceRoutes() {
     if (!requireAuthenticatedRequest(request)) return;
     const String requestedChannel = normalizeManifestChannel(request->hasParam("channel")
       ? request->getParam("channel")->value()
-      : getFirmwareReleaseChannel());
+      : getConfiguredUpdateChannel());
     if (requestedChannel.length() == 0) {
       request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Unknown firmware channel requested.\"}");
       return;
@@ -2964,18 +2866,17 @@ void registerMaintenanceRoutes() {
 size_t content_len;
 
 void maintainLocalOtaUpload() {
-  if (!localOtaInProgress || localOtaLastActivityMillis == 0 ||
-      millis() - localOtaLastActivityMillis <= LOCAL_OTA_STALL_TIMEOUT_MS) {
+  const LocalUpdateSnapshot state = getLocalUpdateSnapshot();
+  if (!state.inProgress || state.lastActivityMillis == 0 ||
+      millis() - state.lastActivityMillis <= LOCAL_OTA_STALL_TIMEOUT_MS) {
     return;
   }
 
   DebugPrintln(1, "Local update upload timed out; clearing update state");
-  if (localOtaUpdateWriterActive) {
+  if (state.writerActive) {
     Update.abort();
   }
-  localOtaUpdateWriterActive = false;
-  localOtaLastActivityMillis = 0;
-  localOtaInProgress = false;
+  finishLocalUpdate();
   LittleFS.remove(WEB_BUNDLE_UPLOAD_PATH);
   cleanupStaleWebBundleArtifactsInternal();
   finishOtaProgress(false, "Local update upload timed out. Please try again.");
@@ -3120,38 +3021,39 @@ String buildOtaProgressJson() {
 
 String buildUpdateFilesProgressJson() {
   JsonDocument json;
-  const WebFilesUpdateSnapshot state = getWebFilesUpdateSnapshot();
-  const bool busy = runDownloadingFilesStatus || runDownloadingFiles;
+  WebFilesUpdateSnapshot state = getWebFilesUpdateSnapshot();
+  const bool busy = state.active;
   const MaintenanceOperation maintenance = getMaintenanceOperation();
   const bool filesystemWriteActive = busy ||
     maintenance == MaintenanceOperation::WebBundle ||
+    maintenance == MaintenanceOperation::WebFiles ||
     maintenance == MaintenanceOperation::FormatFilesystem ||
     maintenance == MaintenanceOperation::SingleFileUpload;
   const bool sourceConfigured = getConfiguredFirmwareBaseUrl().length() > 0;
-  const bool retrying = runDownloadingFiles && !runDownloadingFilesStatus && state.retryCount > 0;
-
-  // This endpoint is polled frequently by multiple pages. Never perform TLS or
-  // manifest I/O here; the update worker reports a concrete error if the
-  // configured server does not contain a matching package.
-  const bool serverSupportsInstalledFirmware = sourceConfigured;
+  const bool retrying = state.retrying;
 
   json["busy"] = busy;
   json["configured"] = sourceConfigured;
   json["retrying"] = retrying;
-  json["serverSupportsInstalledFirmware"] = serverSupportsInstalledFirmware;
+  json["serverSupportKnown"] = state.serverSupportKnown;
+  if (state.serverSupportKnown) {
+    json["serverSupportsInstalledFirmware"] = state.serverSupportsInstalledFirmware;
+  }
   json["firmwareVersion"] = String(actconf.fversion);
     json["firmwareChannel"] = getFirmwareReleaseChannel();
     json["firmwareChannelLabel"] = getFirmwareReleaseLabel();
+    json["updateChannel"] = getConfiguredUpdateChannel();
+    json["updateChannelLabel"] = getConfiguredUpdateLabel();
     json["standbyAutoUpdate"] = String(actconf.standbyAutoUpdate);
     json["standbyAutoUpdateIntervalHours"] = actconf.standbyAutoUpdateIntervalHours;
   if (!filesystemWriteActive) {
-    cachedStoredWebFilesVersion = getStoredWebFilesVersionOnly();
-    cachedStoredWebFilesChannel = getStoredWebFilesChannel();
+    setStoredWebFilesVersionInfo(getStoredWebFilesVersionOnly(), getStoredWebFilesChannel());
+    state = getWebFilesUpdateSnapshot();
   }
-  json["storedWebFilesVersion"] = cachedStoredWebFilesVersion;
-  json["storedWebFilesChannel"] = cachedStoredWebFilesChannel;
+  json["storedWebFilesVersion"] = state.storedWebFilesVersion;
+  json["storedWebFilesChannel"] = state.storedWebFilesChannel;
   json["upToDate"] = sourceConfigured && !filesystemWriteActive
-    ? areWebFilesCurrent(actconf.fversion, getFirmwareReleaseChannel().c_str())
+    ? areWebFilesCurrent(actconf.fversion, getConfiguredUpdateChannel().c_str())
     : false;
   json["completed"] = state.completed;
   json["total"] = state.total;
@@ -3271,6 +3173,7 @@ bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &er
     state.message = "MDS reports no newer firmware available.";
     setOtaProgressState(state);
     writeDisplayStatusScreen("OTA Status", "Firmware current", "MDS current");
+    finishDisplayProgressMode(5000UL);
     http.end();
     return true;
   }
@@ -3305,6 +3208,7 @@ bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &er
         state.message = "MDS returned the installed firmware version. Update skipped.";
         setOtaProgressState(state);
         writeDisplayStatusScreen("OTA Status", "Firmware current", serverFirmwareVersion);
+        finishDisplayProgressMode(5000UL);
         DebugPrintln(2, "Skipping MDS OTA because server returned installed firmware version: " + serverFirmwareVersion);
         http.end();
         return true;
@@ -3441,6 +3345,9 @@ bool performRemoteOtaUpdate(const String &url, bool filesystemUpdate, String &er
 
   if (filesystemUpdate) {
     saveWebFilesVersion(actconf.fversion);
+  } else {
+    const String targetVersion = otaServerTargetVersion();
+    armFirmwareBootValidation(targetVersion.c_str());
   }
 
   http.end();
@@ -3461,16 +3368,14 @@ void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size
     }
     Serial.println("Update");
     content_len = request->contentLength();
-    localOtaInProgress = true;
-    localOtaUpdateWriterActive = false;
-    localOtaLastActivityMillis = millis();
+    beginLocalUpdate(false);
     standbySleepBlockedUntilMillis = millis() + 180000UL;
     startOtaProgress(filesystemUpdate ? "upload-filesystem" : "upload-firmware", content_len,
                      filesystemUpdate ? "Uploading file system update..." : "Uploading firmware...");
     // Detect filesystem uploads both from modern field names and legacy filenames.
     int cmd = filesystemUpdate ? U_PART : U_FLASH;
     if (!filesystemUpdate && !saveConfigBackupToLittleFS(actconf)) {
-      localOtaInProgress = false;
+      finishLocalUpdate();
       finishOtaProgress(false, "Config backup failed. Firmware update cancelled.");
       releaseMaintenanceOperation(MaintenanceOperation::LocalFirmware);
       request->send(500, "application/json", buildOtaResponse("error", "Config backup failed. Firmware update cancelled.", false, false, false));
@@ -3483,23 +3388,21 @@ void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size
     if (!Update.begin(UPDATE_SIZE_UNKNOWN, cmd)) {
 #endif
       Update.printError(Serial);
-      localOtaInProgress = false;
+      finishLocalUpdate();
       finishOtaProgress(false, "Unable to start OTA update.");
       releaseMaintenanceOperation(MaintenanceOperation::LocalFirmware);
       request->send(500, "application/json", buildOtaResponse("error", "Unable to start OTA update.", false, false, !filesystemUpdate));
       return;
     }
-    localOtaUpdateWriterActive = true;
+    setLocalUpdateWriterActive(true);
   }
 
-  localOtaLastActivityMillis = millis();
+  touchLocalUpdate();
   const size_t written = Update.write(data, len);
   if (written != len) {
     Update.printError(Serial);
     Update.abort();
-    localOtaInProgress = false;
-    localOtaUpdateWriterActive = false;
-    localOtaLastActivityMillis = 0;
+    finishLocalUpdate();
     finishOtaProgress(false, "Update write failed.");
     releaseMaintenanceOperation(MaintenanceOperation::LocalFirmware);
     request->send(500, "application/json", buildOtaResponse("error", "Update write failed.", false, false, !filesystemUpdate));
@@ -3519,15 +3422,15 @@ void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size
     updateOtaProgress("finalizing", content_len, content_len, "Finalizing update...");
     if (!Update.end(true)){
       Update.printError(Serial);
-      localOtaInProgress = false;
-      localOtaUpdateWriterActive = false;
-      localOtaLastActivityMillis = 0;
+      finishLocalUpdate();
       finishOtaProgress(false, "Update failed. See serial log for details.");
       releaseMaintenanceOperation(MaintenanceOperation::LocalFirmware);
       request->send(500, "application/json", buildOtaResponse("error", "Update failed. See serial log for details.", false, false, !filesystemUpdate));
     } else {
       if (filesystemUpdate) {
         saveWebFilesVersion(actconf.fversion);
+      } else {
+        armFirmwareBootValidation(nullptr);
       }
       keepAwakeAfterUpdateRestart = true;
       Serial.println("Update complete");
@@ -3536,9 +3439,7 @@ void handleDoUpdate(AsyncWebServerRequest *request, const String& filename, size
         : "Firmware update complete. Device reboots now.";
       finishOtaProgress(true, message);
       request->send(200, "application/json", buildOtaResponse("ok", message, true, false, !filesystemUpdate));
-      localOtaInProgress = false;
-      localOtaUpdateWriterActive = false;
-      localOtaLastActivityMillis = 0;
+      finishLocalUpdate();
       releaseMaintenanceOperation(MaintenanceOperation::LocalFirmware);
       scheduledRestartMillis = millis() + 2000UL;
     }

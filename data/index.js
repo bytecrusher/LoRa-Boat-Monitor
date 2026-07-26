@@ -1,6 +1,5 @@
 var indexLiveDataTimer = null;
 var indexStaticDataTimer = null;
-var indexWebFilesTimer = null;
 
 function setIndexNavigationDisabled(element, isDisabled) {
     if (element.tagName === 'A') {
@@ -64,12 +63,48 @@ function updateIndexLiveData(myObj) {
     setText('dashboardMdsState', values.SendDataViaWifi && values.SendDataViaWifi.Value === 'Yes' ? 'Enabled' : 'Disabled');
 }
 
-function updateWebFilesInfo(info) {
-    var status = info.upToDate ? 'Up to date' : 'Update available';
-    var storedChannel = info.storedWebFilesChannel ? ' (' + info.storedWebFilesChannel + ')' : '';
-    var firmwareChannel = info.firmwareChannelLabel ? ' (' + info.firmwareChannelLabel + ')' : '';
-    setText('dashboardWebFiles', status);
-    setText('dashboardWebFilesDetail', 'Installed: ' + (info.storedWebFilesVersion || '-') + storedChannel + ', firmware: ' + (info.firmwareVersion || '-') + firmwareChannel);
+function setDashboardUpdateStatus(label, state) {
+    setText('dashboardUpdateStatus', label);
+    var dot = document.getElementById('dashboardUpdateDot');
+    if (dot) {
+        dot.className = 'update-indicator-dot update-indicator-' + (state || 'unknown');
+    }
+}
+
+async function requestIndexJson(url) {
+    var response = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
+    var payload = await response.json();
+    if (!response.ok) {
+        throw new Error(payload && payload.message ? payload.message : 'Request failed');
+    }
+    return payload;
+}
+
+async function refreshDashboardUpdateStatus() {
+    setDashboardUpdateStatus('Checking for updates...', 'checking');
+    try {
+        var webInfo = await requestIndexJson('/updatefilesinfo?ts=' + Date.now());
+        var firmwareInfo = null;
+        for (var attempt = 0; attempt < 20; attempt += 1) {
+            firmwareInfo = await requestIndexJson('/mdsotainfo?' + (attempt === 0 ? 'refresh=1&' : '') + 'ts=' + Date.now());
+            if (!firmwareInfo.running) {
+                break;
+            }
+            await new Promise(function (resolve) { setTimeout(resolve, 500); });
+        }
+
+        var firmwareAvailable = firmwareInfo && firmwareInfo.status === 'update-available';
+        var webAvailable = webInfo && !webInfo.upToDate;
+        if (firmwareAvailable || webAvailable) {
+            setDashboardUpdateStatus('Update available', 'available');
+        } else if (firmwareInfo && (firmwareInfo.status === 'current' || firmwareInfo.status === 'device-newer') && webInfo.upToDate) {
+            setDashboardUpdateStatus('System up to date', 'current');
+        } else {
+            setDashboardUpdateStatus('Check update status', 'unknown');
+        }
+    } catch (error) {
+        setDashboardUpdateStatus('Update check unavailable', 'unknown');
+    }
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -88,19 +123,11 @@ document.addEventListener('DOMContentLoaded', function () {
         fetchJson('/data.json?ts=' + Date.now(), updateIndexLiveData);
     }
 
-    function refreshWebFilesStatus() {
-        fetchJson('/updatefilesinfo?ts=' + Date.now(), updateWebFilesInfo, function () {
-            setText('dashboardWebFiles', 'Unknown');
-            setText('dashboardWebFilesDetail', 'Status endpoint not available');
-        });
-    }
-
     refreshStaticData();
-    refreshWebFilesStatus();
+    refreshDashboardUpdateStatus();
 
     indexLiveDataTimer = startVisiblePolling(refreshLiveData, 5000);
-    indexStaticDataTimer = setInterval(refreshStaticData, 15000);
-    indexWebFilesTimer = setInterval(refreshWebFilesStatus, 10000);
+    indexStaticDataTimer = startVisiblePolling(refreshStaticData, 15000);
 });
 
 window.addEventListener('beforeunload', function () {
@@ -109,11 +136,7 @@ window.addEventListener('beforeunload', function () {
         indexLiveDataTimer = null;
     }
     if (indexStaticDataTimer) {
-        clearInterval(indexStaticDataTimer);
+        indexStaticDataTimer();
         indexStaticDataTimer = null;
-    }
-    if (indexWebFilesTimer) {
-        clearInterval(indexWebFilesTimer);
-        indexWebFilesTimer = null;
     }
 });

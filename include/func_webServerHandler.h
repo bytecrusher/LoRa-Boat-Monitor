@@ -9,17 +9,14 @@
 #include "func_myFunctions.h"
 
 extern String readFile2(fs::FS &fs, const char * path);
-extern String getheader(configData actconf);
+extern String getheader(const configData &actconf);
 extern configData actconf;
-extern volatile boolean runDownloadingFiles;
-extern volatile boolean runDownloadingFilesStatus;
 extern String formatfs(fs::FS &fs);
 extern configData defconf;
 extern int slot;
 extern String getMyDirAsString(fs::FS &fs, const char * dirname, uint8_t levels);
 extern bool reboot;
 extern unsigned long standbySleepBlockedUntilMillis;
-extern bool localOtaInProgress;
 extern unsigned long scheduledRestartMillis;
 extern bool keepAwakeAfterUpdateRestart;
 extern int relayPin;

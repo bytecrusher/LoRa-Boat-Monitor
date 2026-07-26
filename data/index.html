@@ -22,6 +22,10 @@
       <div class="dashboard-version">
         <span class="status-label">Firmware</span>
         <strong id="dashboardFirmware">-</strong>
+        <a class="dashboard-update-link" href="/firmware.html" aria-label="Open firmware and web updates">
+          <span class="update-indicator-dot" id="dashboardUpdateDot"></span>
+          <span id="dashboardUpdateStatus">Checking for updates...</span>
+        </a>
       </div>
     </section>
 
@@ -40,11 +44,6 @@
         <span class="status-label">Operation Mode Input</span>
         <strong id="dashboardStandbyState">-</strong>
         <span class="muted-text">12 V = always on, no 12 V = standby/wakeup. GPIO <span id="dashboardStandbyPin">-</span>, <span id="dashboardStandbyLevel">-</span></span>
-      </article>
-      <article class="status-card">
-        <span class="status-label">Web Files</span>
-        <strong id="dashboardWebFiles">Checking...</strong>
-        <span class="muted-text" id="dashboardWebFilesDetail">-</span>
       </article>
     </section>
 

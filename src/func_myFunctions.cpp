@@ -6,11 +6,19 @@
 #include <freertos/semphr.h>
 
 namespace {
-struct ConfigStorageHeader {
+struct LegacyConfigStorageHeader {
   uint32_t magic;
   uint16_t version;
   uint16_t length;
   uint32_t checksum;
+};
+
+struct ConfigSlotHeader {
+  uint32_t magic;
+  uint16_t version;
+  uint16_t length;
+  uint32_t checksum;
+  uint32_t sequence;
 };
 
 struct ConfigBackupHeader {
@@ -22,9 +30,16 @@ struct ConfigBackupHeader {
 
 constexpr uint32_t CONFIG_STORAGE_MAGIC = 0x43464731UL;  // "CFG1"
 constexpr uint16_t CONFIG_STORAGE_VERSION = 1;
+constexpr uint32_t CONFIG_SLOT_MAGIC = 0x43464732UL;     // "CFG2"
+constexpr uint16_t CONFIG_SLOT_VERSION = 2;
+constexpr int CONFIG_SLOT_SIZE = 1280;
+constexpr int CONFIG_SLOT_BASES[] = {1536, 2816};
+constexpr size_t CONFIG_SLOT_COUNT = sizeof(CONFIG_SLOT_BASES) / sizeof(CONFIG_SLOT_BASES[0]);
 constexpr uint32_t CONFIG_BACKUP_MAGIC = 0x43424631UL;   // "CBF1"
 constexpr uint16_t CONFIG_BACKUP_VERSION = 1;
 constexpr char CONFIG_BACKUP_PATH[] = "/config-backup.bin";
+constexpr char CONFIG_BACKUP_TEMP_PATH[] = "/config-backup.tmp";
+constexpr char CONFIG_BACKUP_PREVIOUS_PATH[] = "/config-backup.previous";
 constexpr char WEB_FILES_VERSION_PATH[] = "/webfiles-version.txt";
 StaticSemaphore_t configStorageMutexBuffer;
 SemaphoreHandle_t configStorageMutex = nullptr;
@@ -66,8 +81,8 @@ private:
 
 void renderDisplayLines(const String (&lines)[8], bool forceAll = false);
 
-int configHeaderStart() {
-  return cfgStart - int(sizeof(ConfigStorageHeader));
+int legacyConfigHeaderStart() {
+  return cfgStart - int(sizeof(LegacyConfigStorageHeader));
 }
 
 uint32_t calculateConfigChecksum(const uint8_t *data, size_t len) {
@@ -79,17 +94,50 @@ uint32_t calculateConfigChecksum(const uint8_t *data, size_t len) {
   return hash;
 }
 
-bool readConfigStorageHeader(ConfigStorageHeader &header) {
-  if (configHeaderStart() < 0) {
+bool readLegacyConfigStorageHeader(LegacyConfigStorageHeader &header) {
+  if (legacyConfigHeaderStart() < 0) {
     return false;
   }
-  EEPROM.get(configHeaderStart(), header);
+  EEPROM.get(legacyConfigHeaderStart(), header);
 
   return header.magic == CONFIG_STORAGE_MAGIC &&
          header.version == CONFIG_STORAGE_VERSION &&
          header.length > 0 &&
          header.length <= sizeof(configData);
 }
+
+bool isSequenceNewer(uint32_t candidate, uint32_t reference) {
+  return static_cast<int32_t>(candidate - reference) > 0;
+}
+
+bool readConfigSlot(size_t slotIndex, configData *cfg, uint32_t &sequence) {
+  if (slotIndex >= CONFIG_SLOT_COUNT) return false;
+
+  const int base = CONFIG_SLOT_BASES[slotIndex];
+  ConfigSlotHeader header;
+  EEPROM.get(base, header);
+  if (header.magic != CONFIG_SLOT_MAGIC ||
+      header.version != CONFIG_SLOT_VERSION ||
+      header.length != sizeof(configData) ||
+      base + int(sizeof(ConfigSlotHeader)) + int(header.length) > sizeEEPROM) {
+    return false;
+  }
+
+  uint32_t checksum = 2166136261UL;
+  const int dataBase = base + int(sizeof(ConfigSlotHeader));
+  for (uint16_t i = 0; i < header.length; ++i) {
+    checksum ^= EEPROM.read(dataBase + i);
+    checksum *= 16777619UL;
+  }
+  if (checksum != header.checksum) return false;
+
+  if (cfg != nullptr) EEPROM.get(dataBase, *cfg);
+  sequence = header.sequence;
+  return true;
+}
+
+static_assert(sizeof(ConfigSlotHeader) + sizeof(configData) <= CONFIG_SLOT_SIZE,
+              "configData no longer fits in a redundant EEPROM slot");
 
 bool migrateConfigWithExpandedFirmwareVersion(const uint8_t *storedConfig, uint16_t storedLength, configData &cfg) {
   constexpr size_t oldFirmwareVersionSize = 7;
@@ -123,6 +171,93 @@ bool migrateConfigWithExpandedFirmwareVersion(const uint8_t *storedConfig, uint1
   memcpy(reinterpret_cast<uint8_t*>(&cfg) + newTailOffset, storedConfig + oldTailOffset, tailLength);
   cfg.valid = defconf.valid;
   return true;
+}
+
+bool migrateConfigWithAppendedUpdateChannel(const uint8_t *storedConfig, uint16_t storedLength, configData &cfg) {
+  constexpr size_t appendedFieldSize = sizeof(configData::updateChannel);
+  if (storedLength != sizeof(configData) - appendedFieldSize) {
+    return false;
+  }
+
+  int storedValid = 0;
+  memcpy(&storedValid, storedConfig, sizeof(storedValid));
+  if (storedValid != 18) {
+    return false;
+  }
+
+  cfg = configData();
+  const size_t preservedLength = min(size_t(storedLength), offsetof(configData, updateChannel));
+  memcpy(reinterpret_cast<uint8_t*>(&cfg), storedConfig, preservedLength);
+  cfg.valid = defconf.valid;
+  strncpy(cfg.updateChannel, defconf.updateChannel, sizeof(cfg.updateChannel) - 1);
+  cfg.updateChannel[sizeof(cfg.updateChannel) - 1] = '\0';
+  return true;
+}
+
+bool readMigratableConfigSlot(size_t slotIndex, configData &cfg, uint32_t &sequence) {
+  if (slotIndex >= CONFIG_SLOT_COUNT) return false;
+
+  const int base = CONFIG_SLOT_BASES[slotIndex];
+  ConfigSlotHeader header;
+  EEPROM.get(base, header);
+  if (header.magic != CONFIG_SLOT_MAGIC ||
+      header.version != CONFIG_SLOT_VERSION ||
+      header.length == 0 ||
+      header.length > sizeof(configData) ||
+      base + int(sizeof(ConfigSlotHeader)) + int(header.length) > sizeEEPROM) {
+    return false;
+  }
+
+  uint8_t storedConfig[sizeof(configData)] = {0};
+  const int dataBase = base + int(sizeof(ConfigSlotHeader));
+  for (uint16_t i = 0; i < header.length; ++i) {
+    storedConfig[i] = EEPROM.read(dataBase + i);
+  }
+  if (calculateConfigChecksum(storedConfig, header.length) != header.checksum) {
+    return false;
+  }
+
+  if (!migrateConfigWithAppendedUpdateChannel(storedConfig, header.length, cfg)) {
+    return false;
+  }
+  sequence = header.sequence;
+  return true;
+}
+
+bool loadNewestConfigSlot(configData &cfg, size_t &selectedSlot) {
+  configData candidate;
+  uint32_t selectedSequence = 0;
+  bool found = false;
+
+  for (size_t i = 0; i < CONFIG_SLOT_COUNT; ++i) {
+    uint32_t candidateSequence = 0;
+    if (!readConfigSlot(i, &candidate, candidateSequence)) continue;
+    if (!found || isSequenceNewer(candidateSequence, selectedSequence)) {
+      cfg = candidate;
+      selectedSlot = i;
+      selectedSequence = candidateSequence;
+      found = true;
+    }
+  }
+  return found;
+}
+
+bool loadNewestMigratableConfigSlot(configData &cfg, size_t &selectedSlot) {
+  configData candidate;
+  uint32_t selectedSequence = 0;
+  bool found = false;
+
+  for (size_t i = 0; i < CONFIG_SLOT_COUNT; ++i) {
+    uint32_t candidateSequence = 0;
+    if (!readMigratableConfigSlot(i, candidate, candidateSequence)) continue;
+    if (!found || isSequenceNewer(candidateSequence, selectedSequence)) {
+      cfg = candidate;
+      selectedSlot = i;
+      selectedSequence = candidateSequence;
+      found = true;
+    }
+  }
+  return found;
 }
 
 bool readConfigBackupHeader(File &file, ConfigBackupHeader &header) {
@@ -372,8 +507,8 @@ void eraseEEPROMConfig(const configData &cfg) {
   // Reset EEPROM bytes to '0' for the length of the data structure
   //noInterrupts();                       // Stop all interrupts important for writing in EEPROM
   EEPROM.begin(sizeEEPROM);
-  const int eraseStart = max(0, configHeaderStart());
-  const int eraseEnd = cfgStart + sizeof(cfg);
+  const int eraseStart = max(0, legacyConfigHeaderStart());
+  const int eraseEnd = sizeEEPROM;
   for (int i = eraseStart; i < eraseEnd; i++) {
     EEPROM.write(i, 0);
   }
@@ -389,22 +524,50 @@ bool saveEEPROMConfig(const configData &cfg) {
     DebugPrintln(1, "Could not lock configuration storage for save");
     return false;
   }
-  // Save configuration from RAM into EEPROM
-  //noInterrupts();                       // Stop all interrupts important for writing in EEPROM
-  const ConfigStorageHeader header = {
-    CONFIG_STORAGE_MAGIC,
-    CONFIG_STORAGE_VERSION,
-    uint16_t(sizeof(configData)),
-    calculateConfigChecksum(reinterpret_cast<const uint8_t*>(&cfg), sizeof(configData))
-  };
-
   EEPROM.begin(sizeEEPROM);
-  EEPROM.put(configHeaderStart(), header);
-  EEPROM.put( cfgStart, cfg );
+  uint32_t sequences[CONFIG_SLOT_COUNT] = {0};
+  bool validSlots[CONFIG_SLOT_COUNT] = {false};
+  for (size_t i = 0; i < CONFIG_SLOT_COUNT; ++i) {
+    validSlots[i] = readConfigSlot(i, nullptr, sequences[i]);
+  }
+
+  size_t targetSlot = 0;
+  uint32_t nextSequence = 1;
+  if (!validSlots[0] && !validSlots[1]) {
+    // Preserve the legacy record during the first migration write.
+    targetSlot = 1;
+    nextSequence = 1;
+  } else if (!validSlots[0]) {
+    targetSlot = 0;
+    nextSequence = sequences[1] + 1;
+  } else if (!validSlots[1]) {
+    targetSlot = 1;
+    nextSequence = sequences[0] + 1;
+  } else if (isSequenceNewer(sequences[0], sequences[1])) {
+    targetSlot = 1;
+    nextSequence = sequences[0] + 1;
+  } else {
+    targetSlot = 0;
+    nextSequence = sequences[1] + 1;
+  }
+
+  const ConfigSlotHeader header = {
+    CONFIG_SLOT_MAGIC,
+    CONFIG_SLOT_VERSION,
+    uint16_t(sizeof(configData)),
+    calculateConfigChecksum(reinterpret_cast<const uint8_t*>(&cfg), sizeof(configData)),
+    nextSequence
+  };
+  const int slotBase = CONFIG_SLOT_BASES[targetSlot];
+  EEPROM.put(slotBase + int(sizeof(ConfigSlotHeader)), cfg);
+  EEPROM.put(slotBase, header);
   const bool committed = EEPROM.commit();
   EEPROM.end();                         // Free RAM copy of structure
   //interrupts();                         // Activate all interrupts
-  DebugPrintln(committed ? 3 : 1, committed ? "New settings saved in EEPROM" : "Failed to commit EEPROM configuration");
+  DebugPrintln(committed ? 3 : 1,
+               committed
+                 ? "New settings saved in redundant EEPROM slot " + String(targetSlot + 1)
+                 : "Failed to commit EEPROM configuration");
   return committed;
 }
 
@@ -416,9 +579,22 @@ configData loadEEPROMConfig() {
   }
   // Loads configuration from EEPROM into RAM
   configData cfg = configData();
-  ConfigStorageHeader header;
   EEPROM.begin(sizeEEPROM);
-  if (readConfigStorageHeader(header)) {
+  size_t selectedSlot = 0;
+  if (loadNewestConfigSlot(cfg, selectedSlot)) {
+    EEPROM.end();
+    DebugPrintln(3, "Loaded settings from redundant EEPROM slot " + String(selectedSlot + 1));
+    return cfg;
+  }
+
+  if (loadNewestMigratableConfigSlot(cfg, selectedSlot)) {
+    EEPROM.end();
+    DebugPrintln(3, "Migrated settings from redundant EEPROM slot " + String(selectedSlot + 1));
+    return cfg;
+  }
+
+  LegacyConfigStorageHeader header;
+  if (readLegacyConfigStorageHeader(header)) {
     uint8_t storedConfig[sizeof(configData)] = {0};
     for (uint16_t i = 0; i < header.length; ++i) {
       storedConfig[i] = EEPROM.read(cfgStart + i);
@@ -433,6 +609,10 @@ configData loadEEPROMConfig() {
       }
       if (migrateConfigWithExpandedFirmwareVersion(storedConfig, header.length, cfg)) {
         DebugPrintln(3, "Migrated EEPROM config after firmware version field expansion");
+        return cfg;
+      }
+      if (migrateConfigWithAppendedUpdateChannel(storedConfig, header.length, cfg)) {
+        DebugPrintln(3, "Migrated legacy EEPROM config with configured update channel");
         return cfg;
       }
 
@@ -468,9 +648,12 @@ configData loadEEPROMConfig() {
 bool hasEEPROMConfigHeader() {
   ConfigStorageGuard guard;
   if (!guard.acquired()) return false;
-  ConfigStorageHeader header;
   EEPROM.begin(sizeEEPROM);
-  const bool hasHeader = readConfigStorageHeader(header);
+  uint32_t sequence = 0;
+  LegacyConfigStorageHeader legacyHeader;
+  const bool hasHeader = readConfigSlot(0, nullptr, sequence) ||
+                         readConfigSlot(1, nullptr, sequence) ||
+                         readLegacyConfigStorageHeader(legacyHeader);
   EEPROM.end();
   return hasHeader;
 }
@@ -494,11 +677,8 @@ bool saveConfigBackupToLittleFS(const configData &cfg) {
     calculateConfigChecksum(reinterpret_cast<const uint8_t*>(&backupCfg), sizeof(configData))
   };
 
-  if (LittleFS.exists(CONFIG_BACKUP_PATH)) {
-    LittleFS.remove(CONFIG_BACKUP_PATH);
-  }
-
-  File backupFile = LittleFS.open(CONFIG_BACKUP_PATH, FILE_WRITE);
+  LittleFS.remove(CONFIG_BACKUP_TEMP_PATH);
+  File backupFile = LittleFS.open(CONFIG_BACKUP_TEMP_PATH, FILE_WRITE);
   if (!backupFile) {
     DebugPrintln(1, "Failed to open config backup file");
     return false;
@@ -509,10 +689,25 @@ bool saveConfigBackupToLittleFS(const configData &cfg) {
   backupFile.close();
 
   if (!headerWritten || !configWritten) {
-    LittleFS.remove(CONFIG_BACKUP_PATH);
+    LittleFS.remove(CONFIG_BACKUP_TEMP_PATH);
     DebugPrintln(1, "Failed to write config backup");
     return false;
   }
+
+  LittleFS.remove(CONFIG_BACKUP_PREVIOUS_PATH);
+  const bool hadPreviousBackup = LittleFS.exists(CONFIG_BACKUP_PATH);
+  if (hadPreviousBackup && !LittleFS.rename(CONFIG_BACKUP_PATH, CONFIG_BACKUP_PREVIOUS_PATH)) {
+    LittleFS.remove(CONFIG_BACKUP_TEMP_PATH);
+    DebugPrintln(1, "Failed to preserve previous config backup");
+    return false;
+  }
+  if (!LittleFS.rename(CONFIG_BACKUP_TEMP_PATH, CONFIG_BACKUP_PATH)) {
+    if (hadPreviousBackup) LittleFS.rename(CONFIG_BACKUP_PREVIOUS_PATH, CONFIG_BACKUP_PATH);
+    LittleFS.remove(CONFIG_BACKUP_TEMP_PATH);
+    DebugPrintln(1, "Failed to activate new config backup");
+    return false;
+  }
+  LittleFS.remove(CONFIG_BACKUP_PREVIOUS_PATH);
 
   DebugPrintln(3, "Config backup saved to LittleFS without secrets");
   return true;
@@ -559,6 +754,21 @@ String getFirmwareReleaseLabel() {
   return String(FIRMWARE_RELEASE_LABEL);
 }
 
+String getConfiguredUpdateChannel() {
+  String channel = String(actconf.updateChannel);
+  channel.trim();
+  channel.toLowerCase();
+  if (channel == "release") channel = "stable";
+  if (channel != "stable" && channel != "beta") {
+    channel = String(defconf.updateChannel);
+  }
+  return channel;
+}
+
+String getConfiguredUpdateLabel() {
+  return getConfiguredUpdateChannel() == "stable" ? "Release" : "Beta";
+}
+
 String buildWebFilesVersionTag(const char *version, const char *channel) {
   if (version == nullptr || version[0] == '\0') {
     return "";
@@ -566,7 +776,7 @@ String buildWebFilesVersionTag(const char *version, const char *channel) {
 
   String versionTag = String(version);
   String releaseChannel = channel == nullptr || channel[0] == '\0'
-    ? getFirmwareReleaseChannel()
+    ? getConfiguredUpdateChannel()
     : String(channel);
   releaseChannel.trim();
   releaseChannel.toLowerCase();
@@ -870,20 +1080,10 @@ boolean toBoolean(String settingValue) {
   }
 }
 
-// Convert string to char
-char* toChar(String command){
-  if(command.length()!=0){
-    char *p = const_cast<char*>(command.c_str());
-    return p;
-  }
-  char* ch = new char[strlen("null") + 1];
-  return ch;
-}
-
 // Convert Hex to Int
-int HexToInt(char str[])
+int HexToInt(const char *str)
 {
-  return (int) strtol(str, 0, 16);
+  return str == nullptr ? 0 : static_cast<int>(strtol(str, nullptr, 16));
 }
 
 // Seaching the index for a value in a string array
@@ -1055,17 +1255,6 @@ float dewpoint(float temp, float humidity) {
   return dewp;
 }
 
-// Checksum calculation over binary array
-byte BinCheckSum(byte *Data[]) {
-  byte checksum = 0;
-  // Iterate over the string, ADD each byte with the total sum
-  for (int c = 0; c < sizeof(*Data); c++) {
-    checksum += *Data[c];
-  } 
-  // Return the result
-  return checksum;
-}
-
 // Checksum calculation for NMEA
 char CheckSum(String NMEAData) {
   char checksum = 0;
@@ -1079,30 +1268,26 @@ char CheckSum(String NMEAData) {
 
 // Check NMEA string
 bool CheckNMEA(String NMEAstring) {
-  bool check = false;
   int i1 = NMEAstring.indexOf( '$');
   int i2 = NMEAstring.indexOf( '*');
-  int i3 = NMEAstring.length();
+  if (i1 < 0 || i2 <= i1 + 1 || i2 + 2 >= NMEAstring.length()) {
+    return false;
+  }
+  const int i3 = min(i2 + 3, static_cast<int>(NMEAstring.length()));
   String NMEApartial = NMEAstring.substring(i1+1, i2);
   String cksum1 = NMEAstring.substring(i2+1, i3);
   String cksum2 = String(CheckSum(NMEApartial), HEX);
-  int cksum3 = HexToInt(toChar(cksum1));
-  int cksum4 = HexToInt(toChar(cksum2));
+  int cksum3 = HexToInt(cksum1.c_str());
+  int cksum4 = HexToInt(cksum2.c_str());
 //  DebugPrintln(3, cksum1);
 //  DebugPrintln(3, cksum2);
 //  DebugPrintln(3, cksum3);
 //  DebugPrintln(3, cksum4);
-  if(cksum3 == cksum4){
-    check = true;
-  }
-  else{
-    check = false;
-  }
-  return check;
+  return cksum3 == cksum4;
 }
 
 // Read and print sensor values
-void readValues(configData myactconf) {
+void readValues(const configData &myactconf) {
     boolean debugBME280 = false;
     boolean debugVEdirect = false;
     boolean debugADC = false;
@@ -1425,12 +1610,12 @@ void writeDisplay() {
 }
 
 // Display sensor values on OLED
-void writeDisplayValues(configData myactconf) {
+void writeDisplayValues(const configData &myactconf) {
   (void)myactconf;
   writeDisplay();
 }
 
-void writeDisplayByMode(configData myactconf) {
+void writeDisplayByMode(const configData &myactconf) {
   if (isDisplayProgressModeActive()) return;
 
   if (String(myactconf.OledDisplayMode) == "Status") {
@@ -1564,11 +1749,21 @@ void unlockDisplay() {
 }
 
 bool isDisplayProgressModeActive() {
+  DisplayGuard displayGuard;
+  if (!displayGuard.acquired()) return true;
   if (displayProgressModeActive) return true;
   if (displayProgressHoldUntilMillis == 0) return false;
   if (static_cast<int32_t>(displayProgressHoldUntilMillis - millis()) > 0) return true;
   displayProgressHoldUntilMillis = 0;
   return false;
+}
+
+void setDisplayPowerSave(bool powerSave) {
+  DisplayGuard displayGuard;
+  if (!displayGuard.acquired()) return;
+  u8x8.setPowerSave(powerSave ? 1 : 0);
+  displayLineCacheValid = false;
+  resetDisplayProgressCache();
 }
 
 void finishDisplayProgressMode(uint32_t holdMillis) {
@@ -1844,7 +2039,7 @@ static bool isSafeUploadFilename(const String &filename) {
   if (filename.indexOf("..") >= 0) {
     return false;
   }
-  if (filename.indexOf('\\') >= 0) {
+  if (filename.indexOf('/') >= 0 || filename.indexOf('\\') >= 0) {
     return false;
   }
   if (filename.endsWith("/")) {
@@ -1977,7 +2172,7 @@ String humanReadableSize(const size_t bytes) {
   else return String(bytes / 1024.0 / 1024.0 / 1024.0) + " GB";
 }
 
-String getheader(configData myactconf) {
+String getheader(const configData &myactconf) {
   String content = readFile2(LittleFS, "/header.html");
   //content.replace("%header%", String(readFile2(LittleFS, "/header.html")));
   content.replace("%devname%", htmlEscapeLocal(String(myactconf.devname)));

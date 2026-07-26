@@ -584,6 +584,10 @@ Optionale Channel-Auswahl:
   - `public/ota/bin/web/beta/<version>/firmware.bin`
   - `public/ota/bin/web/release/<version>/webui-package.tar`
   - `public/ota/bin/web/beta/<version>/webui-package.tar`
+- Jeder Channel-Eintrag in `stable.json`, `beta.json` und `firmware-manifest.json` enthaelt:
+  - `version`, `firmware`, `sha256`, `webFiles` und `webFileHashes`
+  - `webBundleSha256` mit der SHA256-Pruefsumme von `webui-package.tar`
+  - Fehlt `webBundleSha256`, installiert der ESP das TAR nicht und faellt auf die einzeln gehashten Webdateien zurueck.
 - Empfohlene Metadateien fuer automatische Deploys:
   - `var/ota/bin/firmware.version`
   - `var/ota/bin/firmware.sha256`
@@ -698,3 +702,33 @@ Das Dashboard rendert nur numerische Kanaele sinnvoll. Fuer den aktuellen Stand 
 - externe Systeme nicht direkt auf interne Legacy-Pfade konfigurieren
 - `var/log` und `var/ota/logs` beschreibbar halten
 - bei Produktionsfehlern immer zuerst die Projekt-Logs und danach die Webserver-/Passenger-Logs pruefen
+
+
+## LoRaWAN payload schema 3
+
+Die Firmware trennt LoRaWAN-Uplinks nach Inhalt:
+
+- FPort 1: regelmaessige Messwerte und optional ein Wakeup-Ereignispaar,
+  `payloadType=measurements`, `payloadSchema=3`
+- FPort 2: seltene Geraete-/Konfigurationsdaten, `payloadType=deviceConfig`, `payloadSchema=1`
+
+Der TTN Application Uplink Formatter muss dem Stand aus
+`src/Payload_Formats_TTN_V3.js` entsprechen. FPort 2 darf im MDS keine leeren
+Sensorzeilen erzeugen. Er aktualisiert die vom MDS unterstuetzten Board-Metadaten
+Firmware-Version und MAC-Zuordnung; weitere dekodierte Konfigurationswerte bleiben
+in TTN verfuegbar. FPort 1 wird in die Sensorgruppen
+Battery, Tanks, Status, GPS und bei gesetztem Presence-Flag Environment/Dewpoint
+oder VEdirect aufgeloest. Ist das Wakeup-Flag gesetzt, erzeugt MDS zusaetzlich
+einen `WakeupStan`-Datensatz mit dem Namen `WakeupLog`:
+
+- `value1`: Standby-Ursache, zum Beispiel `Sleep standby`
+- `value2`: vom ESP erfasster Standby-Zeitpunkt
+- `value3`: Wakeup-Ursache, zum Beispiel `Wakeup Timer` oder `Wakeup EXT0`
+- `value4`: vom ESP erfasster Wakeup-Zeitpunkt
+
+Diese beiden Zeiten folgen denselben Regeln wie beim WiFi-Upload. Der
+TTN-Empfangszeitpunkt `received_at` darf nicht als Wakeup-Zeit eingesetzt werden;
+er bleibt ausschliesslich Transport-Metadatum. Schema 2 mit 50 Byte und das alte
+33-Byte-Paket bleiben lesbar.
+
+Der vollstaendige Bytevertrag steht in `docs/LORAWAN_PAYLOADS.md`.

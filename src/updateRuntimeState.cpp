@@ -13,11 +13,19 @@ MdsTestSnapshot mdsTestState;
 OtaDiagnosticsSnapshot otaDiagnosticsState;
 OtaMetadataSnapshot betaMetadataState;
 OtaMetadataSnapshot stableMetadataState;
+LocalUpdateSnapshot localUpdateState;
+UploadResultSnapshot webBundleUploadResult;
+UploadResultSnapshot singleFileUploadResult;
 MaintenanceOperation maintenanceOperation = MaintenanceOperation::None;
+portMUX_TYPE stateMutexInitMux = portMUX_INITIALIZER_UNLOCKED;
 
 SemaphoreHandle_t getStateMutex() {
   if (stateMutex == nullptr) {
-    stateMutex = xSemaphoreCreateMutexStatic(&stateMutexBuffer);
+    taskENTER_CRITICAL(&stateMutexInitMux);
+    if (stateMutex == nullptr) {
+      stateMutex = xSemaphoreCreateMutexStatic(&stateMutexBuffer);
+    }
+    taskEXIT_CRITICAL(&stateMutexInitMux);
   }
   return stateMutex;
 }
@@ -82,7 +90,15 @@ const char *maintenanceOperationName(MaintenanceOperation operation) {
 void resetWebFilesUpdateState(size_t total, const String &currentName, const String &message) {
   StateGuard guard;
   if (!guard.acquired()) return;
+  const bool active = webFilesState.active;
+  const bool retrying = webFilesState.retrying;
+  const String storedVersion = webFilesState.storedWebFilesVersion;
+  const String storedChannel = webFilesState.storedWebFilesChannel;
   webFilesState = WebFilesUpdateSnapshot();
+  webFilesState.active = active;
+  webFilesState.retrying = retrying;
+  webFilesState.storedWebFilesVersion = storedVersion;
+  webFilesState.storedWebFilesChannel = storedChannel;
   webFilesState.total = total;
   webFilesState.currentName = currentName;
   webFilesState.message = message;
@@ -135,9 +151,104 @@ void setWebFilesUpdateStartedMillis(unsigned long startedMillis) {
   webFilesState.startedMillis = startedMillis;
 }
 
+void setWebFilesUpdateActivity(bool active, bool retrying) {
+  StateGuard guard;
+  if (!guard.acquired()) return;
+  webFilesState.active = active;
+  webFilesState.retrying = retrying;
+}
+
+void setWebFilesServerSupport(bool known, bool supported) {
+  StateGuard guard;
+  if (!guard.acquired()) return;
+  webFilesState.serverSupportKnown = known;
+  webFilesState.serverSupportsInstalledFirmware = supported;
+}
+
+void setStoredWebFilesVersionInfo(const String &version, const String &channel) {
+  StateGuard guard;
+  if (!guard.acquired()) return;
+  webFilesState.storedWebFilesVersion = version;
+  webFilesState.storedWebFilesChannel = channel;
+}
+
 WebFilesUpdateSnapshot getWebFilesUpdateSnapshot() {
   StateGuard guard;
   return guard.acquired() ? webFilesState : WebFilesUpdateSnapshot();
+}
+
+void beginLocalUpdate(bool writerActive) {
+  StateGuard guard;
+  if (!guard.acquired()) return;
+  localUpdateState.inProgress = true;
+  localUpdateState.writerActive = writerActive;
+  localUpdateState.lastActivityMillis = millis();
+}
+
+void touchLocalUpdate() {
+  StateGuard guard;
+  if (!guard.acquired() || !localUpdateState.inProgress) return;
+  localUpdateState.lastActivityMillis = millis();
+}
+
+void setLocalUpdateWriterActive(bool writerActive) {
+  StateGuard guard;
+  if (!guard.acquired()) return;
+  localUpdateState.writerActive = writerActive;
+  if (localUpdateState.inProgress) localUpdateState.lastActivityMillis = millis();
+}
+
+void finishLocalUpdate() {
+  StateGuard guard;
+  if (!guard.acquired()) return;
+  localUpdateState = LocalUpdateSnapshot();
+}
+
+LocalUpdateSnapshot getLocalUpdateSnapshot() {
+  StateGuard guard;
+  return guard.acquired() ? localUpdateState : LocalUpdateSnapshot();
+}
+
+void resetWebBundleUploadResult(const String &defaultResponse) {
+  StateGuard guard;
+  if (!guard.acquired()) return;
+  webBundleUploadResult = UploadResultSnapshot();
+  webBundleUploadResult.response = defaultResponse;
+}
+
+void setWebBundleUploadResultState(int statusCode, const String &response) {
+  StateGuard guard;
+  if (!guard.acquired()) return;
+  webBundleUploadResult.statusCode = statusCode;
+  webBundleUploadResult.finished = true;
+  webBundleUploadResult.succeeded = statusCode >= 200 && statusCode < 300;
+  webBundleUploadResult.response = response;
+}
+
+UploadResultSnapshot getWebBundleUploadResult() {
+  StateGuard guard;
+  return guard.acquired() ? webBundleUploadResult : UploadResultSnapshot();
+}
+
+void resetSingleFileUploadResult(const String &defaultMessage) {
+  StateGuard guard;
+  if (!guard.acquired()) return;
+  singleFileUploadResult = UploadResultSnapshot();
+  singleFileUploadResult.response = defaultMessage;
+}
+
+void setSingleFileUploadResultState(bool succeeded, const String &message) {
+  StateGuard guard;
+  if (!guard.acquired()) return;
+  singleFileUploadResult.statusCode = succeeded ? 200 : 400;
+  singleFileUploadResult.finished = true;
+  singleFileUploadResult.succeeded = succeeded;
+  singleFileUploadResult.response = message;
+}
+
+UploadResultSnapshot getSingleFileUploadResult() {
+  StateGuard guard;
+  return guard.acquired() ? singleFileUploadResult : UploadResultSnapshot();
 }
 
 bool queueRemoteOtaRequest(const RemoteOtaRequest &request) {

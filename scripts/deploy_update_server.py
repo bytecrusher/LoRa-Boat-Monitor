@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upload firmware and web files to the configured update server via FTP."""
+"""Publish firmware and web files to MDS OTA storage."""
 
 from __future__ import annotations
 
@@ -15,6 +15,9 @@ import ssl
 import subprocess
 import sys
 import tempfile
+import time
+import urllib.parse
+import urllib.request
 from ftplib import FTP, FTP_TLS, error_perm
 from pathlib import Path
 
@@ -35,6 +38,7 @@ BETA_MARKERS = ("latestBetaVersion.txt",)
 MANIFEST_FILE = "firmware-manifest.json"
 DEFAULT_MDS_OTA_SSH_TARGET = "hosting157867@derguntmar.de:httpdocs/mds-git.derguntmar.de/var/ota/bin"
 DEFAULT_MDS_PUBLIC_OTA_SSH_TARGET = "hosting157867@derguntmar.de:httpdocs/mds-git.derguntmar.de/public/ota/bin"
+DEFAULT_MDS_PUBLIC_OTA_BASE_URL = "https://mds-git.derguntmar.de/ota/bin/web"
 
 
 def load_project_env() -> None:
@@ -55,7 +59,12 @@ def load_project_env() -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Deploy LoRa Boat Monitor update files via FTP.")
+    parser = argparse.ArgumentParser(description="Deploy LoRa Boat Monitor update files to MDS OTA storage.")
+    parser.add_argument(
+        "--legacy-ftp",
+        action="store_true",
+        help="Also publish to the deprecated FTP update root. Disabled by default.",
+    )
     parser.add_argument("--host", default=os.environ.get("UPDATE_SERVER_FTP_HOST", ""), help="FTP host name")
     parser.add_argument("--user", default=os.environ.get("UPDATE_SERVER_FTP_USER", ""), help="FTP user name")
     parser.add_argument("--password", default=os.environ.get("UPDATE_SERVER_FTP_PASSWORD", ""), help="FTP password")
@@ -119,6 +128,16 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("SKIP_MDS_OTA_UPLOAD", "").lower() in {"1", "true", "yes"},
         help="Skip the additional MDS OTA firmware upload.",
     )
+    parser.add_argument(
+        "--verify-base-url",
+        default=os.environ.get("MDS_PUBLIC_OTA_BASE_URL", DEFAULT_MDS_PUBLIC_OTA_BASE_URL),
+        help="Public OTA web base URL used to verify the completed deployment.",
+    )
+    parser.add_argument(
+        "--skip-verify",
+        action="store_true",
+        help="Skip the public post-deployment metadata and artifact checks.",
+    )
     return parser.parse_args()
 
 
@@ -139,7 +158,7 @@ def collect_web_files() -> list[Path]:
 
 
 def has_ftp_config(args: argparse.Namespace) -> bool:
-    return bool(args.host and args.user and args.password and args.remote_dir)
+    return bool(args.legacy_ftp and args.host and args.user and args.password and args.remote_dir)
 
 
 def ensure_ftp_config(args: argparse.Namespace) -> None:
@@ -276,6 +295,7 @@ def build_manifest(
     version: str,
     firmware_sha256: str,
     web_file_hashes: dict[str, str],
+    web_bundle_sha256: str,
 ) -> str:
     manifest = json.loads(existing_manifest) if existing_manifest.strip() else {}
 
@@ -285,6 +305,7 @@ def build_manifest(
         "firmware": f"{channel_path}/{version}/firmware.bin",
         "sha256": firmware_sha256,
         "webFileHashes": web_file_hashes,
+        "webBundleSha256": web_bundle_sha256,
         "webFiles": f"{channel_path}/{version}",
     }
 
@@ -296,6 +317,7 @@ def build_channel_metadata(
     version: str,
     firmware_sha256: str,
     web_file_hashes: dict[str, str],
+    web_bundle_sha256: str,
 ) -> str:
     channel_path = channel_folder(channel)
     metadata = {
@@ -304,9 +326,43 @@ def build_channel_metadata(
         "sha256": firmware_sha256,
         "version": version,
         "webFileHashes": web_file_hashes,
+        "webBundleSha256": web_bundle_sha256,
         "webFiles": f"{channel_path}/{version}",
     }
     return json.dumps(metadata, indent=2, sort_keys=True) + "\n"
+
+
+def verify_public_deployment(base_url: str, channel: str, version: str, firmware_sha256: str, web_bundle_sha256: str) -> None:
+    metadata_url = base_url.rstrip("/") + f"/{channel}.json"
+    last_error: Exception | None = None
+    for attempt in range(1, 4):
+        try:
+            with urllib.request.urlopen(metadata_url, timeout=20) as response:
+                metadata = json.loads(response.read().decode("utf-8"))
+            if metadata.get("version") != version:
+                raise RuntimeError(f"published version is {metadata.get('version')!r}, expected {version!r}")
+            if metadata.get("sha256") != firmware_sha256:
+                raise RuntimeError("published firmware SHA256 does not match the local artifact")
+            if web_bundle_sha256 and metadata.get("webBundleSha256") != web_bundle_sha256:
+                raise RuntimeError("published web bundle SHA256 does not match the local artifact")
+
+            for key in ("firmware", "webFiles"):
+                if not metadata.get(key):
+                    raise RuntimeError(f"published metadata is missing {key}")
+            firmware_url = urllib.parse.urljoin(metadata_url, metadata["firmware"])
+            package_url = urllib.parse.urljoin(metadata_url, metadata["webFiles"].rstrip("/") + "/webui-package.tar")
+            for artifact_url in (firmware_url, package_url):
+                request = urllib.request.Request(artifact_url, method="HEAD")
+                with urllib.request.urlopen(request, timeout=20) as response:
+                    if response.status < 200 or response.status >= 400:
+                        raise RuntimeError(f"artifact check returned HTTP {response.status}: {artifact_url}")
+            print(f"Verified public OTA deployment: {metadata_url}")
+            return
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            if attempt < 3:
+                time.sleep(3)
+    raise RuntimeError(f"public deployment verification failed: {last_error}")
 
 
 def upload_mds_ota_files(
@@ -471,10 +527,14 @@ def main() -> int:
     remote_root = args.remote_dir.strip("/")
     release_files = collect_release_files(version, args.channel)
     web_file_hashes = build_web_file_hashes(release_files, version)
-    manifest_text = build_manifest("", args.channel, version, firmware_sha256, web_file_hashes)
-    channel_metadata_text = build_channel_metadata(args.channel, version, firmware_sha256, web_file_hashes)
+    web_bundle_sha256 = file_sha256(WEBUI_PACKAGE) if WEBUI_PACKAGE.exists() else ""
+    manifest_text = build_manifest("", args.channel, version, firmware_sha256, web_file_hashes, web_bundle_sha256)
+    channel_metadata_text = build_channel_metadata(args.channel, version, firmware_sha256, web_file_hashes, web_bundle_sha256)
 
     print(f"Preparing release {version} for channel '{args.channel}'")
+    if args.legacy_ftp:
+        ensure_ftp_config(args)
+
     if has_ftp_config(args):
         print(f"FTP target: {args.host}:{args.port}/{remote_root}")
         print(f"Files to upload: {len(release_files)}")
@@ -482,8 +542,6 @@ def main() -> int:
         print("Legacy FTP target not configured. Skipping legacy web root deployment.")
 
     ftp = None
-    if has_ftp_config(args):
-        ensure_ftp_config(args)
     if not args.dry_run and has_ftp_config(args):
         ftp = connect_ftp(args)
 
@@ -502,7 +560,7 @@ def main() -> int:
             if not args.dry_run and ftp is not None:
                 existing_manifest = download_optional_text(ftp, manifest_remote_path)
 
-            manifest_text = build_manifest(existing_manifest, args.channel, version, firmware_sha256, web_file_hashes)
+            manifest_text = build_manifest(existing_manifest, args.channel, version, firmware_sha256, web_file_hashes, web_bundle_sha256)
             for marker in marker_files:
                 upload_text(
                     ftp,  # type: ignore[arg-type]
@@ -546,6 +604,7 @@ def main() -> int:
                     version,
                     firmware_sha256,
                     web_file_hashes,
+                    web_bundle_sha256,
                 )
             upload_mds_ota_files_ssh(
                 args.mds_ota_target,
@@ -560,6 +619,15 @@ def main() -> int:
     finally:
         if ftp is not None:
             ftp.quit()
+
+    if not args.dry_run and not args.skip_verify and not args.skip_mds_ota:
+        verify_public_deployment(
+            args.verify_base_url,
+            args.channel,
+            version,
+            firmware_sha256,
+            web_bundle_sha256,
+        )
 
     print(f"Release {version} prepared for channel '{args.channel}'.")
     return 0

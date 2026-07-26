@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
 CONFIG_SOURCE = ROOT / "src" / "Configuration.h"
 WEB_BUNDLE = ROOT / "webui-package.tar"
+PLATFORMIO_INI = ROOT / "platformio.ini"
 
 
 def fail(errors: list[str], message: str) -> None:
@@ -156,6 +157,52 @@ def validate_runtime_state_boundaries(errors: list[str]) -> None:
         fail(errors, "saveEEPROMConfig must lock storage and commit explicitly")
 
 
+def validate_reproducible_dependencies(errors: list[str]) -> None:
+    content = PLATFORMIO_INI.read_text(encoding="utf-8")
+    platform_match = re.search(r"^platform\s*=\s*(.+)$", content, re.MULTILINE)
+    if not platform_match or "@" not in platform_match.group(1):
+        fail(errors, "PlatformIO platform must be pinned to an explicit version")
+
+    lib_match = re.search(r"^lib_deps\s*=\s*\n((?:[ \t]+.*(?:\n|$))*)", content, re.MULTILINE)
+    if not lib_match:
+        fail(errors, "PlatformIO lib_deps section is missing")
+        return
+    for line in lib_match.group(1).splitlines():
+        dependency = line.strip()
+        if not dependency or dependency.startswith((";", "[")):
+            continue
+        if dependency.startswith(("http://", "https://", "git@")):
+            if not re.search(r"[#@][0-9a-f]{7,40}$", dependency):
+                fail(errors, f"Git dependency is not pinned to a commit: {dependency}")
+        elif "@" not in dependency or "^" in dependency or "~" in dependency:
+            fail(errors, f"Library dependency is not exactly pinned: {dependency}")
+
+
+def validate_lora_runtime_safety(errors: list[str]) -> None:
+    lora_source = (ROOT / "src" / "LoRa.h").read_text(encoding="utf-8")
+    main_source = (ROOT / "src" / "LoRa_boat_monitor_abp.cpp").read_text(encoding="utf-8")
+
+    if re.search(r"\bLMIC\s*=\s*RTC_LMIC\b", lora_source):
+        fail(errors, "LMIC transient scheduler state must not be restored from RTC")
+
+    queue_lines = [line for line in lora_source.splitlines() if "LMIC_setTxData2(" in line]
+    unchecked_queue_lines = [line.strip() for line in queue_lines if "=" not in line.split("LMIC_setTxData2(", 1)[0]]
+    if unchecked_queue_lines:
+        fail(errors, "Every LMIC_setTxData2 call must capture and validate its return value")
+
+    required_status_fields = (
+        'response["txQueued"]',
+        'response["queueResult"]',
+        'response["opmode"]',
+        'response["queuedAgeMillis"]',
+        'response["confirmedTxAttempts"]',
+        'response["rx1DelaySeconds"]',
+    )
+    missing_fields = [field for field in required_status_fields if field not in main_source]
+    if missing_fields:
+        fail(errors, "LoRa diagnostics are missing: " + ", ".join(missing_fields))
+
+
 def main() -> int:
     errors: list[str] = []
     version = firmware_version(errors)
@@ -164,6 +211,8 @@ def main() -> int:
     validate_frontend_contract(errors)
     validate_route_registry(errors)
     validate_runtime_state_boundaries(errors)
+    validate_reproducible_dependencies(errors)
+    validate_lora_runtime_safety(errors)
 
     if errors:
         for error in errors:

@@ -154,9 +154,6 @@ function otaElements() {
     return {
         loader: firmwareById('loader'),
         content: firmwareById('myDiv'),
-        progressWrapper: firmwareById('otaProgressWrapper'),
-        progressBar: firmwareById('otaProgressBar'),
-        progressText: firmwareById('otaProgressText'),
         progressDialog: firmwareById('otaProgressDialog'),
         progressDialogBar: firmwareById('otaProgressDialogBar'),
         progressDialogText: firmwareById('otaProgressDialogText'),
@@ -167,14 +164,11 @@ function otaElements() {
         localWebBundleFileInput: firmwareById('localWebBundleFile'),
         localWebBundleFileName: firmwareById('localWebBundleFileName'),
         localWebBundleButton: firmwareById('localWebBundleButton'),
-        releaseOtaInstallButton: firmwareById('releaseOtaFirmwareButton'),
-        releaseOtaVersion: firmwareById('releaseOtaVersion'),
-        releaseOtaStatus: firmwareById('releaseOtaStatus'),
-        releaseOtaDetail: firmwareById('releaseOtaDetail'),
-        betaOtaInstallButton: firmwareById('betaOtaFirmwareButton'),
-        betaOtaVersion: firmwareById('betaOtaVersion'),
-        betaOtaStatus: firmwareById('betaOtaStatus'),
-        betaOtaDetail: firmwareById('betaOtaDetail'),
+        configuredOtaInstallButton: firmwareById('configuredOtaFirmwareButton'),
+        configuredOtaChannel: firmwareById('configuredOtaChannel'),
+        configuredOtaVersion: firmwareById('configuredOtaVersion'),
+        configuredOtaStatus: firmwareById('configuredOtaStatus'),
+        configuredOtaDetail: firmwareById('configuredOtaDetail'),
         mdsTestButton: firmwareById('mdsTestButton'),
         message: firmwareById('firmwareMessage'),
         webFilesUpdateButton: firmwareById('webFilesUpdateButton'),
@@ -185,12 +179,12 @@ function otaElements() {
         webFilesProgressBar: firmwareById('webFilesProgressBar'),
         webFilesProgressText: firmwareById('webFilesProgressText'),
         backButton: firmwareById('backToOverviewButton'),
+        otaDiagnosticsPanel: firmwareById('otaDiagnosticsPanel'),
         otaDiagnosticsButton: firmwareById('otaDiagnosticsButton'),
         otaDiagWifi: firmwareById('otaDiagWifi'),
         otaDiagTime: firmwareById('otaDiagTime'),
         otaDiagEndpoint: firmwareById('otaDiagEndpoint'),
-        otaDiagBeta: firmwareById('otaDiagBeta'),
-        otaDiagRelease: firmwareById('otaDiagRelease'),
+        otaDiagChannel: firmwareById('otaDiagChannel'),
         otaDiagManifest: firmwareById('otaDiagManifest'),
         otaDiagnosticsDetail: firmwareById('otaDiagnosticsDetail')
     };
@@ -227,14 +221,11 @@ function setLoadingState(isLoading, options) {
 
 function renderOtaProgress(progress) {
     const elements = otaElements();
-    if (!elements.progressWrapper || !elements.progressBar || !elements.progressText || !progress) {
+    if (!progress) {
         return;
     }
 
     const shouldShow = progress.active || progress.percent > 0 || progress.message;
-    if (shouldShow) {
-        elements.progressWrapper.style.display = 'block';
-    }
 
     let percent = clampPercent(progress.percent);
     const phase = progress.phase || '';
@@ -249,11 +240,6 @@ function renderOtaProgress(progress) {
     }
 
     lastRenderedOtaPercent = shouldShow ? percent : 0;
-    elements.progressBar.style.width = percent + '%';
-    elements.progressText.textContent = progress.message
-        ? progress.message + ' (' + percent + '%)'
-        : percent + '%';
-
     if (elements.progressDialog && elements.progressDialogBar && elements.progressDialogText && elements.progressDialogPercent) {
         elements.progressDialog.classList.toggle('hidden', !shouldShow);
         elements.progressDialogBar.style.width = percent + '%';
@@ -680,35 +666,27 @@ async function testMdsUpload() {
     }
 }
 
-function otaInfoTarget(channel) {
+function otaInfoTarget() {
     const elements = otaElements();
-    if (channel === 'release') {
-        return {
-            version: elements.releaseOtaVersion,
-            status: elements.releaseOtaStatus,
-            detail: elements.releaseOtaDetail,
-            button: elements.releaseOtaInstallButton
-        };
-    }
-
     return {
-        version: elements.betaOtaVersion,
-        status: elements.betaOtaStatus,
-        detail: elements.betaOtaDetail,
-        button: elements.betaOtaInstallButton
+        channel: elements.configuredOtaChannel,
+        version: elements.configuredOtaVersion,
+        status: elements.configuredOtaStatus,
+        detail: elements.configuredOtaDetail,
+        button: elements.configuredOtaInstallButton
     };
 }
 
-function otaChannelLabel(channel) {
-    return channel === 'release' ? 'Release' : 'Beta';
-}
-
-function renderMdsOtaInfo(channel, info) {
-    const target = otaInfoTarget(channel);
+function renderMdsOtaInfo(info) {
+    const target = otaInfoTarget();
     if (!target.status || !info) {
         return;
     }
 
+    const channelLabel = info.requestedChannelLabel || info.updateChannelLabel || 'Configured';
+    if (target.channel) {
+        target.channel.textContent = channelLabel;
+    }
     const version = info.version || '-';
     if (target.version) {
         target.version.textContent = version || '-';
@@ -719,6 +697,8 @@ function renderMdsOtaInfo(channel, info) {
         label = 'Update available';
     } else if (info.status === 'current') {
         label = 'Up to date';
+    } else if (info.status === 'device-newer') {
+        label = 'Device newer';
     } else if (info.status === 'not-configured') {
         label = 'Not configured';
     } else if (info.status === 'offline') {
@@ -745,22 +725,23 @@ function renderMdsOtaInfo(channel, info) {
         target.button.disabled = info.status === 'not-configured' ||
             info.status === 'offline' ||
             info.status === 'forbidden' ||
+            info.status === 'device-newer' ||
             info.status === 'current';
         target.button.textContent = info.status === 'current'
-            ? otaChannelLabel(channel) + ' Firmware Current'
-            : 'Install ' + otaChannelLabel(channel) + ' Firmware';
+            ? 'Firmware Is Current'
+            : 'Install Firmware Update';
     }
 }
 
-async function refreshMdsOtaInfo(channel) {
-    const target = otaInfoTarget(channel);
+async function refreshMdsOtaInfo() {
+    const target = otaInfoTarget();
     try {
         for (let attempt = 0; attempt < 45; attempt += 1) {
-            const info = await firmwareRequestJson('/mdsotainfo?channel=' + encodeURIComponent(channel) + (attempt === 0 ? '&refresh=1' : '') + '&ts=' + Date.now(), {
+            const info = await firmwareRequestJson('/mdsotainfo?' + (attempt === 0 ? 'refresh=1&' : '') + 'ts=' + Date.now(), {
                 timeoutMs: FIRMWARE_REQUEST_TIMEOUT_MS
             });
             if (!info.running) {
-                renderMdsOtaInfo(channel, info);
+                renderMdsOtaInfo(info);
                 return info;
             }
             if (target.detail) {
@@ -799,14 +780,14 @@ function renderWebFilesInfo(info) {
     const storedVersion = info.storedWebFilesVersion || '-';
     const storedChannel = info.storedWebFilesChannel ? ' (' + info.storedWebFilesChannel + ')' : '';
     const firmwareVersion = info.firmwareVersion || '-';
-    const firmwareChannel = info.firmwareChannelLabel ? ' (' + info.firmwareChannelLabel + ')' : '';
+    const updateChannel = info.updateChannelLabel ? ' (' + info.updateChannelLabel + ')' : '';
 
     firmwareSetText('webFilesInstalledVersion', storedVersion + storedChannel);
-    firmwareSetText('webFilesFirmwareVersion', firmwareVersion + firmwareChannel);
+    firmwareSetText('webFilesFirmwareVersion', firmwareVersion + updateChannel);
     firmwareSetText('webFilesStatus', info.error ? 'Error' : (info.retrying ? 'Retrying...' : (info.busy ? 'Updating...' : (info.upToDate ? 'Up to date' : 'Update available'))));
 
     if (elements.webFilesUpdateButton) {
-        const serverUnavailableForVersion = info.configured && info.serverSupportsInstalledFirmware === false;
+        const serverUnavailableForVersion = info.configured && info.serverSupportKnown === true && info.serverSupportsInstalledFirmware === false;
         const localPackageMode = serverUnavailableForVersion || !info.configured;
         elements.webFilesUpdateButton.disabled = info.busy;
         elements.webFilesUpdateButton.textContent = serverUnavailableForVersion
@@ -843,20 +824,15 @@ async function refreshWebFilesInfo() {
 }
 
 async function refreshFirmwarePageStatus() {
-    firmwareSetText('betaOtaStatus', 'Checking...');
-    firmwareSetText('releaseOtaStatus', 'Checking...');
+    firmwareSetText('configuredOtaStatus', 'Checking...');
     firmwareSetText('webFilesStatus', 'Checking...');
 
     // The ESP performs HTTPS checks for these endpoints. Run them in a small
     // queue instead of parallelizing them from the browser, otherwise the first
     // page load can overwhelm TLS/heap and show false diagnostic errors.
-    await refreshMdsOtaInfo('beta').catch(function () {});
-    await firmwareDelay(250);
-    await refreshMdsOtaInfo('release').catch(function () {});
+    await refreshMdsOtaInfo().catch(function () {});
     await firmwareDelay(250);
     await refreshWebFilesInfo().catch(function () {});
-    await firmwareDelay(750);
-    await refreshOtaDiagnostics({ retry: true }).catch(function () {});
 }
 
 function renderDiagnosticStatus(id, check) {
@@ -873,12 +849,11 @@ function renderOtaDiagnostics(info) {
     renderDiagnosticStatus('otaDiagWifi', info.wifi);
     renderDiagnosticStatus('otaDiagTime', info.time);
     renderDiagnosticStatus('otaDiagEndpoint', info.endpoint);
-    renderDiagnosticStatus('otaDiagBeta', info.betaMetadata);
-    renderDiagnosticStatus('otaDiagRelease', info.releaseMetadata);
+    renderDiagnosticStatus('otaDiagChannel', info.channelMetadata);
     renderDiagnosticStatus('otaDiagManifest', info.manifest);
 
     const details = [];
-    ['wifi', 'time', 'endpoint', 'betaMetadata', 'releaseMetadata', 'manifest'].forEach(function (key) {
+    ['wifi', 'time', 'endpoint', 'channelMetadata', 'manifest'].forEach(function (key) {
         const item = info[key];
         if (!item) {
             return;
@@ -920,8 +895,7 @@ async function refreshOtaDiagnostics(options) {
         firmwareSetText('otaDiagWifi', 'Error');
         firmwareSetText('otaDiagTime', 'Error');
         firmwareSetText('otaDiagEndpoint', 'Error');
-        firmwareSetText('otaDiagBeta', 'Error');
-        firmwareSetText('otaDiagRelease', 'Error');
+        firmwareSetText('otaDiagChannel', 'Error');
         firmwareSetText('otaDiagManifest', 'Error');
         firmwareSetText('otaDiagnosticsDetail', 'OTA diagnostics request failed.');
         return null;
@@ -1042,22 +1016,12 @@ document.addEventListener('DOMContentLoaded', function () {
     if (elements.localWebBundleButton) {
         elements.localWebBundleButton.addEventListener('click', uploadLocalWebBundle);
     }
-    if (elements.releaseOtaInstallButton) {
-        elements.releaseOtaInstallButton.addEventListener('click', function () {
-            const force = elements.releaseOtaInstallButton.dataset.force === '1';
+    if (elements.configuredOtaInstallButton) {
+        elements.configuredOtaInstallButton.addEventListener('click', function () {
+            const force = elements.configuredOtaInstallButton.dataset.force === '1';
             startRemoteUpdate(
-                'mds-release',
-                'The device will download and install the current release firmware from MDS. Continue?',
-                force
-            );
-        });
-    }
-    if (elements.betaOtaInstallButton) {
-        elements.betaOtaInstallButton.addEventListener('click', function () {
-            const force = elements.betaOtaInstallButton.dataset.force === '1';
-            startRemoteUpdate(
-                'mds-beta',
-                'The device will download and install the current beta firmware from MDS. Continue?',
+                'mds-configured',
+                'The device will download and install firmware from the configured update channel. Continue?',
                 force
             );
         });
@@ -1071,6 +1035,14 @@ document.addEventListener('DOMContentLoaded', function () {
     // Back to Overview is a plain link in the HTML, so it also works if JS is slow.
     if (elements.otaDiagnosticsButton) {
         elements.otaDiagnosticsButton.addEventListener('click', refreshOtaDiagnostics);
+    }
+    if (elements.otaDiagnosticsPanel) {
+        elements.otaDiagnosticsPanel.addEventListener('toggle', function () {
+            if (elements.otaDiagnosticsPanel.open && elements.otaDiagnosticsPanel.dataset.loaded !== '1') {
+                elements.otaDiagnosticsPanel.dataset.loaded = '1';
+                refreshOtaDiagnostics({ retry: true }).catch(function () {});
+            }
+        });
     }
     document.addEventListener('change', function (event) {
         if (event.target === elements.localFileInput || event.target === elements.localWebBundleFileInput) {

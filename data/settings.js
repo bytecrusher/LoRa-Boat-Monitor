@@ -298,7 +298,7 @@ async function saveSettings(event) {
     setBusyState("Saving settings...");
 
     try {
-        var response = await fetch("/savesettings", {
+        var result = await request("/savesettings", {
             method: "POST",
             headers: token ? {
                 "Content-Type": "application/x-www-form-urlencoded",
@@ -308,17 +308,14 @@ async function saveSettings(event) {
             },
             body: body.toString(),
             credentials: "same-origin",
-            redirect: "follow"
+            redirect: "follow",
+            timeoutMs: 15000
         });
 
-        if (!response.ok) {
+        if (!result.ok) {
             var message = "Settings could not be saved.";
-            try {
-                var json = await response.json();
-                if (json && json.message) {
-                    message = json.message;
-                }
-            } catch (error) {
+            if (result.json && result.json.message) {
+                message = result.json.message;
             }
             throw new Error(message);
         }

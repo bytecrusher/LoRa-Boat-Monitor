@@ -152,41 +152,10 @@ const lmic_pinmap lmic_pins = {
     .dio = {26, 34, 35},
 };
 
-// Payload arry;
-static uint8_t mydata[33];// 27 sensor/status bytes + 6 ESP MAC bytes
-                          // mydata[0] Low Byte Counter
-                          // mydata[1] High Byte Counter
-                          // mydata[2] Low Byte Temperature
-                          // mydata[3] High Byte Temperature
-                          // mydata[4] Low Byte Pressure
-                          // mydata[5] High Byte Pressure
-                          // mydata[6] Low Byte Humidity
-                          // mydata[7] High Byte Humidity
-                          // mydata[8] Low Byte Dewpoint
-                          // mydata[9] High Byte Dewpoint
-                          // mydata[10] Low Byte Voltage
-                          // mydata[11] High Byte Voltage
-                          // mydata[12] Low Byte Temperature 1Wire
-                          // mydata[13] High Byte Temperature 1Wire
-                          // mydata[14] Low Byte Longitude 1
-                          // mydata[15] High Byte Longitude 1
-                          // mydata[16] Low Byte Longitude 2
-                          // mydata[17] High Byte Longitude 2
-                          // mydata[18] Low Byte Latitude 1
-                          // mydata[19] High Byte Latitude 1
-                          // mydata[20] Low Byte Latitude 2
-                          // mydata[21] High Byte Latitude 2
-                          // mydata[22] Low Byte Tank Level 1
-                          // mydata[23] High Byte Tank Level 1
-                          // mydata[24] Low Byte Tank Level 2
-                          // mydata[25] High Byte Tank Level 2
-                          // mydata[26] Low Byte Alarm1 and Relay
-                          // mydata[27] MAC byte 1
-                          // mydata[28] MAC byte 2
-                          // mydata[29] MAC byte 3
-                          // mydata[30] MAC byte 4
-                          // mydata[31] MAC byte 5
-                          // mydata[32] MAC byte 6
+// FPort 1 schema 3. The exact 51-byte layout is documented in
+// docs/LORAWAN_PAYLOADS.md and intentionally fills the EU868 DR2 limit.
+static uint8_t mydata[51];
+static_assert(sizeof(mydata) == 51, "FPort 1 schema 3 must remain exactly 51 bytes");
 
 // Schedule TX every this many seconds (might become longer due to duty
 // cycle limitations).

@@ -1,6 +1,10 @@
 #include "func_webServerHandler.h"
 #include "webServerRoutes.h"
+#include "firmwareBootHealth.h"
+#include "updateRuntimeState.h"
 #include <WiFi.h>
+
+extern int bootCount;
 
 void registerApiRoutes() {
   httpServer.on("/health", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -12,12 +16,29 @@ void registerApiRoutes() {
     json["firmwareVersion"] = String(actconf.fversion);
     json["uptimeMs"] = millis();
     json["freeHeap"] = ESP.getFreeHeap();
+    json["minFreeHeap"] = ESP.getMinFreeHeap();
     json["resetReason"] = static_cast<int>(esp_reset_reason());
+    json["bootCount"] = bootCount;
+    json["bootValidationPending"] = isFirmwareBootValidationPending();
+    json["bootValidationAttempts"] = getFirmwareBootAttemptCount();
+    json["bootHealth"] = getFirmwareBootHealthStatus();
+    json["recoverySafeMode"] = isRecoverySafeMode();
     json["webInstallCheckpoint"] = getWebBundleInstallCheckpoint();
     json["webInstallFreeHeap"] = getWebBundleInstallFreeHeap();
     json["webInstallStackWords"] = getWebBundleInstallStackWords();
     json["wifiConnected"] = WiFi.status() == WL_CONNECTED;
     json["ip"] = WiFi.localIP().toString();
+    json["wifiRssi"] = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
+    json["maintenanceOperation"] = maintenanceOperationName(getMaintenanceOperation());
+    const OtaProgressSnapshot ota = getOtaProgressSnapshot();
+    json["otaActive"] = ota.active;
+    json["otaPhase"] = ota.phase;
+    json["otaCurrent"] = ota.current;
+    json["otaTotal"] = ota.total;
+    const WebFilesUpdateSnapshot webFiles = getWebFilesUpdateSnapshot();
+    json["webFilesUpdateActive"] = webFiles.active;
+    json["webFilesUpdateMessage"] = webFiles.message;
+    json["configStorage"] = "CFG2 A/B";
     json["standbyInputPin"] = alarmPin;
     json["standbyInputLevel"] = digitalRead(alarmPin) == LOW ? "LOW" : "HIGH";
     json["standbyInputState"] = alarm1 ? "Active" : "Inactive";
@@ -41,6 +62,8 @@ void registerApiRoutes() {
     json_Device["Device"]["FirmwareVersion"] = String(actconf.fversion);
     json_Device["Device"]["FirmwareChannel"] = getFirmwareReleaseChannel();
     json_Device["Device"]["FirmwareChannelLabel"] = getFirmwareReleaseLabel();
+    json_Device["Device"]["UpdateChannel"] = getConfiguredUpdateChannel();
+    json_Device["Device"]["UpdateChannelLabel"] = getConfiguredUpdateLabel();
     json_Device["Device"]["License"] = String(actconf.license);
 
     json_Device["Device"]["ESP32"]["SDKVersion"] = String(ESP.getSdkVersion());

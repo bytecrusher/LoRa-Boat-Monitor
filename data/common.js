@@ -147,24 +147,47 @@ function withCsrf(options) {
 }
 
 async function request(url, options) {
-    var response = await fetch(url, withCsrf(options));
-    var text = await response.text();
-    var json = null;
-
-    if (text) {
-        try {
-            json = JSON.parse(text);
-        } catch (error) {
-            json = null;
+    var sourceOptions = options || {};
+    var requestOptions = {};
+    Object.keys(sourceOptions).forEach(function (key) {
+        if (key !== 'timeoutMs') {
+            requestOptions[key] = sourceOptions[key];
         }
+    });
+    var timeoutMs = Number(sourceOptions.timeoutMs || 10000);
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timeout = null;
+    if (controller && !requestOptions.signal) {
+        requestOptions.signal = controller.signal;
+        timeout = window.setTimeout(function () {
+            controller.abort();
+        }, timeoutMs);
     }
 
-    return {
-        ok: response.ok,
-        status: response.status,
-        text: text,
-        json: json
-    };
+    try {
+        var response = await fetch(url, withCsrf(requestOptions));
+        var text = await response.text();
+        var json = null;
+
+        if (text) {
+            try {
+                json = JSON.parse(text);
+            } catch (error) {
+                json = null;
+            }
+        }
+
+        return {
+            ok: response.ok,
+            status: response.status,
+            text: text,
+            json: json
+        };
+    } finally {
+        if (timeout !== null) {
+            window.clearTimeout(timeout);
+        }
+    }
 }
 
 async function requestJson(url, options) {
@@ -176,7 +199,7 @@ async function requestJson(url, options) {
 }
 
 function fetchJson(url, onSuccess, onError) {
-    requestJson(url)
+    return requestJson(url)
         .then(onSuccess)
         .catch(function (error) {
             if (onError) {

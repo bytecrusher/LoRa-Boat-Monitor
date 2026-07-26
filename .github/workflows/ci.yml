@@ -1,29 +1,42 @@
-name: CI
+name: Firmware CI
 
-on: [push]
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: firmware-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-20.04]
-    
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-        with: 
-          submodules: "recursive"
-      - name: Install deps
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned toolchain
+        run: python3 -m pip install platformio==6.1.19
+      - name: Run source-level tests
         run: |
-          #apt-get install -y python3-pip
-          python3 -m pip install --upgrade pip
-          pip install -U platformio
-      - name: Validate project contracts
-        run: |
-          python3 scripts/validate_project.py
+          sh scripts/test_version_comparator.sh
+          node tests/payload_decoders_test.js
           for file in data/*.js src/Payload_Formats_*.js; do node --check "$file"; done
-      - name: Build
-        run: |
-          pio run
-          cp ./.pio/build/heltec_wifi_lora_32_V2/firmware.bin ./docs/firmware.bmb
+      - name: Build reproducible artifacts
+        run: ./scripts/build_release_artifacts.sh
+      - name: Validate built project contracts
+        run: python3 scripts/validate_project.py
+      - name: Upload verified build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: loraboatmonitor-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            firmware.bin
+            webui-package.tar

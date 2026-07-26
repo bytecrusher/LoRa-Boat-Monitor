@@ -47,14 +47,20 @@ function format_payload(args){
   // By default, this plugin uses "uplink_message.frm_payload" and sends it to the decoding function "decodeUplink".
   // For more vendor-specific decoders, check out https://github.com/TheThingsNetwork/lorawan-devices/tree/master/vendor
   let bytes =  Buffer.from(args['uplink_message']['frm_payload'], 'base64');
-  var decoded_payload = decodeUplink(bytes)['data'];
+  var decoded_payload = decodeUplink(bytes, args['uplink_message']['f_port'])['data'];
   // Merge decoded payload into Ubidots payload
   Object.assign(ubidots_payload, decoded_payload);
   // return ubidots_payload
   return decoded_payload
 }
 
-function decodeUplink(bytes) {
+function decodeUplink(bytes, fPort) {
+  if (fPort === 2) {
+    return decodeDevicePayload(bytes);
+  }
+  if (fPort === 1 && bytes.length === 51 && bytes[0] === 3) {
+    return decodeMeasurementPayloadV3(bytes);
+  }
   // Decoder for the LoRa Boat Monitor
   var decoded = {};
   
@@ -62,7 +68,9 @@ function decodeUplink(bytes) {
   var voffset = 0;      // Voltage offset
   var toffset = 0;      // Temperature offset for BME280
   var poffset = 0;      // pressure offset for altitude
-//  decoded.counter = ((bytes[1] << 8) | bytes[0]);
+  decoded.payloadType = "measurements";
+  decoded.payloadSchema = bytes.length >= 50 ? 2 : 1;
+  decoded.counter = readUint16(bytes, 0);
   var temperature = (((bytes[3] << 8) | bytes[2]) / 100) - 50 + toffset;
 //  decoded.temperature = Math.round(temperature * 10) / 10;
   decoded.pressure = ((bytes[5] << 8) | bytes[4]) / 10 + poffset;
@@ -75,14 +83,106 @@ function decodeUplink(bytes) {
   decoded.tempbattery = Math.round(tempbattery * 10) / 10;
   decoded.longitude = ((bytes[15] << 8) | bytes[14]) / 100 + ((bytes[17] << 8) | bytes[16]) / 1000000;
   decoded.latitude = ((bytes[19] << 8) | bytes[18]) / 100 + ((bytes[21] << 8) | bytes[20]) / 1000000;
-//  decoded.level1 = ((bytes[23] << 8) | bytes[22]) / 100;
-//  decoded.level2 = ((bytes[25] << 8) | bytes[24]) / 100;
+  decoded.level1 = readUint16(bytes, 22) / 100;
+  decoded.level2 = readUint16(bytes, 24) / 100;
   decoded.alarm1 = bytes[26] & 0x01;
+  decoded.environmentPresent = (bytes[26] & 0x04) !== 0;
+  decoded.vedirectPresent = (bytes[26] & 0x08) !== 0;
   if (bytes.length >= 33) {
     decoded.macAddress = formatMacAddress(bytes, 27);
   }
-  decoded.relay = (bytes[26] & 0x10) / 0x10;
+  decoded.relay = (bytes[26] >> 4) & 0x03;
+  decoded.gpsFix = (bytes[26] & 0x40) !== 0;
+  if (bytes.length >= 50) {
+    decoded.batteryCapacity = bytes[33];
+    decoded.tank1Adc = readUint16(bytes, 34);
+    decoded.tank2Adc = readUint16(bytes, 36);
+    decoded.speed = readUint16(bytes, 38) / 100;
+    decoded.course = readUint16(bytes, 40) / 100;
+    decoded.altitude = readInt16(bytes, 42) / 10;
+    decoded.vedirectVoltage = readUint16(bytes, 44) / 100;
+    decoded.vedirectCurrent = readInt16(bytes, 46) / 100;
+    decoded.vedirectTemperature = readInt16(bytes, 48) / 100;
+  }
   return {"data": decoded};
+}
+
+function decodeMeasurementPayloadV3(bytes) {
+  var status = bytes[24];
+  var causeCodes = bytes[50];
+  var standbyCauses = ["", "Sleep standby"];
+  var wakeupCauses = ["", "Wakeup EXT0", "Wakeup EXT1", "Wakeup Timer", "Wakeup Touch", "Wakeup ULP", "Wakeup Other"];
+  var standbyCode = causeCodes & 0x0f;
+  var wakeupCode = (causeCodes >> 4) & 0x0f;
+  return {"data": {
+    "payloadType": "measurements",
+    "payloadSchema": 3,
+    "counter": readUint16(bytes, 1),
+    "temperature": readInt16(bytes, 3) / 10,
+    "pressure": readUint16(bytes, 5) / 10,
+    "humidity": bytes[7],
+    "dewpoint": readInt16(bytes, 8) / 10,
+    "voltage": readUint16(bytes, 10) / 1000,
+    "tempbattery": readInt16(bytes, 12) / 10,
+    "longitude": readInt32(bytes, 14) / 1000000,
+    "latitude": readInt32(bytes, 18) / 1000000,
+    "level1": bytes[22],
+    "level2": bytes[23],
+    "alarm1": status & 0x01,
+    "environmentPresent": (status & 0x04) !== 0,
+    "vedirectPresent": (status & 0x08) !== 0,
+    "relay": (status >> 4) & 0x03,
+    "gpsFix": (status & 0x40) !== 0,
+    "wakeupEventPresent": (status & 0x80) !== 0,
+    "batteryCapacity": bytes[25],
+    "tank1Adc": readUint16(bytes, 26),
+    "tank2Adc": readUint16(bytes, 28),
+    "speed": readUint16(bytes, 30) / 100,
+    "course": readUint16(bytes, 32) / 100,
+    "altitude": readInt16(bytes, 34) / 10,
+    "vedirectVoltage": readUint16(bytes, 36) / 100,
+    "vedirectCurrent": readInt16(bytes, 38) / 100,
+    "vedirectTemperature": readInt16(bytes, 40) / 100,
+    "standbyEpoch": readUint32(bytes, 42),
+    "wakeupEpoch": readUint32(bytes, 46),
+    "standbyCause": standbyCauses[standbyCode] || (standbyCode ? "Standby Other" : ""),
+    "wakeupCause": wakeupCauses[wakeupCode] || (wakeupCode ? "Wakeup Other" : "")
+  }};
+}
+
+function decodeDevicePayload(bytes) {
+  if (bytes.length < 34 || bytes[0] !== 1) return {"data": {"payloadType": "unsupported"}};
+  var firmwareVersion = "";
+  for (var i = 14; i < 22 && bytes[i] !== 0; i++) firmwareVersion += String.fromCharCode(bytes[i]);
+  return {"data": {
+    "payloadType": "deviceConfig",
+    "payloadSchema": bytes[0],
+    "firmwareVersion": firmwareVersion,
+    "firmwareChannel": (bytes[1] & 0x40) !== 0 ? "stable" : "beta",
+    "standbyEnabled": (bytes[1] & 0x01) !== 0,
+    "transmitIntervalMinutes": bytes[3],
+    "standbySleepMinutes": readUint16(bytes, 4),
+    "macAddress": formatMacAddress(bytes, 24),
+    "configHash": readUint32(bytes, 30).toString(16).toUpperCase()
+  }};
+}
+
+function readUint16(bytes, offset) {
+  return ((bytes[offset + 1] || 0) << 8) | (bytes[offset] || 0);
+}
+
+function readInt16(bytes, offset) {
+  var value = readUint16(bytes, offset);
+  return value & 0x8000 ? value - 0x10000 : value;
+}
+
+function readUint32(bytes, offset) {
+  return ((bytes[offset] || 0) | ((bytes[offset + 1] || 0) << 8) |
+    ((bytes[offset + 2] || 0) << 16) | ((bytes[offset + 3] || 0) << 24)) >>> 0;
+}
+
+function readInt32(bytes, offset) {
+  return readUint32(bytes, offset) | 0;
 }
 
 function formatMacAddress(bytes, offset) {
@@ -97,4 +197,4 @@ function formatMacAddress(bytes, offset) {
   return parts.join(":");
 }
 
-module.exports = { format_payload };
+module.exports = { format_payload, decodeUplink };
