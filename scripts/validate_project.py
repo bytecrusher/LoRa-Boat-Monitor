@@ -181,6 +181,7 @@ def validate_reproducible_dependencies(errors: list[str]) -> None:
 def validate_lora_runtime_safety(errors: list[str]) -> None:
     lora_source = (ROOT / "src" / "LoRa.h").read_text(encoding="utf-8")
     main_source = (ROOT / "src" / "LoRa_boat_monitor_abp.cpp").read_text(encoding="utf-8")
+    webclient_source = (ROOT / "src" / "func_webclient.cpp").read_text(encoding="utf-8")
 
     if re.search(r"\bLMIC\s*=\s*RTC_LMIC\b", lora_source):
         fail(errors, "LMIC transient scheduler state must not be restored from RTC")
@@ -201,6 +202,15 @@ def validate_lora_runtime_safety(errors: list[str]) -> None:
     missing_fields = [field for field in required_status_fields if field not in main_source]
     if missing_fields:
         fail(errors, "LoRa diagnostics are missing: " + ", ".join(missing_fields))
+
+    if "manualUplink || currentLoraPacketUsesWifiFallback || currentLoraPacketIncludedDeviceEvent" not in lora_source:
+        fail(errors, "WakeupLog LoRa packets must use confirmed uplinks")
+    if "currentLoraPacketIncludedDeviceEvent\n        ? acknowledged" not in lora_source:
+        fail(errors, "WakeupLog events must remain queued until a LoRa network ACK is received")
+    if "actconf.MdsSensorIdStatus <= 0" in webclient_source:
+        fail(errors, "WakeupLog WiFi delivery must not depend on a legacy sensor ID")
+    if "insertedSensorRows <= 0 || skippedSensorRows > 0" not in webclient_source:
+        fail(errors, "MDS delivery must reject responses that did not store every sensor row")
 
 
 def main() -> int:

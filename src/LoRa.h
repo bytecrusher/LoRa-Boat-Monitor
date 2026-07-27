@@ -668,7 +668,8 @@ void do_send(osjob_t *j)
     currentLoraPacketUsesWifiFallback = !manualUplink &&
       strcmp(actconf.transmitPriority, "LoRaFirst") == 0 &&
       strcmp(actconf.SendDataViaWifi, "Yes") == 0;
-    const bool confirmedUplink = manualUplink || currentLoraPacketUsesWifiFallback;
+    // WakeupLog entries must survive radio transmission without a network ACK.
+    const bool confirmedUplink = manualUplink || currentLoraPacketUsesWifiFallback || currentLoraPacketIncludedDeviceEvent;
     lastLoraQueueResult = LMIC_setTxData2(
       LORA_DYNAMIC_PORT,
       mydata,
@@ -857,7 +858,9 @@ void onEvent(ev_t ev) {
           DebugPrintln(1, "Downlink Message: unknown");
         }
       }
-      const bool dynamicDeliveryAccepted = !currentLoraPacketUsesWifiFallback || acknowledged;
+      const bool dynamicDeliveryAccepted = currentLoraPacketIncludedDeviceEvent
+        ? acknowledged
+        : (!currentLoraPacketUsesWifiFallback || acknowledged);
       if (!currentLoraPacketIsStatic && currentLoraPacketIncludedDeviceEvent && dynamicDeliveryAccepted) {
         acknowledgePendingLoraDeviceEvent();
         acknowledgeMdsDeviceEventDeliveredByLora(currentLoraPacketStandbyEpoch,

@@ -72,8 +72,10 @@ included in the next regular FPort 1 packet instead of creating a separate uplin
 With `WifiFirst`, each due transmission is attempted through Wi-Fi/MDS first. A
 complete successful MDS response replaces the corresponding LoRa uplink. If Wi-Fi
 association, DNS, TLS, the MDS request or a required WakeupLog upload fails, the
-firmware sends FPort 1 as fallback. A WakeupLog acknowledged through one transport
-is removed from the other transport queue to avoid duplicate event rows.
+firmware sends FPort 1 as fallback. WakeupLog packets use confirmed LoRaWAN
+uplinks and remain queued until the network acknowledges them. A WakeupLog
+acknowledged through one transport is removed from the other transport queue to
+avoid duplicate event rows.
 
 With `LoRaFirst`, FPort 1 is sent as a confirmed LoRaWAN uplink. A network ACK
 marks the cycle as delivered and suppresses the Wi-Fi upload. If queuing fails,

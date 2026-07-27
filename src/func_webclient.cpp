@@ -722,11 +722,19 @@ bool postMdsPayload(const configData &actconf, JsonDocument &docpayload, const c
           success = responseStatus == "ok";
         }
         if (responseJson["insertedSensorRows"].is<int>() || responseJson["skippedSensorRows"].is<int>()) {
-          DebugPrintln(3, String("MDS inserted rows: ") + int(responseJson["insertedSensorRows"] | 0));
-          DebugPrintln(3, String("MDS skipped rows: ") + int(responseJson["skippedSensorRows"] | 0));
+          const int insertedSensorRows = responseJson["insertedSensorRows"] | 0;
+          const int skippedSensorRows = responseJson["skippedSensorRows"] | 0;
+          DebugPrintln(3, String("MDS inserted rows: ") + insertedSensorRows);
+          DebugPrintln(3, String("MDS skipped rows: ") + skippedSensorRows);
           DebugPrintln(3, String("MDS auto resolved rows: ") + int(responseJson["autoResolvedSensorRows"] | 0));
           DebugPrintln(3, String("MDS auto created sensor configs: ") + int(responseJson["autoCreatedSensorConfigs"] | 0));
-          lastMdsStatus = success ? "MDS upload accepted" : "MDS rejected the upload";
+          if (insertedSensorRows <= 0 || skippedSensorRows > 0) {
+            success = false;
+            lastMdsStatus = "MDS did not store every sensor row";
+            DebugPrintln(2, "MDS response did not confirm complete sensor storage");
+          } else {
+            lastMdsStatus = "MDS upload accepted";
+          }
         }
       }
     }
@@ -1278,12 +1286,6 @@ bool sendMdsDeviceEvent(const configData &actconf, const char *sensorName)
   if (WiFi.status() != WL_CONNECTED) {
     lastMdsStatus = "WiFi is not connected";
     DebugPrintln(2, String("Skipping MDS device event because WiFi is not connected: ") + String(sensorName == nullptr ? "" : sensorName));
-    return false;
-  }
-
-  if (actconf.MdsSensorIdStatus <= 0) {
-    lastMdsStatus = "MDS status upload is disabled";
-    DebugPrintln(2, "Skipping MDS device event because status upload is disabled");
     return false;
   }
 
