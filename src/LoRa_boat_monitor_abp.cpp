@@ -159,8 +159,10 @@ bool standbyAutoUpdateAttemptedThisWake = false;
 
 const unsigned long WAKE_MDS_RETRY_INTERVAL_MS = 30000UL;
 const unsigned long STANDBY_WAKE_DISPLAY_HOLD_MS = 2500UL;
+const unsigned long STANDBY_WAKE_CYCLE_TIMEOUT_MS = 90000UL;
 unsigned long lastMdsUploadMillis = 0;
 unsigned long lastSuccessfulWifiDeliveryMillis = 0;
+unsigned long standbyWakeCycleStartedMillis = 0;
 bool standbyUseLoraThisWake = false;
 bool standbyWifiDeliverySucceeded = false;
 bool pendingWakeMdsEvent = false;
@@ -1769,6 +1771,7 @@ void state0(){
   if(machine_state0_executeOnce){
     DebugPrintln(3, " ");
     DebugPrintln(3, "state0 once");
+    standbyWakeCycleStartedMillis = millis();
 
     if (standbyWakeDisplayActive) {
       showStandbyWakeDisplay(pendingWakeReasonLabel,
@@ -1829,6 +1832,25 @@ void state0(){
 
 	  const bool loraEnabledInStandby = standbyUseLoraThisWake;
 	  const bool wifiUploadEnabled = isMdsUploadEnabled();
+	  const bool wakeCycleTimedOut = standbyWakeCycleStartedMillis > 0 &&
+	                                 millis() - standbyWakeCycleStartedMillis >= STANDBY_WAKE_CYCLE_TIMEOUT_MS;
+	  if (wakeCycleTimedOut && !hasActiveStandbyKeepAwakeWork()) {
+	    DebugPrintln(1, "Standby wake cycle exceeded 90 seconds; cancelling pending radio work and entering deep sleep");
+	    writeDisplayStatusScreen("Standby guard", "Wake cycle timeout", "Stopping radio", "Going to sleep");
+	    LMIC_clrTxData();
+	    os_clearCallback(&sendjob);
+	    GOTO_DEEPSLEEP = false;
+	    if (standbyUseLoraThisWake) {
+	      const uint32_t actualSleepSeconds = uint32_t(max(1, actconf.standbySleepDuration)) * 60UL;
+	      SaveLMICToRTC(actualSleepSeconds);
+	    }
+	    if (wifiUploadEnabled && !standbyWifiDeliverySucceeded) {
+	      standbyWifiDeliverySucceeded = maybeSendDataViaWifi(true);
+	    }
+	    processStandbyAutoUpdate();
+	    if (prepareForStandbySleep()) GoDeepSleep();
+	    return;
+	  }
 	  if (loraEnabledInStandby) {
 	    if (!sendedLoraAfterSleepOneTime && wifiUploadEnabled && isWifiFirstTransmitPriority()) {
 	      maybeSendDataViaWifi();
