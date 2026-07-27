@@ -135,6 +135,7 @@ RTC_DATA_ATTR char pendingMdsWakeupEventCause[24] = "";
 RTC_DATA_ATTR time_t lastSentMdsStandbyEventEpoch = 0;
 RTC_DATA_ATTR time_t lastSentMdsWakeupEventEpoch = 0;
 RTC_DATA_ATTR time_t lastStandbyAutoUpdateCheckEpoch = 0;
+RTC_DATA_ATTR time_t lastStandbyWebUpdateAttemptEpoch = 0;
 RTC_DATA_ATTR MdsDeviceEventSnapshot pendingMdsDeviceEventQueue[MDS_DEVICE_EVENT_QUEUE_SIZE];
 RTC_DATA_ATTR uint8_t pendingMdsDeviceEventQueueHead = 0;
 RTC_DATA_ATTR uint8_t pendingMdsDeviceEventQueueTail = 0;
@@ -687,8 +688,22 @@ bool isStandbyAutoFirmwareCheckDue() {
   return lastStandbyAutoUpdateCheckEpoch == 0 || now - lastStandbyAutoUpdateCheckEpoch >= intervalSeconds;
 }
 
+bool isStandbyWebUpdateAttemptDue() {
+  if (!isStandbyAutoUpdateEnabled() || !hasValidWakeSleepTime()) {
+    return false;
+  }
+
+  const time_t now = time(nullptr);
+  const int intervalHours = actconf.standbyAutoUpdateIntervalHours < 1 ? 24 : actconf.standbyAutoUpdateIntervalHours;
+  const time_t intervalSeconds = static_cast<time_t>(intervalHours) * 3600;
+  return lastStandbyWebUpdateAttemptEpoch == 0 || now < lastStandbyWebUpdateAttemptEpoch ||
+         now - lastStandbyWebUpdateAttemptEpoch >= intervalSeconds;
+}
+
 bool shouldEnableWifiForStandbyAutoUpdate() {
-  return isStandbyAutoUpdateEnabled() && (isStandbyAutoFirmwareCheckDue() || areInstalledWebFilesOutdated());
+  return isStandbyAutoUpdateEnabled() &&
+         (isStandbyAutoFirmwareCheckDue() ||
+          (areInstalledWebFilesOutdated() && isStandbyWebUpdateAttemptDue()));
 }
 
 bool processStandbyAutoUpdate() {
@@ -697,8 +712,9 @@ bool processStandbyAutoUpdate() {
   }
 
   const bool webFilesOutdated = areInstalledWebFilesOutdated();
+  const bool webFilesUpdateDue = webFilesOutdated && isStandbyWebUpdateAttemptDue();
   const bool firmwareCheckDue = isStandbyAutoFirmwareCheckDue();
-  if (!webFilesOutdated && !firmwareCheckDue) {
+  if (!webFilesUpdateDue && !firmwareCheckDue) {
     return false;
   }
 
@@ -754,11 +770,14 @@ bool processStandbyAutoUpdate() {
     }
   }
 
-  if (areInstalledWebFilesOutdated()) {
+  if (webFilesUpdateDue && areInstalledWebFilesOutdated()) {
     if (!acquireMaintenanceOperation(MaintenanceOperation::WebFiles)) {
       DebugPrintln(2, "Skipping automatic web files update because maintenance is busy");
       return false;
     }
+    // Persist the attempt before entering the downloader. A watchdog reset or
+    // power loss must not restart the same failing download on every wakeup.
+    lastStandbyWebUpdateAttemptEpoch = time(nullptr);
     writeDisplayStatusScreen("Auto update", "Web files", "Downloading", String(actconf.fversion));
     DebugPrintln(3, "Automatic web files update started");
     resetWebFilesUpdateState(0, "", "Automatic web files update started.");
