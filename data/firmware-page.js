@@ -8,6 +8,7 @@ let lastRenderedOtaPercent = 0;
 let lastRenderedWebFilesPercent = 0;
 let localUploadProgressActive = false;
 let localUploadProgressPercent = 0;
+let activeUpdateProgressType = 'firmware';
 const FIRMWARE_REQUEST_TIMEOUT_MS = 8000;
 const FIRMWARE_DIAGNOSTICS_TIMEOUT_MS = 30000;
 
@@ -155,9 +156,11 @@ function otaElements() {
         loader: firmwareById('loader'),
         content: firmwareById('myDiv'),
         progressDialog: firmwareById('otaProgressDialog'),
+        progressDialogTitle: firmwareById('otaProgressDialogTitle'),
         progressDialogBar: firmwareById('otaProgressDialogBar'),
         progressDialogText: firmwareById('otaProgressDialogText'),
         progressDialogPercent: firmwareById('otaProgressDialogPercent'),
+        progressDialogNote: firmwareById('otaProgressDialogNote'),
         localFileInput: firmwareById('localFirmwareFile'),
         localFileName: firmwareById('localFirmwareFileName'),
         localInstallButton: firmwareById('localFirmwareButton'),
@@ -175,9 +178,6 @@ function otaElements() {
         webFilesInstalledVersion: firmwareById('webFilesInstalledVersion'),
         webFilesFirmwareVersion: firmwareById('webFilesFirmwareVersion'),
         webFilesStatus: firmwareById('webFilesStatus'),
-        webFilesProgressWrapper: firmwareById('webFilesProgressWrapper'),
-        webFilesProgressBar: firmwareById('webFilesProgressBar'),
-        webFilesProgressText: firmwareById('webFilesProgressText'),
         backButton: firmwareById('backToOverviewButton'),
         otaDiagnosticsPanel: firmwareById('otaDiagnosticsPanel'),
         otaDiagnosticsButton: firmwareById('otaDiagnosticsButton'),
@@ -241,10 +241,21 @@ function renderOtaProgress(progress) {
 
     lastRenderedOtaPercent = shouldShow ? percent : 0;
     if (elements.progressDialog && elements.progressDialogBar && elements.progressDialogText && elements.progressDialogPercent) {
+        const isWebFilesUpdate = activeUpdateProgressType === 'web-files';
         elements.progressDialog.classList.toggle('hidden', !shouldShow);
+        if (elements.progressDialogTitle) {
+            elements.progressDialogTitle.textContent = isWebFilesUpdate ? 'Web Interface Update' : 'Firmware Update';
+        }
         elements.progressDialogBar.style.width = percent + '%';
         elements.progressDialogPercent.textContent = percent + '%';
-        elements.progressDialogText.textContent = progress.message || 'Firmware update is running...';
+        elements.progressDialogText.textContent = progress.message || (isWebFilesUpdate
+            ? 'Web interface update is running...'
+            : 'Firmware update is running...');
+        if (elements.progressDialogNote) {
+            elements.progressDialogNote.textContent = isWebFilesUpdate
+                ? 'Please keep this page open until all web interface files are installed.'
+                : 'Please keep this page open until the device restarts.';
+        }
     }
 }
 
@@ -478,6 +489,8 @@ function uploadLocalPackage(options) {
         return;
     }
 
+    activeUpdateProgressType = options && options.progressType === 'web-files' ? 'web-files' : 'firmware';
+
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
     // The ESP validates the CSRF token while parsing the multipart stream,
@@ -596,6 +609,7 @@ function uploadLocalWebBundle() {
         installMessage: 'Installing web package on device...',
         confirmMessage: 'Upload and install this web package? Only known web files will be replaced.',
         failureMessage: 'Web package upload failed.',
+        progressType: 'web-files',
         endpoint: '/uploadWebBundle'
     });
 }
@@ -605,6 +619,7 @@ async function startRemoteUpdate(source, promptText, force) {
         return;
     }
 
+    activeUpdateProgressType = 'firmware';
     setLoadingState(true, { showLoader: false });
     startOtaProgressPolling();
 
@@ -903,8 +918,7 @@ async function refreshOtaDiagnostics(options) {
 }
 
 function renderWebFilesProgress(progress) {
-    const elements = otaElements();
-    if (!elements.webFilesProgressWrapper || !elements.webFilesProgressBar || !elements.webFilesProgressText || !progress) {
+    if (!progress) {
         return;
     }
 
@@ -913,12 +927,16 @@ function renderWebFilesProgress(progress) {
         percent = lastRenderedWebFilesPercent;
     }
     lastRenderedWebFilesPercent = (progress.busy || progress.retrying || percent > 0) ? percent : 0;
-    elements.webFilesProgressWrapper.style.display = progress.busy || percent > 0 || progress.message ? 'block' : 'none';
-    elements.webFilesProgressBar.style.width = percent + '%';
     const showPercent = Number(progress.total) > 0 && !progress.retrying;
-    elements.webFilesProgressText.textContent = progress.message
-        ? (showPercent ? progress.message + ' (' + percent + '%)' : progress.message)
-        : (showPercent ? percent + '%' : '');
+    activeUpdateProgressType = 'web-files';
+    renderOtaProgress({
+        active: Boolean(progress.busy || progress.retrying),
+        percent: percent,
+        phase: progress.error ? 'error' : (percent >= 100 ? 'complete' : 'download-web-files'),
+        message: progress.message
+            ? (showPercent ? progress.message + ' (' + percent + '%)' : progress.message)
+            : (showPercent ? percent + '%' : 'Updating web interface files...')
+    });
 }
 
 function stopWebFilesProgressPolling() {
@@ -971,6 +989,9 @@ async function startWebFilesUpdate() {
         return;
     }
 
+    lastRenderedOtaPercent = 0;
+    activeUpdateProgressType = 'web-files';
+    renderWebFilesProgress({ busy: true, percent: 0, message: 'Starting web interface file download...' });
     showFirmwareMessage('info', 'Starting web interface file download...');
     try {
         const body = new URLSearchParams({ csrf: firmwareCsrfToken(), force: '1' });
@@ -985,6 +1006,7 @@ async function startWebFilesUpdate() {
         startWebFilesProgressPolling();
     } catch (error) {
         const message = error && error.json && error.json.message ? error.json.message : 'Could not start web interface file download.';
+        hideOtaProgressDialog();
         showFirmwareMessage('error', message);
     }
 }

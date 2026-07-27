@@ -27,14 +27,14 @@
     <div id="otaProgressDialog" class="progress-dialog hidden" role="status" aria-live="polite" aria-modal="true">
       <div class="progress-dialog-card">
         <div class="progress-dialog-header">
-          <h4>Firmware Update</h4>
+          <h4 id="otaProgressDialogTitle">Firmware Update</h4>
           <span id="otaProgressDialogPercent">0%</span>
         </div>
         <div class="progress-track">
           <div id="otaProgressDialogBar" class="progress-fill"></div>
         </div>
         <div id="otaProgressDialogText" class="progress-text">Preparing firmware update...</div>
-        <p class="muted-text">Please keep this page open until the device restarts.</p>
+        <p id="otaProgressDialogNote" class="muted-text">Please keep this page open until the update completes.</p>
       </div>
     </div>
     <div class="update-primary-grid">
@@ -63,10 +63,6 @@
         <div class="status-line"><span>Installed Files</span><strong id="webFilesInstalledVersion">-</strong></div>
         <div class="status-line"><span>Required Version</span><strong id="webFilesFirmwareVersion">-</strong></div>
         <div class="status-line"><span>Status</span><strong id="webFilesStatus">Checking...</strong></div>
-        <div id="webFilesProgressWrapper" style="display:none;">
-          <div class="progress-track"><div id="webFilesProgressBar" class="progress-fill"></div></div>
-          <div id="webFilesProgressText" class="progress-text"></div>
-        </div>
         <button type="button" id="webFilesUpdateButton">Update Web Interface</button>
       </div>
     </section>
