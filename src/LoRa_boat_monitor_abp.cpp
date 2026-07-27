@@ -121,6 +121,7 @@ struct MdsDeviceEventSnapshot {
 const uint8_t MDS_DEVICE_EVENT_QUEUE_SIZE = 4;
 const time_t MIN_RELIABLE_EVENT_TIME = 1777852800; // 2026-05-04 00:00:00 UTC
 RTC_DATA_ATTR int bootCount = 0;
+RTC_DATA_ATTR bool suppressStandbyExtWakeForNextSleep = false;
 RTC_DATA_ATTR uint loraCount = 0;
 RTC_DATA_ATTR time_t lastStandbyEventEpoch = 0;
 RTC_DATA_ATTR time_t lastWakeupEventEpoch = 0;
@@ -910,7 +911,10 @@ bool prepareForStandbySleep() {
   }
 
   confirmFirmwareBootHealthy();
-  writeDisplayStatusScreen("Standby", "Going to sleep", pendingWakeReasonLabel, "No pending tasks");
+  writeDisplayStatusScreen("Standby",
+                           "Going to sleep",
+                           suppressStandbyExtWakeForNextSleep ? "Input noise guard" : pendingWakeReasonLabel,
+                           suppressStandbyExtWakeForNextSleep ? "Timer wake only" : "No pending tasks");
   delay(2200);
 
   if (isStandbyControlActive()) {
@@ -929,6 +933,8 @@ bool prepareForStandbySleep() {
   // Re-arm wake sources right before sleep so runtime config changes
   // like standbySleepDuration apply without needing a reboot.
   const uint64_t sleepDurationUs = uint64_t(max(1, actconf.standbySleepDuration)) * 60ULL * uint64_t(uS_TO_S_FACTOR);
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT0);
   const esp_err_t timerWakeResult = esp_sleep_enable_timer_wakeup(sleepDurationUs);
   const esp_err_t rtcInitResult = rtc_gpio_init(GPIO_NUM_39);
   const esp_err_t rtcDirectionResult = rtc_gpio_set_direction(GPIO_NUM_39, RTC_GPIO_MODE_INPUT_ONLY);
@@ -936,7 +942,10 @@ bool prepareForStandbySleep() {
   // defines HIGH while the optocoupler pulls the active 12V state LOW.
   rtc_gpio_pullup_dis(GPIO_NUM_39);
   rtc_gpio_pulldown_dis(GPIO_NUM_39);
-  const esp_err_t extWakeResult = esp_sleep_enable_ext0_wakeup(GPIO_NUM_39, 0);
+  const bool enableExternalWake = !suppressStandbyExtWakeForNextSleep;
+  const esp_err_t extWakeResult = enableExternalWake
+    ? esp_sleep_enable_ext0_wakeup(GPIO_NUM_39, 0)
+    : ESP_OK;
 
   if (timerWakeResult != ESP_OK || rtcInitResult != ESP_OK ||
       rtcDirectionResult != ESP_OK || extWakeResult != ESP_OK) {
@@ -948,13 +957,18 @@ bool prepareForStandbySleep() {
     return false;
   }
 
-  if (rtc_gpio_get_level(GPIO_NUM_39) == LOW) {
+  if (enableExternalWake && rtc_gpio_get_level(GPIO_NUM_39) == LOW) {
     resumeAlwaysOnFromStandby("Active while arming");
     return false;
   }
 
-  DebugPrintln(3, "Standby wake sources armed: GPIO39 LOW (12V) or timer " +
-                    String(max(1, actconf.standbySleepDuration)) + " min");
+  if (enableExternalWake) {
+    DebugPrintln(3, "Standby wake sources armed: GPIO39 LOW (12V) or timer " +
+                      String(max(1, actconf.standbySleepDuration)) + " min");
+  } else {
+    DebugPrintln(2, "Standby input noise guard active: EXT0 disabled for this sleep; timer remains armed for " +
+                      String(max(1, actconf.standbySleepDuration)) + " min");
+  }
 
   if (String(actconf.WifiStandbyMode) == "Yes") {
     disableWiFiForSleep();
@@ -2691,6 +2705,13 @@ void setup() {
   rtc_gpio_deinit(GPIO_NUM_39);
 
   readValues(actconf);     // initial read after boot, to get the status of alarm pin.
+  if (pendingWakeReasonCode == ESP_SLEEP_WAKEUP_EXT0 && !alarm1) {
+    suppressStandbyExtWakeForNextSleep = true;
+    DebugPrintln(1, "Ignoring spurious EXT0 wake: GPIO39 is stable HIGH after boot; next sleep uses timer wake only");
+    writeDisplayStatusScreen("Standby wake", "Input noise detected", "GPIO39 is HIGH", "Timer-only next sleep");
+  } else if (pendingWakeReasonCode == ESP_SLEEP_WAKEUP_TIMER || alarm1) {
+    suppressStandbyExtWakeForNextSleep = false;
+  }
   DebugPrintln(3, "Standby input GPIO " + String(alarmPin) + " raw: " + String(digitalRead(alarmPin) == LOW ? "LOW" : "HIGH") + ", state: " + String(alarm1 ? "Active" : "Inactive") + " (active LOW)");
   DebugPrintln(3, "MDS upload config: SendDataViaWifi=" + String(actconf.SendDataViaWifi) +
                     ", url=" + String(strlen(actconf.MdsUrl) > 0 ? "set" : "missing") +
