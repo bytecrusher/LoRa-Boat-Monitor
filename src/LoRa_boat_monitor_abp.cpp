@@ -1860,7 +1860,9 @@ void state0(){
 	  // Queue the paired standby/wakeup event before LMIC can build the first
 	  // FPort 1 packet of this wake cycle.
 	  captureCurrentWakeEventIfReady();
-  lora_loop();
+  if (standbyUseLoraThisWake) {
+    lora_loop();
+  }
   delay(20);
 
 	  const bool loraEnabledInStandby = standbyUseLoraThisWake;
@@ -1870,10 +1872,10 @@ void state0(){
 	  if (wakeCycleTimedOut && !hasActiveStandbyKeepAwakeWork()) {
 	    DebugPrintln(1, "Standby wake cycle exceeded 90 seconds; cancelling pending radio work and entering deep sleep");
 	    writeDisplayStatusScreen("Standby guard", "Wake cycle timeout", "Stopping radio", "Going to sleep");
-	    LMIC_clrTxData();
-	    os_clearCallback(&sendjob);
 	    GOTO_DEEPSLEEP = false;
 	    if (standbyUseLoraThisWake) {
+	      LMIC_clrTxData();
+	      os_clearCallback(&sendjob);
 	      const uint32_t actualSleepSeconds = uint32_t(max(1, actconf.standbySleepDuration)) * 60UL;
 	      SaveLMICToRTC(actualSleepSeconds);
 	    }

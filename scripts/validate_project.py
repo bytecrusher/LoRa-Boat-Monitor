@@ -212,6 +212,26 @@ def validate_lora_runtime_safety(errors: list[str]) -> None:
     if "insertedSensorRows <= 0 || skippedSensorRows > 0" not in webclient_source:
         fail(errors, "MDS delivery must reject responses that did not store every sensor row")
 
+    state0_start = main_source.find("void state0(){")
+    state0_end = main_source.find("// S1 = Battery On", state0_start)
+    state0_source = main_source[state0_start:state0_end]
+    if state0_start < 0 or state0_end < 0:
+        fail(errors, "Could not inspect the standby state implementation")
+    else:
+        guarded_loop = re.search(
+            r"if\s*\(standbyUseLoraThisWake\)\s*\{\s*lora_loop\(\);\s*\}",
+            state0_source,
+        )
+        if not guarded_loop:
+            fail(errors, "Standby must not run the LMIC scheduler before LoRa initialization")
+
+        guarded_cancel = re.search(
+            r"if\s*\(standbyUseLoraThisWake\)\s*\{\s*LMIC_clrTxData\(\);\s*os_clearCallback\(&sendjob\);",
+            state0_source,
+        )
+        if not guarded_cancel:
+            fail(errors, "Standby must not cancel LMIC work before LoRa initialization")
+
 
 def main() -> int:
     errors: list[str] = []
