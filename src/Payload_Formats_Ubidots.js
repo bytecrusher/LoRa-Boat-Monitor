@@ -85,7 +85,8 @@ function decodeUplink(bytes, fPort) {
   decoded.latitude = ((bytes[19] << 8) | bytes[18]) / 100 + ((bytes[21] << 8) | bytes[20]) / 1000000;
   decoded.level1 = readUint16(bytes, 22) / 100;
   decoded.level2 = readUint16(bytes, 24) / 100;
-  decoded.alarm1 = bytes[26] & 0x01;
+  decoded.mainPowerOn = bytes[26] & 0x01;
+  decoded.alarm1 = decoded.mainPowerOn;
   decoded.environmentPresent = (bytes[26] & 0x04) !== 0;
   decoded.vedirectPresent = (bytes[26] & 0x08) !== 0;
   if (bytes.length >= 33) {
@@ -128,6 +129,7 @@ function decodeMeasurementPayloadV3(bytes) {
     "latitude": readInt32(bytes, 18) / 1000000,
     "level1": bytes[22],
     "level2": bytes[23],
+    "mainPowerOn": status & 0x01,
     "alarm1": status & 0x01,
     "environmentPresent": (status & 0x04) !== 0,
     "vedirectPresent": (status & 0x08) !== 0,

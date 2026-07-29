@@ -36,6 +36,7 @@ assert.strictEqual(dynamicResult.voltage, 12.75);
 assert.strictEqual(dynamicResult.level1, 75.25);
 assert.strictEqual(dynamicResult.level2, 40.5);
 assert.strictEqual(dynamicResult.alarm1, 1);
+assert.strictEqual(dynamicResult.mainPowerOn, 1);
 assert.strictEqual(dynamicResult.relay, 2);
 assert.strictEqual(dynamicResult.batteryCapacity, 88);
 assert.strictEqual(dynamicResult.tank1Adc, 3621);
@@ -83,6 +84,8 @@ assert.strictEqual(schema3Result.standbyCause, 'Sleep standby');
 assert.strictEqual(schema3Result.wakeupCause, 'Wakeup Timer');
 assert.strictEqual(schema3Result.standbyEpoch, 1781517600);
 assert.strictEqual(schema3Result.wakeupEpoch, 1781518500);
+assert.strictEqual(schema3Result.mainPowerOn, 1);
+assert.strictEqual(schema3Result.alarm1, schema3Result.mainPowerOn);
 
 const device = new Array(34).fill(0);
 device[0] = 1;

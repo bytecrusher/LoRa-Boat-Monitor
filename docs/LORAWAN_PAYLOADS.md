@@ -24,7 +24,7 @@ backward compatible with the previous 33-byte and 50-byte payloads.
 | 14-17 | longitude | degrees x 1,000,000, signed |
 | 18-21 | latitude | degrees x 1,000,000, signed |
 | 22-23 | tank 1 and tank 2 level | percent |
-| 24 | status flags | alarm bit 0, BME bit 2, VE.Direct bit 3, relay bits 4-5, GPS fix bit 6, WakeupLog bit 7 |
+| 24 | status flags | main-power-on bit 0 (legacy name `alarm1`), BME bit 2, VE.Direct bit 3, relay bits 4-5, GPS fix bit 6, WakeupLog bit 7 |
 | 25 | battery capacity | percent |
 | 26-29 | tank 1 and tank 2 raw ADC | unsigned, little endian |
 | 30-33 | GPS speed and course | knots/degrees x 100 |
@@ -93,6 +93,9 @@ keeps the two priority modes symmetric and avoids duplicate measurement rows.
   unchanged.
 - MDS accepts `payloadType=measurements` and `payloadSchema=3` for FPort 1 and
   maps a valid event to `WakeupStan/WakeupLog` with transmission path `2`.
+- Status bit 0 is exposed as `mainPowerOn`: `1` means the battery main switch
+  supplies 12 V and the device stays always on; `0` means sleep/wakeup mode is
+  allowed. The decoder also emits `alarm1` as a temporary compatibility alias.
 - MDS accepts `payloadType=deviceConfig` for FPort 2 and updates board metadata
   without creating zero-valued sensor rows.
 - Schema 2 (50 bytes) and legacy 33-byte FPort 1 packets remain decodable.

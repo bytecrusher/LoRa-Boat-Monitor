@@ -154,9 +154,10 @@ void registerPageRoutes() {
         const AsyncWebParameter* p = request->getParam(i);
         if (p->name() == "data") {
           inputMessage = p->value();
-          if (inputMessage == "alarm1") {
-            DebugPrintln(3, "getdata param = alarm1");
-            data["alarm1"] = alarm1;
+          if (inputMessage == "mainPowerOn" || inputMessage == "alarm1") {
+            DebugPrintln(3, "getdata param = mainPowerOn");
+            data["mainPowerOn"] = mainPowerOn;
+            data["alarm1"] = mainPowerOn;
           }
           if (inputMessage == "Tank1") {
             data["Tank1"] = String(tank1p);

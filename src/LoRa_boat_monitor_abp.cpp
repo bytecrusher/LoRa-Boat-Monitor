@@ -903,29 +903,29 @@ void configureAnalogInputs() {
   analogRead(TANK2_IN);
 }
 
-bool isStandbyControlActive() {
+bool isMainPowerInputActive() {
   uint8_t lowSamples = 0;
   for (uint8_t sample = 0; sample < 3; ++sample) {
-    if (digitalRead(alarmPin) == LOW) lowSamples++;
+    if (digitalRead(mainPowerInputPin) == LOW) lowSamples++;
     delay(10);
   }
   return lowSamples >= 2;
 }
 
-void resumeAlwaysOnFromStandby(const String &reason) {
+void cancelSleepForMainPower(const String &reason) {
   rtc_gpio_deinit(GPIO_NUM_39);
-  pinMode(alarmPin, INPUT);
-  alarm1 = true;
-  writeDisplayStatusScreen("Standby cancelled", reason, "12V detected", "Staying on");
-  DebugPrintln(2, "Standby cancelled: " + reason + "; GPIO 39 is LOW (12V active)");
+  pinMode(mainPowerInputPin, INPUT);
+  mainPowerOn = true;
+  writeDisplayStatusScreen("Main power on", reason, "12 V detected", "Always on");
+  DebugPrintln(2, "Sleep cancelled: " + reason + "; Main Power Input GPIO39 is LOW (12 V present)");
   delay(1200);
 }
 
 bool prepareForStandbySleep() {
   DebugPrintln(3, "Prepare standby sleep");
 
-  if (isStandbyControlActive()) {
-    resumeAlwaysOnFromStandby("Input active");
+  if (isMainPowerInputActive()) {
+    cancelSleepForMainPower("Main switch on");
     return false;
   }
 
@@ -936,8 +936,8 @@ bool prepareForStandbySleep() {
                            suppressStandbyExtWakeForNextSleep ? "Timer wake only" : "No pending tasks");
   delay(2200);
 
-  if (isStandbyControlActive()) {
-    resumeAlwaysOnFromStandby("Changed before sleep");
+  if (isMainPowerInputActive()) {
+    cancelSleepForMainPower("Changed before sleep");
     return false;
   }
 
@@ -972,12 +972,12 @@ bool prepareForStandbySleep() {
                       ", rtcInit=" + String(rtcInitResult) +
                       ", rtcDirection=" + String(rtcDirectionResult) +
                       ", ext0=" + String(extWakeResult));
-    resumeAlwaysOnFromStandby("Wake source error");
+    cancelSleepForMainPower("Wake source error");
     return false;
   }
 
   if (enableExternalWake && rtc_gpio_get_level(GPIO_NUM_39) == LOW) {
-    resumeAlwaysOnFromStandby("Active while arming");
+    cancelSleepForMainPower("Active while arming");
     return false;
   }
 
@@ -985,7 +985,7 @@ bool prepareForStandbySleep() {
     DebugPrintln(3, "Standby wake sources armed: GPIO39 LOW (12V) or timer " +
                       String(max(1, actconf.standbySleepDuration)) + " min");
   } else {
-    DebugPrintln(2, "Standby input noise guard active: EXT0 disabled for this sleep; timer remains armed for " +
+    DebugPrintln(2, "Main Power Input noise guard active: EXT0 disabled for this sleep; timer remains armed for " +
                       String(max(1, actconf.standbySleepDuration)) + " min");
   }
 
@@ -2633,7 +2633,7 @@ void setup() {
   //##### Pin Settings #####
   pinMode(ledPin, OUTPUT);          // LED Pin output
   pinMode(relayPin, OUTPUT);        // Relay Pin output
-  pinMode(alarmPin, INPUT);         // Alarm Pin input (external circuit provides the level)
+  pinMode(mainPowerInputPin, INPUT); // Main power input (active LOW through optocoupler)
   configureAnalogInputs();
 
   //##### Start 1Wire sensors #####
@@ -2725,15 +2725,15 @@ void setup() {
   // The RTC wake configuration is armed again right before deep sleep.
   rtc_gpio_deinit(GPIO_NUM_39);
 
-  readValues(actconf);     // initial read after boot, to get the status of alarm pin.
-  if (pendingWakeReasonCode == ESP_SLEEP_WAKEUP_EXT0 && !alarm1) {
+  readValues(actconf);     // Initial read after boot to determine the main power mode.
+  if (pendingWakeReasonCode == ESP_SLEEP_WAKEUP_EXT0 && !mainPowerOn) {
     suppressStandbyExtWakeForNextSleep = true;
     DebugPrintln(1, "Ignoring spurious EXT0 wake: GPIO39 is stable HIGH after boot; next sleep uses timer wake only");
     writeDisplayStatusScreen("Standby wake", "Input noise detected", "GPIO39 is HIGH", "Timer-only next sleep");
-  } else if (pendingWakeReasonCode == ESP_SLEEP_WAKEUP_TIMER || alarm1) {
+  } else if (pendingWakeReasonCode == ESP_SLEEP_WAKEUP_TIMER || mainPowerOn) {
     suppressStandbyExtWakeForNextSleep = false;
   }
-  DebugPrintln(3, "Standby input GPIO " + String(alarmPin) + " raw: " + String(digitalRead(alarmPin) == LOW ? "LOW" : "HIGH") + ", state: " + String(alarm1 ? "Active" : "Inactive") + " (active LOW)");
+  DebugPrintln(3, "Main power input GPIO " + String(mainPowerInputPin) + " raw: " + String(digitalRead(mainPowerInputPin) == LOW ? "LOW" : "HIGH") + ", mode: " + String(mainPowerOn ? "Always on" : "Sleep/wakeup") + " (12 V is active LOW)");
   DebugPrintln(3, "MDS upload config: SendDataViaWifi=" + String(actconf.SendDataViaWifi) +
                     ", url=" + String(strlen(actconf.MdsUrl) > 0 ? "set" : "missing") +
                     ", apiKey=" + String(strlen(actconf.MdsApiKey) > 0 ? "set" : "missing") +
@@ -2792,11 +2792,11 @@ void loop() {
     return;
   }
 
-  if ((alarm1 == true) || (String(actconf.standbyMode) == "Off")) {
+  if (mainPowerOn || String(actconf.standbyMode) == "Off") {
     state1();
   }
 
-  if ((alarm1 == false) && (String(actconf.standbyMode) == "On")) {
+  if (!mainPowerOn && String(actconf.standbyMode) == "On") {
     if (millis() < standbySleepBlockedUntilMillis && hasActiveStandbyKeepAwakeWork()) {
       state1();
     } else {

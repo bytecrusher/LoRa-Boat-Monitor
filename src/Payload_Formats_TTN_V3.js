@@ -47,7 +47,8 @@ function decodeUplink(input) {
   data.position = {"value": 0, context:{"lat": latitude, "lng": longitude}};
   data.level1 = readUint16(input.bytes, 22) / 100;
   data.level2 = readUint16(input.bytes, 24) / 100;
-  data.alarm1 = input.bytes[26] & 0x01;
+  data.mainPowerOn = input.bytes[26] & 0x01;
+  data.alarm1 = data.mainPowerOn; // Legacy alias for existing TTN/MDS integrations.
   data.environmentPresent = (input.bytes[26] & 0x04) !== 0;
   data.vedirectPresent = (input.bytes[26] & 0x08) !== 0;
   data.relay = (input.bytes[26] >> 4) & 0x03;
@@ -106,6 +107,7 @@ function decodeMeasurementPayloadV3(bytes) {
     position: { value: 0, context: { lat: latitude, lng: longitude } },
     level1: bytes[22],
     level2: bytes[23],
+    mainPowerOn: status & 0x01,
     alarm1: status & 0x01,
     environmentPresent: (status & 0x04) !== 0,
     vedirectPresent: (status & 0x08) !== 0,

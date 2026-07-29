@@ -70,7 +70,7 @@ String sendXDR3(int sendmode){
   NMEAXdr3 = "IIXDR,";
   NMEAXdr3 = NMEAXdr3 + "L," + String(tank1p) + ",P,Water,";
   NMEAXdr3 = NMEAXdr3 + "L," + String(tank2p) + ",P,Fuel,";
-  NMEAXdr3 = NMEAXdr3 + "I," + String(alarm1) + ",B,Alarm,";
+  NMEAXdr3 = NMEAXdr3 + "I," + String(mainPowerOn) + ",B,MainPower,";
   NMEAXdr3 = NMEAXdr3 + "O," + String(actconf.relay) + ",B,Relay";
  
   // Build CheckSum

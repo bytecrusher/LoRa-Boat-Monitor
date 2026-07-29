@@ -45,10 +45,14 @@ function setSensorInfo(myObj) {
   setElementValue('tank1adc', myObj.Device.MeasuringValues.Tank1adc.Value);
   setElementValue('tank2', myObj.Device.MeasuringValues.Tank2Voltage.Value);
   setElementValue('tank2adc', myObj.Device.MeasuringValues.Tank2adc.Value);
-  setElementValue('alarm', myObj.Device.MeasuringValues.Alarm.Value);
-  setElementValue('standbyInputState', myObj.Device.MeasuringValues.StandbyInputState.Value);
-  setElementValue('standbyInputLevel', myObj.Device.MeasuringValues.StandbyInputLevel.Value);
-  setElementValue('standbyInputPin', myObj.Device.MeasuringValues.StandbyInputPin.Value);
+  var mainPowerOn = myObj.Device.MeasuringValues.MainPowerOn || myObj.Device.MeasuringValues.Alarm;
+  var mainPowerMode = myObj.Device.MeasuringValues.MainPowerMode || myObj.Device.MeasuringValues.StandbyInputState;
+  var mainPowerLevel = myObj.Device.MeasuringValues.MainPowerInputLevel || myObj.Device.MeasuringValues.StandbyInputLevel;
+  var mainPowerPin = myObj.Device.MeasuringValues.MainPowerInputPin || myObj.Device.MeasuringValues.StandbyInputPin;
+  setElementValue('alarm', mainPowerOn.Value);
+  setElementValue('standbyInputState', mainPowerMode.Value);
+  setElementValue('standbyInputLevel', mainPowerLevel.Value);
+  setElementValue('standbyInputPin', mainPowerPin.Value);
   setElementValue('relay', myObj.Device.MeasuringValues.Relay.Value);
   setElementValue('rtimer', myObj.Device.MeasuringValues.RelayTimer.Value);
   setElementValue('envSensor', myObj.Device.MeasuringValues.EnvSensor.Value);

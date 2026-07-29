@@ -1501,11 +1501,11 @@ void readValues(const configData &myactconf) {
       DebugPrintln(3, " %");
     }
 
-    // Digital input 12V activ via opto coupler
-    alarm1 = !digitalRead(alarmPin);  // Invert for easer logic.
+    // The optocoupler pulls GPIO39 LOW while the battery main switch supplies 12 V.
+    mainPowerOn = digitalRead(mainPowerInputPin) == LOW;
     if (debugAlarm1) {
-      DebugPrint(3, "Alarm = ");
-      DebugPrint(3, alarm1);
+      DebugPrint(3, "Main power input = ");
+      DebugPrint(3, mainPowerOn);
       DebugPrintln(3, "  ");
     }
 
@@ -1592,7 +1592,7 @@ void writeDisplay() {
   char tnk2[10];
   dtostrf(tank2p, 5, 1, tnk2);
   char alm[10];
-  dtostrf(int(alarm1), 5, 0, alm);
+  dtostrf(int(mainPowerOn), 5, 0, alm);
   char rel[10];
   dtostrf(int(actconf.relay), 5, 0, rel);
   
@@ -1623,7 +1623,7 @@ void writeDisplayByMode(const configData &myactconf) {
     const String mdsState = String(myactconf.SendDataViaWifi) == "Yes" ? "MDS enabled" : "MDS disabled";
     const String loraMode = "LoRa " + String(myactconf.loraOperationMode);
     const String priority = "Prio " + String(myactconf.transmitPriority);
-    const String standbyLevel = digitalRead(alarmPin) == LOW ? "GPIO39 LOW" : "GPIO39 HIGH";
+    const String standbyLevel = digitalRead(mainPowerInputPin) == LOW ? "GPIO39 LOW" : "GPIO39 HIGH";
     const String batteryLine = "Bat " + String(voltage, 2) + "V " + String(capacity, 0) + "%";
     const String webLine = "Web " + String(myactconf.fversion);
     writeDisplayStatusScreen("Device status",

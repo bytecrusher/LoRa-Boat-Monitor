@@ -125,9 +125,11 @@ function updateBatteryGauge(voltage, capacity, rawAdc) {
 }
 
 function updateSensorIndicators(myObj) {
-    toggleClass('alarm', 'led-red', myObj.Device.MeasuringValues.Alarm.Value != '0');
+    var mainPowerOn = myObj.Device.MeasuringValues.MainPowerOn || myObj.Device.MeasuringValues.Alarm;
+    var mainPowerMode = myObj.Device.MeasuringValues.MainPowerMode || myObj.Device.MeasuringValues.StandbyInputState;
+    toggleClass('alarm', 'led-green', mainPowerOn.Value != '0');
     toggleClass('relay', 'led-green', myObj.Device.MeasuringValues.Relay.Value != '0');
-    toggleClass('standbyInputLed', 'led-red', myObj.Device.MeasuringValues.StandbyInputState.Value === 'Active');
+    toggleClass('standbyInputLed', 'led-green', mainPowerMode.Value === 'Always on');
 }
 
 function updateEnvironmentValues(myObj) {
@@ -144,6 +146,9 @@ function updateEnvironmentValues(myObj) {
 }
 
 function updateSensorPage(myObj) {
+    var mainPowerMode = myObj.Device.MeasuringValues.MainPowerMode || myObj.Device.MeasuringValues.StandbyInputState;
+    var mainPowerPin = myObj.Device.MeasuringValues.MainPowerInputPin || myObj.Device.MeasuringValues.StandbyInputPin;
+    var mainPowerLevel = myObj.Device.MeasuringValues.MainPowerInputLevel || myObj.Device.MeasuringValues.StandbyInputLevel;
     setElementValue('quality', myObj.Device.NetworkParameter.ConnectionQuality.Value);
     updateEnvironmentValues(myObj);
 
@@ -170,13 +175,13 @@ function updateSensorPage(myObj) {
     setElementValue('tank2adc', myObj.Device.MeasuringValues.Tank2adc.Value);
     setElementValue('rtimer', myObj.Device.MeasuringValues.RelayTimer.Value);
     setElementValue('info', myObj.Device.NetworkParameter.ServerMode == 4 ? '(Demo Mode)' : '');
-    setElementValue('standbyInputState', myObj.Device.MeasuringValues.StandbyInputState.Value);
-    setElementValue('standbyInputPin', myObj.Device.MeasuringValues.StandbyInputPin.Value);
-    setElementValue('standbyInputLevel', myObj.Device.MeasuringValues.StandbyInputLevel.Value);
+    setElementValue('standbyInputState', mainPowerMode.Value);
+    setElementValue('standbyInputPin', mainPowerPin.Value);
+    setElementValue('standbyInputLevel', mainPowerLevel.Value);
     setElementValue('standbyModeDiag', myObj.Device.MeasuringValues.standbyMode.Value);
-    setElementValue('standbyInputStateDiag', myObj.Device.MeasuringValues.StandbyInputState.Value);
-    setElementValue('standbyInputPinDiag', myObj.Device.MeasuringValues.StandbyInputPin.Value);
-    setElementValue('standbyInputLevelDiag', myObj.Device.MeasuringValues.StandbyInputLevel.Value);
+    setElementValue('standbyInputStateDiag', mainPowerMode.Value);
+    setElementValue('standbyInputPinDiag', mainPowerPin.Value);
+    setElementValue('standbyInputLevelDiag', mainPowerLevel.Value);
 
     updateSensorIndicators(myObj);
     updateBatteryGauge(

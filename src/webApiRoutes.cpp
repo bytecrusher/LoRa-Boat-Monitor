@@ -39,9 +39,15 @@ void registerApiRoutes() {
     json["webFilesUpdateActive"] = webFiles.active;
     json["webFilesUpdateMessage"] = webFiles.message;
     json["configStorage"] = "CFG2 A/B";
-    json["standbyInputPin"] = alarmPin;
-    json["standbyInputLevel"] = digitalRead(alarmPin) == LOW ? "LOW" : "HIGH";
-    json["standbyInputState"] = alarm1 ? "Active" : "Inactive";
+    const String mainPowerLevel = digitalRead(mainPowerInputPin) == LOW ? "LOW" : "HIGH";
+    const String mainPowerMode = mainPowerOn ? "Always on" : "Sleep/wakeup";
+    json["mainPowerInputPin"] = mainPowerInputPin;
+    json["mainPowerInputLevel"] = mainPowerLevel;
+    json["mainPowerMode"] = mainPowerMode;
+    // Compatibility aliases for web files from earlier firmware releases.
+    json["standbyInputPin"] = mainPowerInputPin;
+    json["standbyInputLevel"] = mainPowerLevel;
+    json["standbyInputState"] = mainPowerMode;
 
     String responseBody;
     serializeJson(json, responseBody);
@@ -224,16 +230,25 @@ void registerApiRoutes() {
 
     json_Device["Device"]["MeasuringValues"]["Tank2adc"]["Value"] = String(tank2adc);
 
-    json_Device["Device"]["MeasuringValues"]["Alarm"]["Value"] = String(alarm1);
-    json_Device["Device"]["MeasuringValues"]["Alarm"]["Unit"] = "bin";  // TODO: bring into staticdata.json
+    json_Device["Device"]["MeasuringValues"]["MainPowerOn"]["Value"] = String(mainPowerOn);
+    json_Device["Device"]["MeasuringValues"]["MainPowerOn"]["Unit"] = "bool";
 
-    const int standbyInputRawLevel = digitalRead(alarmPin);
-    json_Device["Device"]["MeasuringValues"]["StandbyInputPin"]["Value"] = String(alarmPin);
-    json_Device["Device"]["MeasuringValues"]["StandbyInputPin"]["Unit"] = "GPIO";
-    json_Device["Device"]["MeasuringValues"]["StandbyInputLevel"]["Value"] = standbyInputRawLevel == LOW ? "LOW" : "HIGH";
-    json_Device["Device"]["MeasuringValues"]["StandbyInputLevel"]["Unit"] = "active LOW";
-    json_Device["Device"]["MeasuringValues"]["StandbyInputState"]["Value"] = alarm1 ? "Active" : "Inactive";
-    json_Device["Device"]["MeasuringValues"]["StandbyInputState"]["Unit"] = alarm1 ? "awake/active" : "standby/sleep";
+    const int mainPowerRawLevel = digitalRead(mainPowerInputPin);
+    const String mainPowerLevel = mainPowerRawLevel == LOW ? "LOW" : "HIGH";
+    const String mainPowerMode = mainPowerOn ? "Always on" : "Sleep/wakeup";
+    json_Device["Device"]["MeasuringValues"]["MainPowerInputPin"]["Value"] = String(mainPowerInputPin);
+    json_Device["Device"]["MeasuringValues"]["MainPowerInputPin"]["Unit"] = "GPIO";
+    json_Device["Device"]["MeasuringValues"]["MainPowerInputLevel"]["Value"] = mainPowerLevel;
+    json_Device["Device"]["MeasuringValues"]["MainPowerInputLevel"]["Unit"] = "12 V = LOW";
+    json_Device["Device"]["MeasuringValues"]["MainPowerMode"]["Value"] = mainPowerMode;
+    json_Device["Device"]["MeasuringValues"]["MainPowerMode"]["Unit"] = mainPowerOn ? "12 V present" : "no 12 V";
+
+    // Compatibility aliases keep older web packages operational during an update.
+    json_Device["Device"]["MeasuringValues"]["Alarm"]["Value"] = String(mainPowerOn);
+    json_Device["Device"]["MeasuringValues"]["Alarm"]["Unit"] = "bin";
+    json_Device["Device"]["MeasuringValues"]["StandbyInputPin"] = json_Device["Device"]["MeasuringValues"]["MainPowerInputPin"];
+    json_Device["Device"]["MeasuringValues"]["StandbyInputLevel"] = json_Device["Device"]["MeasuringValues"]["MainPowerInputLevel"];
+    json_Device["Device"]["MeasuringValues"]["StandbyInputState"] = json_Device["Device"]["MeasuringValues"]["MainPowerMode"];
 
     json_Device["Device"]["MeasuringValues"]["Relay"]["Value"] = String(actconf.relay);
     json_Device["Device"]["MeasuringValues"]["Relay"]["Unit"] = "bin";  // TODO: bring into staticdata.json

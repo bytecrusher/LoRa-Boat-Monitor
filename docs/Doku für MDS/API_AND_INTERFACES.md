@@ -105,7 +105,8 @@ Der Code verarbeitet insbesondere:
 
 Aus `decoded_payload` werden aktuell u. a. diese Felder gelesen:
 
-- `alarm1`
+- `mainPowerOn` (`1` = Batterie-Hauptschalter ein / 12 V / dauerhaft an)
+- `alarm1` als veralteter Kompatibilitaetsalias fuer `mainPowerOn`
 - `altitude`
 - `counter`
 - `dewpoint`
@@ -303,6 +304,9 @@ Verhalten bei neuen oder unvollstaendig provisionierten Boards:
 - `board.standbyState` ist optional und beschreibt den aktuellen Zustand explizit
   - erlaubte Werte: `always_online`, `wakeup`, `standby`
   - wenn vorhanden, ist dieses Feld eindeutiger als `standbyEnabled`
+- `board.mainPowerOn` ist optional und beschreibt direkt den Main Power Input:
+  - `true`: Batterie-Hauptschalter ein, 12 V am Eingang, dauerhaft an
+  - `false`: Batterie-Hauptschalter aus, keine 12 V, Sleep/Wakeup-Modus moeglich
 - akzeptierte Werte fuer `board.standbyEnabled` sind `true/false`, `1/0`, `yes/no`, `on/off`, `enabled/disabled`
 - die Alias-Felder `standby_enabled`, `standbyModeEnabled` und `sleepEnabled` werden gleich behandelt
 - `alwaysOnline` wird ebenfalls akzeptiert, aber invertiert interpretiert

@@ -47,8 +47,8 @@ extern float tank2;
 extern int TANK2_IN;
 extern uint16_t tank2adc;
 extern float tank2p;
-extern int alarm1;
-extern int alarmPin;
+extern int mainPowerOn;
+extern int mainPowerInputPin;
 //#define OneWIRE_PIN 23
 extern OneWire DS18B20;
 extern DallasTemperature sensors;

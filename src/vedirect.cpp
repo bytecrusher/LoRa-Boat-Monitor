@@ -6,7 +6,7 @@ extern configData actconf;
 extern float voltage;
 extern float capacity;
 extern float temp1wire;
-extern int alarm1;
+extern int mainPowerOn;
 
 namespace {
 TaskHandle_t veDirectBinaryTaskHandle = nullptr;
@@ -99,7 +99,7 @@ void sendVEdirect(){
   sendsoc = capacity * 10;                            // Actual battery capacity in %
   vedirectOutput += "SOC\t" + String(sendsoc) + "\r\n";// Actual state of charge (battery capacity)
   vedirectOutput += "TTG\t-1\r\n";                    // Time to go in minutes (-1 = unlimited)
-  if(alarm1 == 0){                                    // Read alarm status
+  if(mainPowerOn == 0){                               // Main switch off: process VE.Direct alarm state
     sendalarm = "OFF";
   }
   else{

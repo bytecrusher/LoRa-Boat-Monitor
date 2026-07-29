@@ -228,7 +228,7 @@
                     </div>
                 </div>
                 <div class="row">
-                    <div class="firstColumn">Alarm and Relay Status <span class="settingHint">(sensorType=Digital, v1=alarm, v2=relay, v3=temp1wire)</span></div>
+                    <div class="firstColumn">Power, Relay and Temperature Status <span class="settingHint">(sensorType=Digital, v1=mainPowerOn, v2=relay, v3=temp1wire)</span></div>
                     <div class="secondColumn">
                         <select name='MdsSensorIdStatus' size='1'>
                             <option value='0'>Off</option>
@@ -769,11 +769,11 @@
                 <input class="myToggleButton section-toggle" type="button" value="+" id="btStandbyModeSettingsPage" data-target="StandbyModeSettingsPage"><svg class="settings-section-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 5 14h6l-1 8 9-13h-6z" fill="none" stroke-width="1.8" stroke-linejoin="round"/></svg>Power and Standby
             </h3>
             <div class="collapsible initially-hidden" id="StandbyModeSettingsPage" >
-                <div class="section-note">Power-saving behavior controlled by the Operation Mode Input. When 12 V is present on that input, the device stays always on. Without 12 V, standby/wakeup mode is active when enabled below.</div>
+                <div class="section-note">The Main Power Input mirrors the battery main switch. Switch on (12 V) keeps the device always on; switch off (0 V) allows sleep/wakeup operation when enabled below.</div>
                 <div class="row">
-                    <div class="firstColumn"><span class="labelText">Standby/Wakeup Mode <span class="infoBadge" tabindex="0">i<span class="infoPopover">This enables automatic sleep/wakeup behavior. The Operation Mode Input decides whether sleep is allowed: 12 V keeps the device always on, no 12 V enables standby/wakeup mode.</span></span></span></div>
+                    <div class="firstColumn"><span class="labelText">Sleep/Wakeup Mode <span class="infoBadge" tabindex="0">i<span class="infoPopover">Enables automatic deep-sleep cycles while the battery main switch is off. The Main Power Input overrides this setting whenever 12 V is present and keeps the device always on.</span></span></span></div>
                     <div class="secondColumn">
-                        <select name='standbyMode' size='1' onchange='check_alarmState(event)'>
+                        <select name='standbyMode' size='1' onchange='checkMainPowerMode(event)'>
                             <option value='Off'>Off</option>
                             <option value='On'>On</option>
                         </select>

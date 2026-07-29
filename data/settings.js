@@ -485,18 +485,18 @@ function check_mds_ota_url(iname) {
     }
 }
 
-function check_alarmState(event) {
+function checkMainPowerMode(event) {
     var selectElement = event.target;
     var value = selectElement.value;
     if (value == "On") {
-        requestJson("/getdata?data=alarm1")
+        requestJson("/getdata?data=mainPowerOn")
             .then(function (response) {
-                if (response.alarm1 == "0" || response.alarm1 === 0) {
-                    alert("Standby mode will be saved. Note: the alarm input is currently inactive, so the device may enter deep sleep shortly after saving.");
+                if (response.mainPowerOn == "0" || response.mainPowerOn === 0) {
+                    alert("Sleep/wakeup mode will be saved. The battery main switch is currently off (no 12 V at the Main Power Input), so the device may enter deep sleep shortly after saving.");
                 }
             })
             .catch(function () {
-                alert("Could not verify the alarm input state.");
+                alert("Could not verify the Main Power Input state.");
             });
     }
 }

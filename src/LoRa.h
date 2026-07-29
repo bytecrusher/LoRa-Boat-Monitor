@@ -503,7 +503,7 @@ void buildDynamicLoraPayload() {
   mydata[22] = static_cast<uint8_t>(constrain(lroundf(tank1p), 0L, 100L));
   mydata[23] = static_cast<uint8_t>(constrain(lroundf(tank2p), 0L, 100L));
 
-  uint8_t status = ((actconf.relay & 0x03) << 4) | (alarm1 & 0x01);
+  uint8_t status = ((actconf.relay & 0x03) << 4) | (mainPowerOn & 0x01);
   if (strcmp(actconf.envSensor, "BME280") == 0) status |= 0x04;
   if (strcmp(actconf.envSensor, "VEdirect-Read") == 0) status |= 0x08;
   if (gpsStatus == "A") status |= 0x40;

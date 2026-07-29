@@ -55,11 +55,14 @@ function updateIndexPage(myObj) {
 
 function updateIndexLiveData(myObj) {
     var values = myObj.Device.MeasuringValues || {};
+    var mainPowerMode = values.MainPowerMode || values.StandbyInputState;
+    var mainPowerPin = values.MainPowerInputPin || values.StandbyInputPin;
+    var mainPowerLevel = values.MainPowerInputLevel || values.StandbyInputLevel;
     setText('dashboardBatteryVoltage', values.BatteryVoltage ? values.BatteryVoltage.Value : '-');
     setText('dashboardBatteryCapacity', values.BatteryCapacity ? values.BatteryCapacity.Value : '-');
-    setText('dashboardStandbyState', values.StandbyInputState ? values.StandbyInputState.Value : '-');
-    setText('dashboardStandbyPin', values.StandbyInputPin ? values.StandbyInputPin.Value : '-');
-    setText('dashboardStandbyLevel', values.StandbyInputLevel ? values.StandbyInputLevel.Value : '-');
+    setText('dashboardStandbyState', mainPowerMode ? mainPowerMode.Value : '-');
+    setText('dashboardStandbyPin', mainPowerPin ? mainPowerPin.Value : '-');
+    setText('dashboardStandbyLevel', mainPowerLevel ? mainPowerLevel.Value : '-');
     setText('dashboardMdsState', values.SendDataViaWifi && values.SendDataViaWifi.Value === 'Yes' ? 'Enabled' : 'Disabled');
 }
 

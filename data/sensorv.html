@@ -257,17 +257,17 @@
         <td class='muted-text'>Configured mode</td>
       </tr>
       <tr>
-        <td>Operation Mode Input Raw</td>
+        <td>Main Power Input Raw</td>
         <td>GPIO <data id='standbyInputPinDiag'></data>: <data id='standbyInputLevelDiag'></data></td>
         <td class='muted-text'>Physical input level</td>
       </tr>
       <tr>
         <td>Interpreted State</td>
         <td><data id='standbyInputStateDiag'></data></td>
-        <td class='muted-text'>12 V keeps the device always on</td>
+        <td class='muted-text'>Main switch on (12 V) keeps the device always on</td>
       </tr>
     </table>
-    <p class="diagnostics-note">Expected behavior: 12 V on the Operation Mode Input keeps the device always on. Without 12 V, standby/wakeup mode is active when standby mode is enabled.</p>
+    <p class="diagnostics-note">Expected behavior: main switch on (12 V, GPIO LOW) keeps the device always on. Main switch off (0 V, GPIO HIGH) enables sleep/wakeup mode when configured.</p>
   </div><br>
   <hr>
 
@@ -422,7 +422,7 @@
           </div>
 
         </td>
-        <td>Alarm:</td>
+        <td>Main Power On:</td>
         <td><div id='alarm' class="led"></div></td>
         <td></td>
       </tr>
@@ -442,12 +442,12 @@
             </svg>
           </div>
         </td>
-        <td>Operation Mode Input:</td>
+        <td>Main Power Input:</td>
         <td>
           <div id='standbyInputLed' class="led"></div>
           <span id='standbyInputState'>-</span><br>
           GPIO <data id='standbyInputPin'></data>: <data id='standbyInputLevel'></data>
-          <span class='muted-text'>(12 V = always on)</span>
+          <span class='muted-text'>(12 V = always on, 0 V = sleep/wakeup)</span>
         </td>
         <td></td>
       </tr>

@@ -114,8 +114,8 @@ bool isStandbyEnabledForMds(const configData &config)
       wakeupCause == ESP_SLEEP_WAKEUP_TOUCHPAD ||
       wakeupCause == ESP_SLEEP_WAKEUP_ULP;
 
-  const bool standbyInputInactive = !alarm1;
-  return standbyInputInactive || wakeupCycleActive || pendingMdsDeviceEventStored;
+  const bool sleepWakeupModeActive = !mainPowerOn;
+  return sleepWakeupModeActive || wakeupCycleActive || pendingMdsDeviceEventStored;
 }
 
 String getStandbyStateForMds(const configData &config)
@@ -124,8 +124,8 @@ String getStandbyStateForMds(const configData &config)
     return "always_online";
   }
 
-  // The hardware input is high when the device should stay permanently online.
-  if (alarm1) {
+  // The logical input is true when the optocoupler pulls GPIO39 LOW with 12 V present.
+  if (mainPowerOn) {
     return "always_online";
   }
 
@@ -140,6 +140,7 @@ void addMdsBoardMetadata(JsonObject &board, const configData &config)
   board["firmwareVersion"] = String(config.fversion);
   board["standbyEnabled"] = isStandbyEnabledForMds(config);
   board["standbyState"] = getStandbyStateForMds(config);
+  board["mainPowerOn"] = mainPowerOn != 0;
 }
 
 bool getLittleFsFileSha256(const String &path, String &sha256) {
@@ -1260,7 +1261,7 @@ bool sendToMDS(const configData &actconf)
   const char* transmissionPath = "1";
   addMdsSensorRecord(sensors, actconf.MdsSensorIdBattery, "ADC", "Battery", mdsDate, mdsTime, transmissionPath, voltage, capacity, 0, 0);
   addMdsSensorRecord(sensors, actconf.MdsSensorIdTanks, "ADC", "Tanks", mdsDate, mdsTime, transmissionPath, tank1p, tank1adc, tank2p, tank2adc);
-  addMdsSensorRecord(sensors, actconf.MdsSensorIdStatus, "Digital", "Status", mdsDate, mdsTime, transmissionPath, alarm1, actconf.relay, temp1wire, 0);
+  addMdsSensorRecord(sensors, actconf.MdsSensorIdStatus, "Digital", "Status", mdsDate, mdsTime, transmissionPath, mainPowerOn, actconf.relay, temp1wire, 0);
   addMdsSensorRecord(sensors, actconf.MdsSensorIdGps, "GPS", "GPS", mdsDate, mdsTime, transmissionPath, latitude, longitude, gpsspeed, course);
 
   if (String(actconf.envSensor) == "BME280") {

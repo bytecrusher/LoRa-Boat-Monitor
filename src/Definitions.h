@@ -47,7 +47,7 @@ float tank2p;                       // Tank 2 level [%]
 uint16_t tank1adc;                        // Tank 1 level [V]
 uint16_t tank2adc;                        // Tank 1 level [V]
 
-int alarm1;                         // Digital Alarm input
+int mainPowerOn;                    // 12 V at GPIO39: main battery switch on / always-on mode
 int relaytimer = 0;                 // Relay timer for ontime n x 5min
 float temp1wire = 0.0;              // Temperature 1Wire in [°C]
 float temp1wireold = 0.0;           // Old temperature 1Wire in [°C]
@@ -96,7 +96,7 @@ int ledPin = 25;        // Pin GPIO25, shared board LED / relay signal, high act
 int relayPin = 25;      // Pin GPIO25, shared board LED / relay signal, high active
 
 // Input Pins
-int alarmPin = 39;      // Pin GPI39, Alarm input
+int mainPowerInputPin = 39; // GPIO39 via optocoupler, active LOW when 12 V is present
 
 // 1Wire definitions
 #define OneWIRE_PIN 23        // 1Wire on pin GPIO23
