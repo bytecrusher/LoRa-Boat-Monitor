@@ -147,7 +147,7 @@ bool migrateConfigWithExpandedFirmwareVersion(const uint8_t *storedConfig, uint1
   const size_t newTailOffset = firmwareOffset + newFirmwareVersionSize;
 
   if (newFirmwareVersionSize != oldFirmwareVersionSize + 1 ||
-      storedLength != sizeof(configData) - 1 ||
+      storedLength != offsetof(configData, updateChannel) - 1 ||
       oldTailOffset > storedLength ||
       newTailOffset > sizeof(configData)) {
     return false;
@@ -174,8 +174,7 @@ bool migrateConfigWithExpandedFirmwareVersion(const uint8_t *storedConfig, uint1
 }
 
 bool migrateConfigWithAppendedUpdateChannel(const uint8_t *storedConfig, uint16_t storedLength, configData &cfg) {
-  constexpr size_t appendedFieldSize = sizeof(configData::updateChannel);
-  if (storedLength != sizeof(configData) - appendedFieldSize) {
+  if (storedLength != offsetof(configData, updateChannel)) {
     return false;
   }
 
@@ -191,6 +190,27 @@ bool migrateConfigWithAppendedUpdateChannel(const uint8_t *storedConfig, uint16_
   cfg.valid = defconf.valid;
   strncpy(cfg.updateChannel, defconf.updateChannel, sizeof(cfg.updateChannel) - 1);
   cfg.updateChannel[sizeof(cfg.updateChannel) - 1] = '\0';
+  return true;
+}
+
+bool migrateConfigWithSensorMetadata(const uint8_t *storedConfig, uint16_t storedLength, configData &cfg) {
+  const size_t sensorMetadataOffset = offsetof(configData, MdsSensorIdTemperature);
+  if (storedLength != sensorMetadataOffset) {
+    return false;
+  }
+
+  int storedValid = 0;
+  memcpy(&storedValid, storedConfig, sizeof(storedValid));
+  if (storedValid != 19) {
+    return false;
+  }
+
+  cfg = configData();
+  memcpy(reinterpret_cast<uint8_t*>(&cfg), storedConfig, storedLength);
+  cfg.valid = defconf.valid;
+  cfg.MdsSensorIdTemperature = cfg.MdsSensorIdStatus;
+  cfg.MdsSensorNamesDirty = 0;
+  cfg.MdsSensorMetadataHash = 0;
   return true;
 }
 
@@ -217,7 +237,9 @@ bool readMigratableConfigSlot(size_t slotIndex, configData &cfg, uint32_t &seque
     return false;
   }
 
-  if (!migrateConfigWithAppendedUpdateChannel(storedConfig, header.length, cfg)) {
+  if (!migrateConfigWithSensorMetadata(storedConfig, header.length, cfg) &&
+      !migrateConfigWithAppendedUpdateChannel(storedConfig, header.length, cfg) &&
+      !migrateConfigWithExpandedFirmwareVersion(storedConfig, header.length, cfg)) {
     return false;
   }
   sequence = header.sequence;

@@ -6,7 +6,7 @@
 
 bool DownloadFilesFromWeb();
 void recoverInterruptedWebFilesUpdate();
-bool sendToMDS(const configData &actconf);
+bool sendToMDS(configData &actconf);
 bool sendMdsDeviceEvent(const configData &actconf, const char *sensorName);
 bool sendMdsOtaStatus(const configData &actconf, const char *phase, int percent, const String &targetVersion, const String &message);
 String getLastMdsStatus();

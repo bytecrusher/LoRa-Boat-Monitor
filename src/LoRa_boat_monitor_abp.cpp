@@ -2332,12 +2332,41 @@ void sanitizeNewConfigFields() {
   changed = sanitizeConfigRange(actconf.MdsSensorIdBattery, defconf.MdsSensorIdBattery, 0, 1) || changed;
   changed = sanitizeConfigRange(actconf.MdsSensorIdTanks, defconf.MdsSensorIdTanks, 0, 1) || changed;
   changed = sanitizeConfigRange(actconf.MdsSensorIdStatus, defconf.MdsSensorIdStatus, 0, 1) || changed;
+  changed = sanitizeConfigRange(actconf.MdsSensorIdTemperature, defconf.MdsSensorIdTemperature, 0, 1) || changed;
   changed = sanitizeConfigRange(actconf.MdsSensorIdGps, defconf.MdsSensorIdGps, 0, 1) || changed;
   changed = sanitizeConfigRange(actconf.MdsSensorIdEnv, defconf.MdsSensorIdEnv, 0, 1) || changed;
   changed = sanitizeConfigRange(actconf.MdsSensorIdDewpoint, defconf.MdsSensorIdDewpoint, 0, 1) || changed;
   changed = sanitizeConfigRange(actconf.MdsSensorIdVedirect, defconf.MdsSensorIdVedirect, 0, 1) || changed;
   changed = sanitizeConfigRange(actconf.cssStyle, defconf.cssStyle, 0, 2) || changed;
   changed = sanitizeConfigRange(actconf.OledDisplayRotation, defconf.OledDisplayRotation, 0, 1) || changed;
+
+  struct SensorNameField {
+    char *value;
+    size_t length;
+    const char *fallback;
+  };
+  SensorNameField sensorNames[] = {
+    {actconf.MdsSensorNameBattery, sizeof(actconf.MdsSensorNameBattery), defconf.MdsSensorNameBattery},
+    {actconf.MdsSensorNameTanks, sizeof(actconf.MdsSensorNameTanks), defconf.MdsSensorNameTanks},
+    {actconf.MdsSensorNameStatus, sizeof(actconf.MdsSensorNameStatus), defconf.MdsSensorNameStatus},
+    {actconf.MdsSensorNameTemperature, sizeof(actconf.MdsSensorNameTemperature), defconf.MdsSensorNameTemperature},
+    {actconf.MdsSensorNameGps, sizeof(actconf.MdsSensorNameGps), defconf.MdsSensorNameGps},
+    {actconf.MdsSensorNameEnv, sizeof(actconf.MdsSensorNameEnv), defconf.MdsSensorNameEnv},
+    {actconf.MdsSensorNameDewpoint, sizeof(actconf.MdsSensorNameDewpoint), defconf.MdsSensorNameDewpoint},
+    {actconf.MdsSensorNameVedirect, sizeof(actconf.MdsSensorNameVedirect), defconf.MdsSensorNameVedirect}
+  };
+  for (SensorNameField &sensorName : sensorNames) {
+    if (!isPrintableConfigString(sensorName.value, sensorName.length) || sensorName.value[0] == '\0') {
+      strncpy(sensorName.value, sensorName.fallback, sensorName.length - 1);
+      sensorName.value[sensorName.length - 1] = '\0';
+      actconf.MdsSensorMetadataHash = 0;
+      changed = true;
+    }
+  }
+  if (actconf.MdsSensorNamesDirty > 1) {
+    actconf.MdsSensorNamesDirty = 0;
+    changed = true;
+  }
 
   if (sanitizeBatteryCalibration(actconf, defconf)) {
     changed = true;

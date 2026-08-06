@@ -28,6 +28,7 @@ extern char pendingMdsStandbyEventCause[24];
 extern char pendingMdsWakeupEventCause[24];
 
 String lastMdsStatus = "";
+RTC_DATA_ATTR time_t lastMdsSensorMetadataSyncEpoch = 0;
 
 String getLastMdsStatus()
 {
@@ -638,7 +639,17 @@ String formatMdsDateTime(time_t timestamp)
   return String(buffer);
 }
 
-void addMdsSensorRecord(JsonArray &sensors, int enabledMarker, const char *sensorType, const char *sensorName,
+String buildMdsSensorAddress(const char *sensorKey)
+{
+  String mac = WiFi.macAddress();
+  mac.replace(":", "");
+  mac.replace("-", "");
+  mac.toLowerCase();
+  return "bm" + mac + String(sensorKey == nullptr ? "" : sensorKey);
+}
+
+void addMdsSensorRecord(JsonArray &sensors, int enabledMarker, const char *sensorKey,
+                        const char *sensorType, const char *sensorName, bool metadataReady,
                         const char *dateValue, const char *timeValue, const char *transmissionPath,
                         float value1, float value2, float value3, float value4)
 {
@@ -650,7 +661,9 @@ void addMdsSensorRecord(JsonArray &sensors, int enabledMarker, const char *senso
   sensor["sensorType"] = sensorType;
   sensor["type"] = sensorType;
 
-  if (sensorName != nullptr && sensorName[0] != '\0') {
+  if (metadataReady) {
+    sensor["sensorAddress"] = buildMdsSensorAddress(sensorKey);
+  } else if (sensorName != nullptr && sensorName[0] != '\0') {
     sensor["sensorName"] = sensorName;
     sensor["name"] = sensorName;
   }
@@ -662,6 +675,159 @@ void addMdsSensorRecord(JsonArray &sensors, int enabledMarker, const char *senso
   sensor["date"] = dateValue;
   sensor["time"] = timeValue;
   sensor["transmissionPath"] = transmissionPath;
+}
+
+String buildMdsSensorMetadataUrl(const configData &config)
+{
+  String url = normalizeSecureUrl(String(config.MdsUrl));
+  const int queryStart = url.indexOf('?');
+  if (queryStart >= 0) {
+    url.remove(queryStart);
+  }
+  const int pathEnd = url.lastIndexOf('/');
+  if (pathEnd < 8) {
+    return "";
+  }
+  return url.substring(0, pathEnd + 1) + "sensormetadata.php";
+}
+
+String metadataHashString(uint32_t hash)
+{
+  char buffer[9];
+  snprintf(buffer, sizeof(buffer), "%08lx", static_cast<unsigned long>(hash));
+  return String(buffer);
+}
+
+bool copyMetadataName(JsonObjectConst sensor, const char *expectedKey, char *target, size_t targetSize)
+{
+  if (String(sensor["key"] | "") != expectedKey || target == nullptr || targetSize == 0) {
+    return false;
+  }
+  String name = sensor["name"] | "";
+  name.trim();
+  if (name.length() == 0 || name.length() >= targetSize) {
+    return false;
+  }
+  for (size_t i = 0; i < name.length(); ++i) {
+    if (name[i] < 32 || name[i] > 126) {
+      return false;
+    }
+  }
+  if (name == String(target)) {
+    return false;
+  }
+  name.toCharArray(target, targetSize);
+  return true;
+}
+
+bool syncMdsSensorMetadata(configData &config)
+{
+  static bool attemptedThisBoot = false;
+  static unsigned long lastAttemptMillis = 0;
+  const unsigned long now = millis();
+  const time_t currentEpoch = time(nullptr);
+  if (config.MdsSensorNamesDirty == 0 && config.MdsSensorMetadataHash != 0 &&
+      currentEpoch > 1700000000 && lastMdsSensorMetadataSyncEpoch > 0 &&
+      currentEpoch - lastMdsSensorMetadataSyncEpoch < 900) {
+    return true;
+  }
+  if (attemptedThisBoot && config.MdsSensorNamesDirty == 0 && now - lastAttemptMillis < 900000UL) {
+    return config.MdsSensorMetadataHash != 0;
+  }
+  attemptedThisBoot = true;
+  lastAttemptMillis = now;
+
+  if (WiFi.status() != WL_CONNECTED || !ensureMdsSystemTime()) {
+    return false;
+  }
+  const String metadataUrl = buildMdsSensorMetadataUrl(config);
+  if (!metadataUrl.startsWith("https://")) {
+    DebugPrintln(2, "MDS sensor metadata endpoint could not be derived");
+    return false;
+  }
+
+  JsonDocument request;
+  JsonObject board = request["board"].to<JsonObject>();
+  addMdsBoardMetadata(board, config);
+  request["metadataHash"] = metadataHashString(config.MdsSensorMetadataHash);
+  request["pushNames"] = config.MdsSensorNamesDirty != 0;
+
+  if (config.MdsSensorMetadataHash == 0 || config.MdsSensorNamesDirty != 0) {
+    JsonArray definitions = request["sensors"].to<JsonArray>();
+    auto addDefinition = [&](int enabled, const char *key, const char *type, const char *name) {
+      if (enabled <= 0) return;
+      JsonObject definition = definitions.add<JsonObject>();
+      definition["key"] = key;
+      definition["sensorType"] = type;
+      definition["sensorAddress"] = buildMdsSensorAddress(key);
+      definition["name"] = name;
+    };
+    addDefinition(config.MdsSensorIdBattery, "bat", "ADC", config.MdsSensorNameBattery);
+    addDefinition(config.MdsSensorIdTanks, "tank", "ADC", config.MdsSensorNameTanks);
+    addDefinition(config.MdsSensorIdStatus, "stat", "Digital", config.MdsSensorNameStatus);
+    addDefinition(config.MdsSensorIdTemperature, "temp", "DS18B20", config.MdsSensorNameTemperature);
+    addDefinition(config.MdsSensorIdGps, "gps", "GPS", config.MdsSensorNameGps);
+    addDefinition(config.MdsSensorIdEnv, "env", "BME280", config.MdsSensorNameEnv);
+    addDefinition(config.MdsSensorIdDewpoint, "dew", "BME280", config.MdsSensorNameDewpoint);
+    addDefinition(config.MdsSensorIdVedirect, "ve", "DS2438", config.MdsSensorNameVedirect);
+  }
+
+  String requestBody;
+  serializeJson(request, requestBody);
+  WiFiClientSecure client;
+  client.setCACert(reinterpret_cast<const char*>(cert_cacert_pem_start));
+  HTTPClient http;
+  http.setConnectTimeout(15000);
+  http.setTimeout(15000);
+  http.setReuse(false);
+  if (!http.begin(client, metadataUrl)) {
+    DebugPrintln(2, "Unable to initialize MDS sensor metadata request");
+    return false;
+  }
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("User-Agent", "LoRaBoatMonitor/ESP32");
+  const int responseCode = http.POST(reinterpret_cast<uint8_t*>(const_cast<char*>(requestBody.c_str())), requestBody.length());
+  const String responseBody = http.getString();
+  http.end();
+  if (responseCode < 200 || responseCode >= 300) {
+    DebugPrintln(2, String("MDS sensor metadata sync failed: HTTP ") + responseCode);
+    return false;
+  }
+
+  JsonDocument response;
+  if (deserializeJson(response, responseBody) != DeserializationError::Ok || String(response["status"] | "") != "ok") {
+    DebugPrintln(2, "MDS sensor metadata response is invalid");
+    return false;
+  }
+
+  bool namesChanged = false;
+  for (JsonObjectConst sensor : response["sensors"].as<JsonArrayConst>()) {
+    namesChanged = copyMetadataName(sensor, "bat", config.MdsSensorNameBattery, sizeof(config.MdsSensorNameBattery)) || namesChanged;
+    namesChanged = copyMetadataName(sensor, "tank", config.MdsSensorNameTanks, sizeof(config.MdsSensorNameTanks)) || namesChanged;
+    namesChanged = copyMetadataName(sensor, "stat", config.MdsSensorNameStatus, sizeof(config.MdsSensorNameStatus)) || namesChanged;
+    namesChanged = copyMetadataName(sensor, "temp", config.MdsSensorNameTemperature, sizeof(config.MdsSensorNameTemperature)) || namesChanged;
+    namesChanged = copyMetadataName(sensor, "gps", config.MdsSensorNameGps, sizeof(config.MdsSensorNameGps)) || namesChanged;
+    namesChanged = copyMetadataName(sensor, "env", config.MdsSensorNameEnv, sizeof(config.MdsSensorNameEnv)) || namesChanged;
+    namesChanged = copyMetadataName(sensor, "dew", config.MdsSensorNameDewpoint, sizeof(config.MdsSensorNameDewpoint)) || namesChanged;
+    namesChanged = copyMetadataName(sensor, "ve", config.MdsSensorNameVedirect, sizeof(config.MdsSensorNameVedirect)) || namesChanged;
+  }
+
+  const String hashValue = response["metadataHash"] | "";
+  const uint32_t newHash = hashValue.length() == 8 ? strtoul(hashValue.c_str(), nullptr, 16) : 0;
+  if (newHash == 0) {
+    DebugPrintln(2, "MDS sensor metadata response has no valid hash");
+    return false;
+  }
+  const bool configChanged = namesChanged || config.MdsSensorMetadataHash != newHash || config.MdsSensorNamesDirty != 0;
+  config.MdsSensorMetadataHash = newHash;
+  config.MdsSensorNamesDirty = 0;
+  lastMdsSensorMetadataSyncEpoch = time(nullptr);
+  if (configChanged && !saveEEPROMConfig(config)) {
+    DebugPrintln(1, "MDS sensor metadata could not be saved locally");
+    return false;
+  }
+  DebugPrintln(3, namesChanged ? "Sensor names synchronized from MDS" : "Sensor metadata is current");
+  return true;
 }
 
 bool postMdsPayload(const configData &actconf, JsonDocument &docpayload, const char *contextLabel)
@@ -1240,7 +1406,7 @@ bool downloadWebFileToPath(const char *fileName,
 }
 }  // namespace
 
-bool sendToMDS(const configData &actconf)
+bool sendToMDS(configData &actconf)
 {
   if (WiFi.status() != WL_CONNECTED) {
     lastMdsStatus = "WiFi is not connected";
@@ -1248,6 +1414,7 @@ bool sendToMDS(const configData &actconf)
     return false;
   }
 
+  const bool metadataReady = syncMdsSensorMetadata(actconf);
   JsonDocument docpayload;
   JsonObject board = docpayload["board"].to<JsonObject>();
   JsonArray sensors = docpayload["sensors"].to<JsonArray>();
@@ -1259,18 +1426,21 @@ bool sendToMDS(const configData &actconf)
   buildMdsTimestamp(mdsDate, mdsTime);
 
   const char* transmissionPath = "1";
-  addMdsSensorRecord(sensors, actconf.MdsSensorIdBattery, "ADC", "Battery", mdsDate, mdsTime, transmissionPath, voltage, capacity, 0, 0);
-  addMdsSensorRecord(sensors, actconf.MdsSensorIdTanks, "ADC", "Tanks", mdsDate, mdsTime, transmissionPath, tank1p, tank1adc, tank2p, tank2adc);
-  addMdsSensorRecord(sensors, actconf.MdsSensorIdStatus, "Digital", "Status", mdsDate, mdsTime, transmissionPath, mainPowerOn, actconf.relay, temp1wire, 0);
-  addMdsSensorRecord(sensors, actconf.MdsSensorIdGps, "GPS", "GPS", mdsDate, mdsTime, transmissionPath, latitude, longitude, gpsspeed, course);
+  addMdsSensorRecord(sensors, actconf.MdsSensorIdBattery, "bat", "ADC", actconf.MdsSensorNameBattery, metadataReady, mdsDate, mdsTime, transmissionPath, voltage, capacity, 0, 0);
+  addMdsSensorRecord(sensors, actconf.MdsSensorIdTanks, "tank", "ADC", actconf.MdsSensorNameTanks, metadataReady, mdsDate, mdsTime, transmissionPath, tank1p, tank1adc, tank2p, tank2adc);
+  addMdsSensorRecord(sensors, actconf.MdsSensorIdStatus, "stat", "Digital", actconf.MdsSensorNameStatus, metadataReady, mdsDate, mdsTime, transmissionPath, mainPowerOn, actconf.relay, 0, 0);
+  if (String(actconf.tempSensorType) == "DS18B20") {
+    addMdsSensorRecord(sensors, actconf.MdsSensorIdTemperature, "temp", "DS18B20", actconf.MdsSensorNameTemperature, metadataReady, mdsDate, mdsTime, transmissionPath, temp1wire, 0, 0, 0);
+  }
+  addMdsSensorRecord(sensors, actconf.MdsSensorIdGps, "gps", "GPS", actconf.MdsSensorNameGps, metadataReady, mdsDate, mdsTime, transmissionPath, latitude, longitude, gpsspeed, course);
 
   if (String(actconf.envSensor) == "BME280") {
-    addMdsSensorRecord(sensors, actconf.MdsSensorIdEnv, "BME280", "Environment", mdsDate, mdsTime, transmissionPath, temperature, humidity, pressure, altitude);
-    addMdsSensorRecord(sensors, actconf.MdsSensorIdDewpoint, "BME280", "Dewpoint", mdsDate, mdsTime, transmissionPath, dewp, 0, 0, 0);
+    addMdsSensorRecord(sensors, actconf.MdsSensorIdEnv, "env", "BME280", actconf.MdsSensorNameEnv, metadataReady, mdsDate, mdsTime, transmissionPath, temperature, humidity, pressure, altitude);
+    addMdsSensorRecord(sensors, actconf.MdsSensorIdDewpoint, "dew", "BME280", actconf.MdsSensorNameDewpoint, metadataReady, mdsDate, mdsTime, transmissionPath, dewp, 0, 0, 0);
   }
 
   if (String(actconf.envSensor) == "VEdirect-Read") {
-    addMdsSensorRecord(sensors, actconf.MdsSensorIdVedirect, "DS2438", "VEdirect", mdsDate, mdsTime, transmissionPath, vedirectVoltage, vedirectCurrent, vedirectTemp, 0);
+    addMdsSensorRecord(sensors, actconf.MdsSensorIdVedirect, "ve", "DS2438", actconf.MdsSensorNameVedirect, metadataReady, mdsDate, mdsTime, transmissionPath, vedirectVoltage, vedirectCurrent, vedirectTemp, 0);
   }
 
   if (sensors.size() == 0) {

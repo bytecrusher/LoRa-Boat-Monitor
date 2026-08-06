@@ -1084,6 +1084,36 @@ bool updateConfigStringField(char *target, size_t targetSize, const String &valu
   return true;
 }
 
+bool updateMdsSensorName(char *target, size_t targetSize, const String &value) {
+  if (target == nullptr || targetSize == 0) {
+    return false;
+  }
+
+  String normalized = value;
+  normalized.trim();
+  if (normalized.length() == 0 || !isPrintableAscii(normalized)) {
+    return false;
+  }
+
+  normalized = normalized.substring(0, targetSize - 1);
+  if (normalized == String(target)) {
+    return false;
+  }
+
+  normalized.toCharArray(target, targetSize);
+  actconf.MdsSensorNamesDirty = 1;
+  actconf.MdsSensorMetadataHash = 0;
+  return true;
+}
+
+void updateMdsSensorEnabled(int &target, int value) {
+  if (target == value) {
+    return;
+  }
+  target = value;
+  actconf.MdsSensorMetadataHash = 0;
+}
+
 bool applyOptionalSecretValue(AsyncWebServerRequest *request,
                               const String &value,
                               const char *clearFlagName,
@@ -1678,10 +1708,19 @@ String settingsTemplateProcessor(const String &var) {
   if (var == "MdsSensorIdBattery") return String(actconf.MdsSensorIdBattery);
   if (var == "MdsSensorIdTanks") return String(actconf.MdsSensorIdTanks);
   if (var == "MdsSensorIdStatus") return String(actconf.MdsSensorIdStatus);
+  if (var == "MdsSensorIdTemperature") return String(actconf.MdsSensorIdTemperature);
   if (var == "MdsSensorIdGps") return String(actconf.MdsSensorIdGps);
   if (var == "MdsSensorIdEnv") return String(actconf.MdsSensorIdEnv);
   if (var == "MdsSensorIdDewpoint") return String(actconf.MdsSensorIdDewpoint);
   if (var == "MdsSensorIdVedirect") return String(actconf.MdsSensorIdVedirect);
+  if (var == "MdsSensorNameBattery") return htmlEscape(String(actconf.MdsSensorNameBattery));
+  if (var == "MdsSensorNameTanks") return htmlEscape(String(actconf.MdsSensorNameTanks));
+  if (var == "MdsSensorNameStatus") return htmlEscape(String(actconf.MdsSensorNameStatus));
+  if (var == "MdsSensorNameTemperature") return htmlEscape(String(actconf.MdsSensorNameTemperature));
+  if (var == "MdsSensorNameGps") return htmlEscape(String(actconf.MdsSensorNameGps));
+  if (var == "MdsSensorNameEnv") return htmlEscape(String(actconf.MdsSensorNameEnv));
+  if (var == "MdsSensorNameDewpoint") return htmlEscape(String(actconf.MdsSensorNameDewpoint));
+  if (var == "MdsSensorNameVedirect") return htmlEscape(String(actconf.MdsSensorNameVedirect));
 
   if (var == "hostname") return htmlEscape(String(actconf.hostname));
   if (var == "sssid") return htmlEscape(String(actconf.sssid));
@@ -1912,33 +1951,45 @@ bool applySettingsField(AsyncWebServerRequest *request, const String &fieldName,
     return true;
   }
   if (fieldName == "MdsSensorIdBattery") {
-    actconf.MdsSensorIdBattery = clampConfigInt(toInteger(fieldValue), defconf.MdsSensorIdBattery, 0, 1);
+    updateMdsSensorEnabled(actconf.MdsSensorIdBattery, clampConfigInt(toInteger(fieldValue), defconf.MdsSensorIdBattery, 0, 1));
     return true;
   }
   if (fieldName == "MdsSensorIdTanks") {
-    actconf.MdsSensorIdTanks = clampConfigInt(toInteger(fieldValue), defconf.MdsSensorIdTanks, 0, 1);
+    updateMdsSensorEnabled(actconf.MdsSensorIdTanks, clampConfigInt(toInteger(fieldValue), defconf.MdsSensorIdTanks, 0, 1));
     return true;
   }
   if (fieldName == "MdsSensorIdStatus") {
-    actconf.MdsSensorIdStatus = clampConfigInt(toInteger(fieldValue), defconf.MdsSensorIdStatus, 0, 1);
+    updateMdsSensorEnabled(actconf.MdsSensorIdStatus, clampConfigInt(toInteger(fieldValue), defconf.MdsSensorIdStatus, 0, 1));
+    return true;
+  }
+  if (fieldName == "MdsSensorIdTemperature") {
+    updateMdsSensorEnabled(actconf.MdsSensorIdTemperature, clampConfigInt(toInteger(fieldValue), defconf.MdsSensorIdTemperature, 0, 1));
     return true;
   }
   if (fieldName == "MdsSensorIdGps") {
-    actconf.MdsSensorIdGps = clampConfigInt(toInteger(fieldValue), defconf.MdsSensorIdGps, 0, 1);
+    updateMdsSensorEnabled(actconf.MdsSensorIdGps, clampConfigInt(toInteger(fieldValue), defconf.MdsSensorIdGps, 0, 1));
     return true;
   }
   if (fieldName == "MdsSensorIdEnv") {
-    actconf.MdsSensorIdEnv = clampConfigInt(toInteger(fieldValue), defconf.MdsSensorIdEnv, 0, 1);
+    updateMdsSensorEnabled(actconf.MdsSensorIdEnv, clampConfigInt(toInteger(fieldValue), defconf.MdsSensorIdEnv, 0, 1));
     return true;
   }
   if (fieldName == "MdsSensorIdDewpoint") {
-    actconf.MdsSensorIdDewpoint = clampConfigInt(toInteger(fieldValue), defconf.MdsSensorIdDewpoint, 0, 1);
+    updateMdsSensorEnabled(actconf.MdsSensorIdDewpoint, clampConfigInt(toInteger(fieldValue), defconf.MdsSensorIdDewpoint, 0, 1));
     return true;
   }
   if (fieldName == "MdsSensorIdVedirect") {
-    actconf.MdsSensorIdVedirect = clampConfigInt(toInteger(fieldValue), defconf.MdsSensorIdVedirect, 0, 1);
+    updateMdsSensorEnabled(actconf.MdsSensorIdVedirect, clampConfigInt(toInteger(fieldValue), defconf.MdsSensorIdVedirect, 0, 1));
     return true;
   }
+  if (fieldName == "MdsSensorNameBattery") return updateMdsSensorName(actconf.MdsSensorNameBattery, sizeof(actconf.MdsSensorNameBattery), fieldValue);
+  if (fieldName == "MdsSensorNameTanks") return updateMdsSensorName(actconf.MdsSensorNameTanks, sizeof(actconf.MdsSensorNameTanks), fieldValue);
+  if (fieldName == "MdsSensorNameStatus") return updateMdsSensorName(actconf.MdsSensorNameStatus, sizeof(actconf.MdsSensorNameStatus), fieldValue);
+  if (fieldName == "MdsSensorNameTemperature") return updateMdsSensorName(actconf.MdsSensorNameTemperature, sizeof(actconf.MdsSensorNameTemperature), fieldValue);
+  if (fieldName == "MdsSensorNameGps") return updateMdsSensorName(actconf.MdsSensorNameGps, sizeof(actconf.MdsSensorNameGps), fieldValue);
+  if (fieldName == "MdsSensorNameEnv") return updateMdsSensorName(actconf.MdsSensorNameEnv, sizeof(actconf.MdsSensorNameEnv), fieldValue);
+  if (fieldName == "MdsSensorNameDewpoint") return updateMdsSensorName(actconf.MdsSensorNameDewpoint, sizeof(actconf.MdsSensorNameDewpoint), fieldValue);
+  if (fieldName == "MdsSensorNameVedirect") return updateMdsSensorName(actconf.MdsSensorNameVedirect, sizeof(actconf.MdsSensorNameVedirect), fieldValue);
   if (fieldName == "devaddr") {
     char hexstring[9];
     fieldValue.toCharArray(hexstring, sizeof(hexstring));

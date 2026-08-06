@@ -9,13 +9,13 @@ static constexpr const char *FIRMWARE_RELEASE_LABEL = "Beta";
 // Default configuration
 // Types 'byte' und 'word' doesn't work!
 typedef struct {
-  int valid = 19;                            // Number of configuration (Please change when the structure or values are changed)
+  int valid = 20;                            // Number of configuration (Please change when the structure or values are changed)
   int crypt = 1;                            // Activate for critical webside a password query [0 = off|1 = on]
   char username[31] = "admin";
   char password[31] = "auto-generated";     // Password for critical websites (settings, update and reboot)
   char devname[21] = "LoRa Boat Monitor";   // Device name for web configuration
   char crights[29] = "NoWa (C) (mod by Gunni) 2023";       // Copy rights
-  char fversion[8] = "V1.16h";               // Firmware version
+  char fversion[8] = "V1.16i";               // Firmware version
   char license[12] = "GPL3";                // License type
   int debug = 3;                            // Debug mode 0=off 1=Errors 2=Errors + Warnings 3=Errors + Warnings + Messages
   int corder1 = 1;                          // Set the Order or Priority for connecting to wifi
@@ -106,6 +106,19 @@ typedef struct {
   char mdsOtaUrl[100] = "https://mds-git.derguntmar.de/ota/getupdate.php"; // MDS OTA endpoint
   char mdsOtaSecret[65] = "";                // Shared secret for the MDS OTA endpoint
   char updateChannel[8] = "beta";            // Update source shared by firmware and web files [stable|beta]
+
+  // Appended fields only: keep this order to preserve OTA configuration migration.
+  int MdsSensorIdTemperature = 0;             // sensorType=DS18B20, value1=temperature
+  char MdsSensorNameBattery[18] = "Battery";
+  char MdsSensorNameTanks[18] = "Tanks";
+  char MdsSensorNameStatus[18] = "Status";
+  char MdsSensorNameTemperature[18] = "Temperature";
+  char MdsSensorNameGps[18] = "GPS";
+  char MdsSensorNameEnv[18] = "Environment";
+  char MdsSensorNameDewpoint[18] = "Dewpoint";
+  char MdsSensorNameVedirect[18] = "VE.Direct";
+  uint32_t MdsSensorMetadataHash = 0;
+  uint8_t MdsSensorNamesDirty = 0;
 } configData;
 
 #endif
