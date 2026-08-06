@@ -3,6 +3,11 @@ var BATTERY_MIN_VOLTAGE = 10.5;
 var BATTERY_NORMAL_VOLTAGE = 12.4;
 var BATTERY_MAX_VOLTAGE = 14.4;
 
+function isUsableTemperature(value) {
+    var numericValue = parseFloat(value);
+    return !isNaN(numericValue) && numericValue > -90;
+}
+
 function clampNumber(value, min, max) {
     var numberValue = parseFloat(value);
     if (isNaN(numberValue)) {
@@ -124,6 +129,124 @@ function updateBatteryGauge(voltage, capacity, rawAdc) {
     }
 }
 
+function resolveTemperatureReading(myObj) {
+    var measuringValues = myObj.Device.MeasuringValues;
+    var deviceSettings = staticData && staticData.Device ? (staticData.Device.DeviceSettings || {}) : {};
+    var hasTemperatureConfig = Object.prototype.hasOwnProperty.call(deviceSettings, 'TempSensorType');
+    var tempSensorType = String(deviceSettings.TempSensorType || '').toLowerCase();
+    var envSensor = String(deviceSettings.envSensor || '').toLowerCase();
+    var oneWire = measuringValues.Temp1Wire || {};
+    var air = measuringValues.AirTemperature || {};
+
+    if ((tempSensorType === 'ds18b20' || envSensor === 'vedirect-read') && isUsableTemperature(oneWire.Value)) {
+        return {
+            value: parseFloat(oneWire.Value),
+            unit: oneWire.Unit || deviceSettings.TempUnit || 'C',
+            source: envSensor === 'vedirect-read' ? 'VE.Direct' : 'DS18B20'
+        };
+    }
+
+    if (envSensor === 'bme280' && isUsableTemperature(air.Value)) {
+        return {
+            value: parseFloat(air.Value),
+            unit: air.Unit || deviceSettings.TempUnit || 'C',
+            source: 'BME280'
+        };
+    }
+
+    if (hasTemperatureConfig) {
+        return null;
+    }
+
+    // Keep the gauge compatible with older firmware that did not expose the sensor type.
+    if (isUsableTemperature(oneWire.Value)) {
+        return { value: parseFloat(oneWire.Value), unit: oneWire.Unit || 'C', source: 'External sensor' };
+    }
+
+    return null;
+}
+
+function updateTemperatureGauge(myObj) {
+    var reading = resolveTemperatureReading(myObj);
+    var card = document.getElementById('temperatureCard');
+    var needle = document.getElementById('temperatureNeedle');
+    var value = document.getElementById('temperatureGaugeValue');
+    var readout = document.getElementById('temperatureGaugeReadout');
+    var unit = document.getElementById('temperatureGaugeUnit');
+    var source = document.getElementById('temperatureSource');
+    var status = document.getElementById('temperatureStatus');
+    var scale = { min: -20, mid: 30, max: 80, cold: 0, warm: 45, hot: 65 };
+
+    if (!card || !status) {
+        return;
+    }
+
+    card.classList.remove('temperature-card--unavailable', 'temperature-card--cold', 'temperature-card--normal', 'temperature-card--warm', 'temperature-card--hot');
+
+    if (!reading) {
+        card.classList.add('temperature-card--unavailable');
+        status.textContent = 'Not available';
+        if (value) {
+            value.textContent = '-';
+        }
+        if (readout) {
+            readout.textContent = '-';
+        }
+        if (unit) {
+            unit.textContent = '';
+        }
+        if (source) {
+            source.textContent = 'No active sensor';
+        }
+        if (needle) {
+            needle.style.transform = 'translateX(-50%) rotate(-130deg)';
+        }
+        return;
+    }
+
+    var normalizedUnit = String(reading.unit).toUpperCase().replace('\u00b0', '');
+    if (normalizedUnit === 'F') {
+        scale = { min: -4, mid: 86, max: 176, cold: 32, warm: 113, hot: 149 };
+    }
+
+    var percent = ((clampNumber(reading.value, scale.min, scale.max) - scale.min) / (scale.max - scale.min)) * 100;
+    var angle = -130 + (percent * 2.6);
+    var displayUnit = '\u00b0' + normalizedUnit;
+
+    if (needle) {
+        needle.style.transform = 'translateX(-50%) rotate(' + angle.toFixed(1) + 'deg)';
+    }
+    if (value) {
+        value.textContent = reading.value.toFixed(1);
+    }
+    if (readout) {
+        readout.textContent = reading.value.toFixed(1) + displayUnit;
+    }
+    if (unit) {
+        unit.textContent = displayUnit;
+    }
+    if (source) {
+        source.textContent = reading.source;
+    }
+    setElementValue('temperatureGaugeMin', scale.min);
+    setElementValue('temperatureGaugeMid', scale.mid);
+    setElementValue('temperatureGaugeMax', scale.max);
+
+    if (reading.value < scale.cold) {
+        card.classList.add('temperature-card--cold');
+        status.textContent = 'Cold';
+    } else if (reading.value >= scale.hot) {
+        card.classList.add('temperature-card--hot');
+        status.textContent = 'Hot';
+    } else if (reading.value >= scale.warm) {
+        card.classList.add('temperature-card--warm');
+        status.textContent = 'Warm';
+    } else {
+        card.classList.add('temperature-card--normal');
+        status.textContent = 'Temperature OK';
+    }
+}
+
 function updateSensorIndicators(myObj) {
     var mainPowerOn = myObj.Device.MeasuringValues.MainPowerOn || myObj.Device.MeasuringValues.Alarm;
     var mainPowerMode = myObj.Device.MeasuringValues.MainPowerMode || myObj.Device.MeasuringValues.StandbyInputState;
@@ -189,6 +312,7 @@ function updateSensorPage(myObj) {
         myObj.Device.MeasuringValues.BatteryCapacity.Value,
         myObj.Device.MeasuringValues.BatteryAdc.Value
     );
+    updateTemperatureGauge(myObj);
     updateTankCard('tank1', myObj.Device.MeasuringValues.Tank1.Value, myObj.Device.MeasuringValues.Tank1adc.Value);
     updateTankCard('tank2', myObj.Device.MeasuringValues.Tank2.Value, myObj.Device.MeasuringValues.Tank2adc.Value);
 }
@@ -200,6 +324,7 @@ function refreshSensorPage() {
 document.addEventListener('DOMContentLoaded', function () {
     fetchJson('/staticdata.json', function (myObj) {
         staticData = myObj;
+        refreshSensorPage();
     });
     startVisiblePolling(refreshSensorPage, 5000);
 });

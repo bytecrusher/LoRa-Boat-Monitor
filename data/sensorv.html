@@ -271,8 +271,8 @@
   </div><br>
   <hr>
 
-  <h3>Battery Gauge</h3>
-  <div class="tank-card-grid battery-card-grid">
+  <h3>Battery and Temperature</h3>
+  <div class="tank-card-grid instrument-card-grid">
     <article class="tank-card battery-card" id="batteryCard">
       <div class="tank-card__header">
         <div>
@@ -313,6 +313,45 @@
       <div class="tank-card__meta">
         <span>ADC raw</span>
         <strong><data id='batteryGaugeAdc'>0</data></strong>
+      </div>
+    </article>
+
+    <article class="tank-card temperature-card temperature-card--unavailable" id="temperatureCard">
+      <div class="tank-card__header">
+        <div>
+          <span class="tank-card__eyebrow">Temperature</span>
+          <strong id="temperatureStatus">Waiting for data</strong>
+        </div>
+        <span class="tank-card__icon temperature-card__icon" aria-hidden="true">
+          <svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' stroke-width='1.7' stroke='currentColor' fill='none' stroke-linecap='round' stroke-linejoin='round'>
+            <path stroke='none' d='M0 0h24v24H0z' fill='none' />
+            <path d='M10 13.5v-8.5a2 2 0 1 1 4 0v8.5a4 4 0 1 1 -4 0' />
+            <path d='M10 9h4' />
+          </svg>
+        </span>
+      </div>
+      <div class="tank-level-display temperature-level-display">
+        <data id='temperatureGaugeValue'>-</data><span id='temperatureGaugeUnit'></span>
+      </div>
+      <div class="tank-instrument temperature-instrument" id="temperatureInstrument" aria-label="Temperature">
+        <div class="tank-instrument__bezel temperature-instrument__bezel">
+          <div class="tank-instrument__face">
+            <div class="tank-instrument__ticks"></div>
+            <div class="tank-instrument__label tank-instrument__label--min" id="temperatureGaugeMin">-20</div>
+            <div class="tank-instrument__label tank-instrument__label--mid" id="temperatureGaugeMid">30</div>
+            <div class="tank-instrument__label tank-instrument__label--max" id="temperatureGaugeMax">80</div>
+            <div class="tank-instrument__needle" id="temperatureNeedle"></div>
+            <div class="tank-instrument__hub"></div>
+            <div class="tank-instrument__readout">
+              <strong id="temperatureGaugeReadout">-</strong>
+              <span>TEMP</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="tank-card__meta">
+        <span>Source</span>
+        <strong id="temperatureSource">No active sensor</strong>
       </div>
     </article>
   </div><br>

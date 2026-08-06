@@ -617,8 +617,8 @@ body > h3 {
     box-shadow: inset 0 0 0 1px rgba(255, 180, 95, 0.22);
 }
 
-.battery-card-grid {
-    grid-template-columns: minmax(min(100%, 280px), 420px);
+.instrument-card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 420px));
 }
 
 .battery-card {
@@ -672,6 +672,57 @@ body > h3 {
     color: #8cffb2;
     background: rgba(140, 255, 178, 0.14);
     box-shadow: inset 0 0 0 1px rgba(140, 255, 178, 0.28);
+}
+
+.temperature-card {
+    background:
+        radial-gradient(circle at 78% 0%, rgba(255, 184, 92, 0.14), transparent 30%),
+        radial-gradient(circle at 16% 12%, rgba(101, 213, 243, 0.17), transparent 34%),
+        linear-gradient(145deg, rgba(15, 44, 55, 0.95), rgba(8, 29, 38, 0.98));
+}
+
+.temperature-card__icon {
+    color: #f2b550;
+    background: rgba(242, 181, 80, 0.12);
+    box-shadow: inset 0 0 0 1px rgba(242, 181, 80, 0.24);
+}
+
+.temperature-instrument__bezel::before {
+    background:
+        radial-gradient(circle at 50% 58%, rgba(2, 14, 20, 0.96) 0 43%, transparent 44%),
+        conic-gradient(from 230deg,
+            #4aaee8 0deg 52deg,
+            #62d5f3 52deg 104deg,
+            #55d98a 104deg 178deg,
+            #f2b550 178deg 224deg,
+            #e85454 224deg 260deg,
+            transparent 260deg 360deg);
+}
+
+.temperature-card--cold .tank-instrument__needle {
+    background: linear-gradient(180deg, #f5fbfd, #62d5f3 72%, #276c92);
+    box-shadow: 0 0 14px rgba(98, 213, 243, 0.38);
+}
+
+.temperature-card--normal .tank-instrument__needle {
+    background: linear-gradient(180deg, #f6fff8, #75e49d 72%, #27764a);
+    box-shadow: 0 0 14px rgba(117, 228, 157, 0.34);
+}
+
+.temperature-card--warm .tank-instrument__needle,
+.temperature-card--hot .tank-instrument__needle {
+    background: linear-gradient(180deg, #fff8e9, #ffb85c 70%, #a13e32);
+    box-shadow: 0 0 15px rgba(255, 184, 92, 0.38);
+}
+
+.temperature-card--hot .temperature-card__icon {
+    color: #ff7474;
+    background: rgba(232, 84, 84, 0.14);
+    box-shadow: inset 0 0 0 1px rgba(232, 84, 84, 0.28);
+}
+
+.temperature-card--unavailable {
+    opacity: 0.72;
 }
 
 .diagnostics-panel code {

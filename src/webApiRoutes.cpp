@@ -108,8 +108,8 @@ void registerApiRoutes() {
     //json_Device["Device"]["DeviceSettings"]["Tank2SlopeA1"] = String(actconf.a1t2slope);
     //json_Device["Device"]["DeviceSettings"]["Tank2SlopeA2"] = String(actconf.a2t2slope);
     //json_Device["Device"]["DeviceSettings"]["Tank2Average"] = String(actconf.t2average);
-    //json_Device["Device"]["DeviceSettings"]["TempSensorType"] = String(actconf.tempSensorType);
-    //json_Device["Device"]["DeviceSettings"]["TempUnit"] = String(actconf.tempUnit);
+    json_Device["Device"]["DeviceSettings"]["TempSensorType"] = String(actconf.tempSensorType);
+    json_Device["Device"]["DeviceSettings"]["TempUnit"] = String(actconf.tempUnit);
     json_Device["Device"]["DeviceSettings"]["envSensor"] = String(actconf.envSensor);
     json_Device["Device"]["DeviceSettings"]["standbyMode"] = String(actconf.standbyMode);
     json_Device["Device"]["DeviceSettings"]["transmitPriority"] = String(actconf.transmitPriority);
