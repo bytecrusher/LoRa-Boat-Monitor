@@ -113,6 +113,16 @@ def validate_frontend_contract(errors: list[str]) -> None:
         if f'var == "{field}"' not in settings_handler or f'fieldName == "{field}"' not in settings_handler:
             fail(errors, f"Sensor name field is not fully handled by the firmware: {field}")
 
+    web_api = (ROOT / "src" / "webApiRoutes.cpp").read_text(encoding="utf-8")
+    sensor_page = (DATA / "sensorv.js").read_text(encoding="utf-8")
+    if '["SensorNames"]' not in web_api:
+        fail(errors, "Device API does not expose configured sensor names")
+    for api_name in ("Battery", "Tanks", "Status", "Temperature", "Gps", "Environment", "Dewpoint", "Vedirect"):
+        if f'["SensorNames"]["{api_name}"]' not in web_api:
+            fail(errors, f"Device API does not expose sensor name: {api_name}")
+    if "updateSensorNames(myObj)" not in sensor_page:
+        fail(errors, "Sensor page does not apply configured sensor names")
+
 
 def validate_route_registry(errors: list[str]) -> None:
     registrations: list[tuple[str, str]] = []

@@ -14,7 +14,7 @@
   %header%
   <div class="section-intro">%envSensorString%</div>
 
-  <div class="section-block"><h3>Position, Speed and Course</h3></div>
+  <div class="section-block"><h3><span id="gpsSensorName">GPS</span> - Position, Speed and Course</h3></div>
   <div class="sensor-values-section tank-levels-section">
     <table class="data-table">
       <tr>
@@ -187,7 +187,7 @@
   </div><br>
   <hr>
 
-  <h3>Battery</h3>
+  <h3 id="batterySectionName">Battery</h3>
   <div class="sensor-values-section">
     <table class="data-table">
       <tr>
@@ -230,7 +230,7 @@
             </svg>
           </div>
         </td>
-        <td>Temperature:</td>
+        <td><span id="temperatureTableName">Temperature</span>:</td>
         <td><data id='1wtemp'></data><data id='1wunit'></data></td>
         <td></td>
       </tr>
@@ -247,7 +247,7 @@
         <td class='muted-text'>GPIO 36 raw value</td>
       </tr>
       <tr>
-        <td>Battery Voltage</td>
+        <td><span id="batteryDiagnosticName">Battery</span> Voltage</td>
         <td><data id='batteryVoltageDiag'></data> V</td>
         <td class='muted-text'>Calculated from ADC curve</td>
       </tr>
@@ -276,7 +276,7 @@
     <article class="tank-card battery-card" id="batteryCard">
       <div class="tank-card__header">
         <div>
-          <span class="tank-card__eyebrow">Battery Voltage</span>
+          <span class="tank-card__eyebrow" id="batteryGaugeName">Battery</span>
           <strong id="batteryStatus">Waiting for data</strong>
         </div>
         <span class="tank-card__icon battery-card__icon" aria-hidden="true">
@@ -319,7 +319,7 @@
     <article class="tank-card temperature-card temperature-card--unavailable" id="temperatureCard">
       <div class="tank-card__header">
         <div>
-          <span class="tank-card__eyebrow">Temperature</span>
+          <span class="tank-card__eyebrow" id="temperatureGaugeName">Temperature</span>
           <strong id="temperatureStatus">Waiting for data</strong>
         </div>
         <span class="tank-card__icon temperature-card__icon" aria-hidden="true">
@@ -362,7 +362,7 @@
     <article class="tank-card" id="tank1Card">
       <div class="tank-card__header">
         <div>
-          <span class="tank-card__eyebrow">Water Tank</span>
+          <span class="tank-card__eyebrow" id="tank1SensorName">Tanks 1</span>
           <strong id="tank1Status">Waiting for data</strong>
         </div>
         <span class="tank-card__icon" aria-hidden="true">
@@ -400,7 +400,7 @@
     <article class="tank-card" id="tank2Card">
       <div class="tank-card__header">
         <div>
-          <span class="tank-card__eyebrow">Fuel Tank</span>
+          <span class="tank-card__eyebrow" id="tank2SensorName">Tanks 2</span>
           <strong id="tank2Status">Waiting for data</strong>
         </div>
         <span class="tank-card__icon" aria-hidden="true">
@@ -442,7 +442,7 @@
   </div><br>
   <hr>
 
-  <h3>Status Outputs</h3>
+  <h3><span id="statusSensorName">Status</span> Outputs</h3>
   <div class="sensor-values-section">
     <table>
       <tr>

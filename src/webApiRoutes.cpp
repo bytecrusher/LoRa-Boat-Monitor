@@ -191,6 +191,15 @@ void registerApiRoutes() {
     json_Device["Device"]["DisplaySettings"]["InstrumentSize"] = String(actconf.instrumentSize);
     json_Device["Device"]["DisplaySettings"]["OledDisplayMode"] = String(actconf.OledDisplayMode);
 
+    json_Device["Device"]["SensorNames"]["Battery"] = String(actconf.MdsSensorNameBattery);
+    json_Device["Device"]["SensorNames"]["Tanks"] = String(actconf.MdsSensorNameTanks);
+    json_Device["Device"]["SensorNames"]["Status"] = String(actconf.MdsSensorNameStatus);
+    json_Device["Device"]["SensorNames"]["Temperature"] = String(actconf.MdsSensorNameTemperature);
+    json_Device["Device"]["SensorNames"]["Gps"] = String(actconf.MdsSensorNameGps);
+    json_Device["Device"]["SensorNames"]["Environment"] = String(actconf.MdsSensorNameEnv);
+    json_Device["Device"]["SensorNames"]["Dewpoint"] = String(actconf.MdsSensorNameDewpoint);
+    json_Device["Device"]["SensorNames"]["Vedirect"] = String(actconf.MdsSensorNameVedirect);
+
     json_Device["Device"]["MeasuringValues"]["AirTemperature"]["Value"] = String(temperature, 1);
     json_Device["Device"]["MeasuringValues"]["AirTemperature"]["Unit"] = String(actconf.tempUnit);  // TODO: bring into staticdata.json
 

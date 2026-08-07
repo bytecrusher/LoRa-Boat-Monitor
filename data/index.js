@@ -55,9 +55,11 @@ function updateIndexPage(myObj) {
 
 function updateIndexLiveData(myObj) {
     var values = myObj.Device.MeasuringValues || {};
+    var sensorNames = myObj.Device.SensorNames || {};
     var mainPowerMode = values.MainPowerMode || values.StandbyInputState;
     var mainPowerPin = values.MainPowerInputPin || values.StandbyInputPin;
     var mainPowerLevel = values.MainPowerInputLevel || values.StandbyInputLevel;
+    setText('dashboardBatteryName', sensorNames.Battery || 'Battery');
     setText('dashboardBatteryVoltage', values.BatteryVoltage ? values.BatteryVoltage.Value : '-');
     setText('dashboardBatteryCapacity', values.BatteryCapacity ? values.BatteryCapacity.Value : '-');
     setText('dashboardStandbyState', mainPowerMode ? mainPowerMode.Value : '-');

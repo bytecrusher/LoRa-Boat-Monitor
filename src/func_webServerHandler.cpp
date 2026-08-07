@@ -2199,7 +2199,7 @@ String buildEnvironmentSensorMarkup() {
   }
 
   String envSensorString = "";
-  envSensorString += F("<h3>Environment <blink><data id='info'></data></blink>");
+  envSensorString += F("<h3><span id='environmentSensorName'>Environment</span> <blink><data id='info'></data></blink>");
   envSensorString += F("</h3>");
   envSensorString += F("<FONT SIZE='4'>");
   envSensorString += F("<table>");
@@ -2255,7 +2255,7 @@ String buildEnvironmentSensorMarkup() {
   envSensorString += F("</svg>");
   envSensorString += F("</div>");
   envSensorString += F("</td>");
-  envSensorString += F("<td>Dew:</td>");
+  envSensorString += F("<td><span id='dewpointSensorName'>Dewpoint</span>:</td>");
   envSensorString += F("<td><data id='dewpoint'></data><data id='dunit'></data></td>");
   envSensorString += F("<td></td>");
   envSensorString += F("</tr>");

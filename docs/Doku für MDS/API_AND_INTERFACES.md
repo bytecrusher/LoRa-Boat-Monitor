@@ -19,6 +19,12 @@ Basisannahme dieser Doku:
 - alle unten genannten Pfade sind relativ zur Basis-URL der Installation
 - Beispiel: `https://mds-git.derguntmar.de`
 
+## Synchronisation der Sensornamen
+
+`POST /ingest/sensormetadata.php` synchronisiert die im Geraet vergebenen Sensornamen mit dem MDS. Die Anfrage verwendet dieselben Board-Zugangsdaten wie `receivejson.php` und ordnet jeden Namen ueber einen stabilen Sensorschluessel und eine aus der MAC-Adresse abgeleitete `sensorAddress` zu.
+
+Nach einer lokalen Namensaenderung sendet das Geraet einmalig alle Sensornamen mit `pushNames: true`. Der MDS uebernimmt diese Namen und liefert bei spaeteren Pruefungen geaenderte Namen wieder an das Geraet zurueck. Der Abgleich erfolgt ueber WLAN; Messwert-Uploads und ihre Ein/Aus-Schalter bleiben davon unabhaengig. Sensornamen werden deshalb nicht mit jedem Messdatensatz erneut uebertragen.
+
 
 ## Uebersicht
 

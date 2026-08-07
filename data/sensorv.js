@@ -131,6 +131,7 @@ function updateBatteryGauge(voltage, capacity, rawAdc) {
 
 function resolveTemperatureReading(myObj) {
     var measuringValues = myObj.Device.MeasuringValues;
+    var names = myObj.Device.SensorNames || {};
     var deviceSettings = staticData && staticData.Device ? (staticData.Device.DeviceSettings || {}) : {};
     var hasTemperatureConfig = Object.prototype.hasOwnProperty.call(deviceSettings, 'TempSensorType');
     var tempSensorType = String(deviceSettings.TempSensorType || '').toLowerCase();
@@ -142,7 +143,7 @@ function resolveTemperatureReading(myObj) {
         return {
             value: parseFloat(oneWire.Value),
             unit: oneWire.Unit || deviceSettings.TempUnit || 'C',
-            source: envSensor === 'vedirect-read' ? 'VE.Direct' : 'DS18B20'
+            source: envSensor === 'vedirect-read' ? (names.Vedirect || 'VE.Direct') : (names.Temperature || 'DS18B20')
         };
     }
 
@@ -150,7 +151,7 @@ function resolveTemperatureReading(myObj) {
         return {
             value: parseFloat(air.Value),
             unit: air.Unit || deviceSettings.TempUnit || 'C',
-            source: 'BME280'
+            source: names.Environment || 'BME280'
         };
     }
 
@@ -268,11 +269,38 @@ function updateEnvironmentValues(myObj) {
     setElementValue('dunit', myObj.Device.MeasuringValues.Dewpoint.Unit);
 }
 
+function updateSensorNames(myObj) {
+    var names = myObj.Device.SensorNames || {};
+    var tankName = names.Tanks || 'Tanks';
+
+    setText('batterySectionName', names.Battery || 'Battery');
+    setText('batteryGaugeName', names.Battery || 'Battery');
+    setText('batteryDiagnosticName', names.Battery || 'Battery');
+    setText('temperatureTableName', names.Temperature || 'Temperature');
+    setText('temperatureGaugeName', names.Temperature || 'Temperature');
+    setText('tank1SensorName', tankName + ' 1');
+    setText('tank2SensorName', tankName + ' 2');
+    setText('statusSensorName', names.Status || 'Status');
+    setText('gpsSensorName', names.Gps || 'GPS');
+    setText('environmentSensorName', names.Environment || 'Environment');
+    setText('dewpointSensorName', names.Dewpoint || 'Dewpoint');
+
+    var tank1Instrument = document.getElementById('tank1Instrument');
+    var tank2Instrument = document.getElementById('tank2Instrument');
+    if (tank1Instrument) {
+        tank1Instrument.setAttribute('aria-label', tankName + ' 1 level');
+    }
+    if (tank2Instrument) {
+        tank2Instrument.setAttribute('aria-label', tankName + ' 2 level');
+    }
+}
+
 function updateSensorPage(myObj) {
     var mainPowerMode = myObj.Device.MeasuringValues.MainPowerMode || myObj.Device.MeasuringValues.StandbyInputState;
     var mainPowerPin = myObj.Device.MeasuringValues.MainPowerInputPin || myObj.Device.MeasuringValues.StandbyInputPin;
     var mainPowerLevel = myObj.Device.MeasuringValues.MainPowerInputLevel || myObj.Device.MeasuringValues.StandbyInputLevel;
     setElementValue('quality', myObj.Device.NetworkParameter.ConnectionQuality.Value);
+    updateSensorNames(myObj);
     updateEnvironmentValues(myObj);
 
     setElementValue('lat', myObj.Device.MeasuringValues.Latitude.Value);

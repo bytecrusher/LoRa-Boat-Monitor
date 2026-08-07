@@ -754,22 +754,21 @@ bool syncMdsSensorMetadata(configData &config)
 
   if (config.MdsSensorMetadataHash == 0 || config.MdsSensorNamesDirty != 0) {
     JsonArray definitions = request["sensors"].to<JsonArray>();
-    auto addDefinition = [&](int enabled, const char *key, const char *type, const char *name) {
-      if (enabled <= 0) return;
+    auto addDefinition = [&](const char *key, const char *type, const char *name) {
       JsonObject definition = definitions.add<JsonObject>();
       definition["key"] = key;
       definition["sensorType"] = type;
       definition["sensorAddress"] = buildMdsSensorAddress(key);
       definition["name"] = name;
     };
-    addDefinition(config.MdsSensorIdBattery, "bat", "ADC", config.MdsSensorNameBattery);
-    addDefinition(config.MdsSensorIdTanks, "tank", "ADC", config.MdsSensorNameTanks);
-    addDefinition(config.MdsSensorIdStatus, "stat", "Digital", config.MdsSensorNameStatus);
-    addDefinition(config.MdsSensorIdTemperature, "temp", "DS18B20", config.MdsSensorNameTemperature);
-    addDefinition(config.MdsSensorIdGps, "gps", "GPS", config.MdsSensorNameGps);
-    addDefinition(config.MdsSensorIdEnv, "env", "BME280", config.MdsSensorNameEnv);
-    addDefinition(config.MdsSensorIdDewpoint, "dew", "BME280", config.MdsSensorNameDewpoint);
-    addDefinition(config.MdsSensorIdVedirect, "ve", "DS2438", config.MdsSensorNameVedirect);
+    addDefinition("bat", "ADC", config.MdsSensorNameBattery);
+    addDefinition("tank", "ADC", config.MdsSensorNameTanks);
+    addDefinition("stat", "Digital", config.MdsSensorNameStatus);
+    addDefinition("temp", "DS18B20", config.MdsSensorNameTemperature);
+    addDefinition("gps", "GPS", config.MdsSensorNameGps);
+    addDefinition("env", "BME280", config.MdsSensorNameEnv);
+    addDefinition("dew", "BME280", config.MdsSensorNameDewpoint);
+    addDefinition("ve", "DS2438", config.MdsSensorNameVedirect);
   }
 
   String requestBody;
