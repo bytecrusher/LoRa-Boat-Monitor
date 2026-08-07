@@ -593,16 +593,6 @@
                     </div>
                 </div>
 
-                <div class="row">
-                    <div class="firstColumn"><span class="labelText">Relay Behavior <span class="infoBadge" tabindex="0">i<span class="infoPopover">Control GPS Module uses the relay output to switch GPS power. On this hardware, GPIO25 is shared with the Heltec board LED, so the LED follows the relay state.</span></span></span></div>
-                    <div class="secondColumn">
-                        <select name='relay' size='1'>
-                            <option value='0'>Off</option>
-                            <option value='1'>On</option>
-                            <option value='2'>Control GPS Module</option>
-                        </select>
-                    </div>
-                </div>
             </div>
         </div></div>
 
@@ -677,40 +667,6 @@
                     <h5 class="section-heading">Sensors and Averaging</h5>
                 </div>
                 <div class="section-note">Sensor names are stored on this device and synchronized with MDS only when they change. Use 1 to 17 letters, numbers, spaces or common punctuation.</div>
-                <div class="sensor-name-list" aria-label="Sensor names">
-                    <div class="row">
-                        <div class="firstColumn">Battery Sensor Name</div>
-                        <div class="secondColumn"><input class="sensor-name-input" type='text' required name='MdsSensorNameBattery' value='%MdsSensorNameBattery%' minlength='1' maxlength='17' pattern='[ -~]+' autocomplete='off'></div>
-                    </div>
-                    <div class="row">
-                        <div class="firstColumn">Tank Sensor Name</div>
-                        <div class="secondColumn"><input class="sensor-name-input" type='text' required name='MdsSensorNameTanks' value='%MdsSensorNameTanks%' minlength='1' maxlength='17' pattern='[ -~]+' autocomplete='off'></div>
-                    </div>
-                    <div class="row">
-                        <div class="firstColumn">Power and Relay Sensor Name</div>
-                        <div class="secondColumn"><input class="sensor-name-input" type='text' required name='MdsSensorNameStatus' value='%MdsSensorNameStatus%' minlength='1' maxlength='17' pattern='[ -~]+' autocomplete='off'></div>
-                    </div>
-                    <div class="row">
-                        <div class="firstColumn">Temperature Sensor Name</div>
-                        <div class="secondColumn"><input class="sensor-name-input" type='text' required name='MdsSensorNameTemperature' value='%MdsSensorNameTemperature%' minlength='1' maxlength='17' pattern='[ -~]+' autocomplete='off'></div>
-                    </div>
-                    <div class="row">
-                        <div class="firstColumn">GPS Sensor Name</div>
-                        <div class="secondColumn"><input class="sensor-name-input" type='text' required name='MdsSensorNameGps' value='%MdsSensorNameGps%' minlength='1' maxlength='17' pattern='[ -~]+' autocomplete='off'></div>
-                    </div>
-                    <div class="row">
-                        <div class="firstColumn">Environment Sensor Name</div>
-                        <div class="secondColumn"><input class="sensor-name-input" type='text' required name='MdsSensorNameEnv' value='%MdsSensorNameEnv%' minlength='1' maxlength='17' pattern='[ -~]+' autocomplete='off'></div>
-                    </div>
-                    <div class="row">
-                        <div class="firstColumn">Dew Point Sensor Name</div>
-                        <div class="secondColumn"><input class="sensor-name-input" type='text' required name='MdsSensorNameDewpoint' value='%MdsSensorNameDewpoint%' minlength='1' maxlength='17' pattern='[ -~]+' autocomplete='off'></div>
-                    </div>
-                    <div class="row">
-                        <div class="firstColumn">VE.Direct Sensor Name</div>
-                        <div class="secondColumn"><input class="sensor-name-input" type='text' required name='MdsSensorNameVedirect' value='%MdsSensorNameVedirect%' minlength='1' maxlength='17' pattern='[ -~]+' autocomplete='off'></div>
-                    </div>
-                </div>
                 <div class="row">
                     <div class="firstColumn">NMEA0183 on Serial</div>
                     <div class="secondColumn">
@@ -721,6 +677,13 @@
                     </div>
                 </div>
 
+                <div class="row section-subtitle compact-subtitle">
+                    <h5 class="section-heading">Battery</h5>
+                </div>
+                <div class="row">
+                    <div class="firstColumn">Battery Sensor Name</div>
+                    <div class="secondColumn"><input class="sensor-name-input" type='text' required name='MdsSensorNameBattery' value='%MdsSensorNameBattery%' minlength='1' maxlength='17' pattern='[ -~]+' autocomplete='off'></div>
+                </div>
                 <div class="row">
                     <div class="firstColumn">Battery Averaging Samples</div>
                     <div class="secondColumn">
@@ -739,6 +702,13 @@
                     </div>
                 </div>
 
+                <div class="row section-subtitle compact-subtitle">
+                    <h5 class="section-heading">Tank Inputs</h5>
+                </div>
+                <div class="row">
+                    <div class="firstColumn"><span class="labelText">Tank Sensor Name <span class="infoBadge" tabindex="0">i<span class="infoPopover">Tank 1 and Tank 2 are transmitted together as one MDS sensor record, so they share this name.</span></span></span></div>
+                    <div class="secondColumn"><input class="sensor-name-input" type='text' required name='MdsSensorNameTanks' value='%MdsSensorNameTanks%' minlength='1' maxlength='17' pattern='[ -~]+' autocomplete='off'></div>
+                </div>
                 <div class="row">
                     <div class="firstColumn">Tank 1 Averaging Samples</div>
                     <div class="secondColumn">
@@ -775,6 +745,13 @@
                     </div>
                 </div>
 
+                <div class="row section-subtitle compact-subtitle">
+                    <h5 class="section-heading">Temperature</h5>
+                </div>
+                <div class="row">
+                    <div class="firstColumn">Temperature Sensor Name</div>
+                    <div class="secondColumn"><input class="sensor-name-input" type='text' required name='MdsSensorNameTemperature' value='%MdsSensorNameTemperature%' minlength='1' maxlength='17' pattern='[ -~]+' autocomplete='off'></div>
+                </div>
                 <div class="row">
                     <div class="firstColumn">1-Wire Temperature Sensor</div>
                     <div class="secondColumn">
@@ -795,6 +772,31 @@
                     </div>
                 </div>
 
+                <div class="row section-subtitle compact-subtitle">
+                    <h5 class="section-heading">GPS and Relay</h5>
+                </div>
+                <div class="row">
+                    <div class="firstColumn">GPS Sensor Name</div>
+                    <div class="secondColumn"><input class="sensor-name-input" type='text' required name='MdsSensorNameGps' value='%MdsSensorNameGps%' minlength='1' maxlength='17' pattern='[ -~]+' autocomplete='off'></div>
+                </div>
+                <div class="row">
+                    <div class="firstColumn">Power and Relay Sensor Name</div>
+                    <div class="secondColumn"><input class="sensor-name-input" type='text' required name='MdsSensorNameStatus' value='%MdsSensorNameStatus%' minlength='1' maxlength='17' pattern='[ -~]+' autocomplete='off'></div>
+                </div>
+                <div class="row">
+                    <div class="firstColumn"><span class="labelText">Relay Behavior <span class="infoBadge" tabindex="0">i<span class="infoPopover">Control GPS Module uses the relay output to switch GPS power. On this hardware, GPIO25 is shared with the Heltec board LED, so the LED follows the relay state.</span></span></span></div>
+                    <div class="secondColumn">
+                        <select name='relay' size='1'>
+                            <option value='0'>Off</option>
+                            <option value='1'>On</option>
+                            <option value='2'>Control GPS Module</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row section-subtitle compact-subtitle">
+                    <h5 class="section-heading">Environment and VE.Direct</h5>
+                </div>
                 <div class="row">
                     <div class="firstColumn"><span class="labelText">Environment Sensor Source <span class="infoBadge" tabindex="0">i<span class="infoPopover">Selects the optional BME280 or VE.Direct source. Both share GPIO17 and GPIO22 and cannot be used at the same time. Off disables this source.</span></span></span></div>
                     <div class="secondColumn">
@@ -805,6 +807,18 @@
                             <option value='VEdirect-Send'>VE.Direct Send</option>
                         </select>
                     </div>
+                </div>
+                <div class="row">
+                    <div class="firstColumn">Environment Sensor Name</div>
+                    <div class="secondColumn"><input class="sensor-name-input" type='text' required name='MdsSensorNameEnv' value='%MdsSensorNameEnv%' minlength='1' maxlength='17' pattern='[ -~]+' autocomplete='off'></div>
+                </div>
+                <div class="row">
+                    <div class="firstColumn">Dew Point Sensor Name</div>
+                    <div class="secondColumn"><input class="sensor-name-input" type='text' required name='MdsSensorNameDewpoint' value='%MdsSensorNameDewpoint%' minlength='1' maxlength='17' pattern='[ -~]+' autocomplete='off'></div>
+                </div>
+                <div class="row">
+                    <div class="firstColumn">VE.Direct Sensor Name</div>
+                    <div class="secondColumn"><input class="sensor-name-input" type='text' required name='MdsSensorNameVedirect' value='%MdsSensorNameVedirect%' minlength='1' maxlength='17' pattern='[ -~]+' autocomplete='off'></div>
                 </div>
             </div>
         </div></div>
