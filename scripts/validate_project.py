@@ -95,6 +95,24 @@ def validate_frontend_contract(errors: list[str]) -> None:
     if missing:
         fail(errors, "Frontend references unregistered paths: " + ", ".join(missing))
 
+    settings_html = (DATA / "settings.html").read_text(encoding="utf-8")
+    settings_handler = (ROOT / "src" / "func_webServerHandler.cpp").read_text(encoding="utf-8")
+    sensor_name_fields = (
+        "MdsSensorNameBattery",
+        "MdsSensorNameTanks",
+        "MdsSensorNameStatus",
+        "MdsSensorNameTemperature",
+        "MdsSensorNameGps",
+        "MdsSensorNameEnv",
+        "MdsSensorNameDewpoint",
+        "MdsSensorNameVedirect",
+    )
+    for field in sensor_name_fields:
+        if settings_html.count(f"name='{field}'") != 1:
+            fail(errors, f"Settings must contain exactly one editable field for {field}")
+        if f'var == "{field}"' not in settings_handler or f'fieldName == "{field}"' not in settings_handler:
+            fail(errors, f"Sensor name field is not fully handled by the firmware: {field}")
+
 
 def validate_route_registry(errors: list[str]) -> None:
     registrations: list[tuple[str, str]] = []

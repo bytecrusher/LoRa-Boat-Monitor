@@ -240,6 +240,18 @@
     gap: 8px;
 }
 
+.settings-page .sensor-name-list {
+    margin: 8px 0 14px;
+    padding: 0 12px;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.16));
+    border-radius: var(--radius-sm, 10px);
+    background: var(--surface-soft, rgba(255, 255, 255, 0.055));
+}
+
+.settings-page .sensor-name-input:invalid {
+    border-color: rgba(255, 112, 112, 0.82);
+}
+
 .settings-page .fieldStack > input {
     width: 100%;
 }

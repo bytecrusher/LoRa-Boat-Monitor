@@ -71,9 +71,28 @@ function bindSettingsPageEvents() {
     var settingsForm = byId("form1");
     if (settingsForm) {
         settingsForm.addEventListener("submit", saveSettings);
+        bindSensorNameValidation(settingsForm);
     }
 
     bindWifiPrioritySwap(settingsForm);
+}
+
+function bindSensorNameValidation(form) {
+    var fields = form.querySelectorAll(".sensor-name-input");
+    for (var i = 0; i < fields.length; i += 1) {
+        fields[i].addEventListener("input", validateSensorNameField);
+        fields[i].addEventListener("blur", function (event) {
+            event.currentTarget.value = event.currentTarget.value.trim();
+            validateSensorNameField(event);
+        });
+    }
+}
+
+function validateSensorNameField(event) {
+    var field = event.currentTarget;
+    var value = field.value.trim();
+    var valid = value.length > 0 && value.length <= 17 && /^[\x20-\x7e]+$/.test(value);
+    field.setCustomValidity(valid ? "" : "Enter 1 to 17 printable characters without umlauts.");
 }
 
 function applySettingsSelections() {
@@ -281,6 +300,14 @@ async function saveSettings(event) {
     event.preventDefault();
 
     var form = event.currentTarget;
+    var sensorNameFields = form ? form.querySelectorAll(".sensor-name-input") : [];
+    for (var i = 0; i < sensorNameFields.length; i += 1) {
+        sensorNameFields[i].value = sensorNameFields[i].value.trim();
+        validateSensorNameField({ currentTarget: sensorNameFields[i] });
+    }
+    if (form && !form.reportValidity()) {
+        return;
+    }
     var otaField = form ? form.elements.mdsOtaUrl : null;
     if (otaField && otaField.value.trim().length > 0 && !isValidHttpsEndpoint(otaField.value)) {
         alert("The MDS OTA endpoint must be a valid https:// URL that points to the OTA script.");

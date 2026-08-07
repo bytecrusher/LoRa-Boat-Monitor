@@ -1091,13 +1091,12 @@ bool updateMdsSensorName(char *target, size_t targetSize, const String &value) {
 
   String normalized = value;
   normalized.trim();
-  if (normalized.length() == 0 || !isPrintableAscii(normalized)) {
+  if (normalized.length() == 0 || normalized.length() >= targetSize || !isPrintableAscii(normalized)) {
     return false;
   }
 
-  normalized = normalized.substring(0, targetSize - 1);
   if (normalized == String(target)) {
-    return false;
+    return true;
   }
 
   normalized.toCharArray(target, targetSize);
@@ -2386,7 +2385,13 @@ void handleSaveSettingsRoute(AsyncWebServerRequest *request) {
   for (int i = 0; i < num; i++) {
     const String fieldName = request->argName(i);
     const String fieldValue = request->arg(i);
-    applySettingsField(request, fieldName, fieldValue);
+    const bool applied = applySettingsField(request, fieldName, fieldValue);
+    if (fieldName.startsWith("MdsSensorName") && !applied) {
+      actconf = previousConfig;
+      request->send(400, "application/json",
+                    "{\"status\":\"error\",\"message\":\"Sensor names must contain 1 to 17 printable characters.\"}");
+      return;
+    }
   }
 
   ensureUniqueWifiPriorities(previousWifiPriorities);
