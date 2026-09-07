@@ -55,6 +55,7 @@ function format_payload(args){
 }
 
 function decodeUplink(bytes, fPort) {
+  if (fPort === 3) return decodeMeasurementPayloadV4(bytes);
   if (fPort === 2) {
     return decodeDevicePayload(bytes);
   }
@@ -150,6 +151,42 @@ function decodeMeasurementPayloadV3(bytes) {
     "standbyCause": standbyCauses[standbyCode] || (standbyCode ? "Standby Other" : ""),
     "wakeupCause": wakeupCauses[wakeupCode] || (wakeupCode ? "Wakeup Other" : "")
   }};
+}
+
+function decodeMeasurementPayloadV4(bytes) {
+  function invalid() { return {data: {}, errors: ["Invalid compact measurement payload"]}; }
+  if (bytes.length < 11 || bytes.length > 51 || bytes[0] !== 4 || (bytes[1] & 128)) return invalid();
+  var expanded = [];
+  for (var i = 0; i < 51; i++) expanded.push(0);
+  expanded[1] = bytes[8]; expanded[2] = bytes[9]; expanded[24] = bytes[10] & 49;
+  var blocks = [
+    [64, [10,11,25], ["voltage","batteryCapacity"], "measurementsPresent"],
+    [1, [12,13], ["tempbattery"], "temperaturePresent"],
+    [2, [3,4,5,6,7,8,9], ["temperature","pressure","humidity","dewpoint"], "environmentPresent"],
+    [4, [14,15,16,17,18,19,20,21,30,31,32,33,34,35], ["longitude","latitude","position","speed","course","altitude"], "gpsFix"],
+    [8, [36,37,38,39,40,41], ["vedirectVoltage","vedirectCurrent","vedirectTemperature"], "vedirectPresent"],
+    [16, [22,23,26,27,28,29], ["level1","level2","tank1Adc","tank2Adc"], "tanksPresent"],
+    [32, [42,43,44,45,46,47,48,49,50], ["standbyEpoch","wakeupEpoch","standbyCause","wakeupCause"], "wakeupEventPresent"]
+  ];
+  var cursor = 11;
+  for (var b = 0; b < blocks.length; b++) {
+    if (!(bytes[1] & blocks[b][0])) continue;
+    if (cursor + blocks[b][1].length > bytes.length) return invalid();
+    for (var j = 0; j < blocks[b][1].length; j++) expanded[blocks[b][1][j]] = bytes[cursor++];
+  }
+  if (cursor !== bytes.length) return invalid();
+  var data = decodeMeasurementPayloadV3(expanded).data;
+  data.payloadSchema = 4;
+  data.macAddress = formatMacAddress(bytes, 2);
+  for (var k = 0; k < blocks.length; k++) {
+    var present = (bytes[1] & blocks[k][0]) !== 0;
+    data[blocks[k][3]] = present;
+    if (!present) for (var f = 0; f < blocks[k][2].length; f++) delete data[blocks[k][2][f]];
+  }
+  var warnings = [];
+  if (data.measurementsPresent && data.voltage < 10) warnings.push("Battery undervoltage");
+  if (data.measurementsPresent && data.voltage > 14.7) warnings.push("Battery overload");
+  return {data: data, warnings: warnings};
 }
 
 function decodeDevicePayload(bytes) {

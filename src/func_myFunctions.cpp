@@ -1,4 +1,5 @@
 #include "func_myFunctions.h"
+#include "TelemetryValidity.h"
 #include <Configuration.h>
 #include <WiFi.h>
 #include <stddef.h>
@@ -1342,6 +1343,7 @@ void readValues(const configData &myactconf) {
         DebugPrint(3, "Temperature = ");
       }
       const float temperatureC = bme.readTemperature();
+      temperature = temperatureC;
       if(String(actconf.tempUnit) == "C"){
         temperature = temperatureC;
         if (debugBME280) {
@@ -1350,9 +1352,8 @@ void readValues(const configData &myactconf) {
         }
       }
       else{
-        temperature = temperatureC * 9 / 5 + 32;
         if (debugBME280) {
-          DebugPrint(3, temperature);
+          DebugPrint(3, temperatureC * 9 / 5 + 32);
           DebugPrintln(3, " *F");
         }
       }
@@ -1395,9 +1396,8 @@ void readValues(const configData &myactconf) {
         }
       }
       else{
-        dewp = dewp * 9 / 5 + 32;
         if (debugBME280) {
-          DebugPrint(3, dewp);
+          DebugPrint(3, dewp * 9 / 5 + 32);
           DebugPrintln(3, " *F");
         }
       }
@@ -1548,17 +1548,13 @@ void readValues(const configData &myactconf) {
     if (String(myactconf.tempSensorType) == "DS18B20") {
       sensors.requestTemperatures();            // Send the command to get temperatures
       temp1wire = sensors.getTempCByIndex(0);   // Read 1Wire sensor 0
-      // Error correction for wrong 1Wire values (-127)
-      if(temp1wire < float(-50)){
-        temp1wire = temp1wireold;
-      }
-      else{
-        temp1wireold = temp1wire;
+      if (!validTemperatureC(temp1wire)) {
+        temp1wire = NAN;
       }
     }
     // If sensor disabled
     else{
-      temp1wire = -99.9;
+      temp1wire = NAN;
     }
     // Unit selection
     if (debugTemp1wire) {
@@ -1571,9 +1567,8 @@ void readValues(const configData &myactconf) {
       }
     }
     else{
-      temp1wire = temp1wire * 9 / 5 + 32;
       if (debugTemp1wire) {
-        DebugPrint(3, temp1wire);
+        DebugPrint(3, temp1wire * 9 / 5 + 32);
         DebugPrintln(3, " *F");
       }
     }
@@ -1592,19 +1587,23 @@ void writeDisplay() {
   //dtostrf(int(counter16), 5, 0, cnt);
   //dtostrf(int(LMIC.seqnoUp), 5, 0, cnt);
   char tmp[10];      
-  dtostrf(temperature, 5, 1, tmp);
+  dtostrf(String(actconf.tempUnit) == "C" ? temperature : temperature * 9 / 5 + 32, 5, 1, tmp);
   char pres[10];
   dtostrf(pressure, 5, 0, pres);
   char hum[10];
   dtostrf(humidity, 5, 1, hum);
   char dew[10];
-  dtostrf(dewp, 5, 1, dew);
+  dtostrf(String(actconf.tempUnit) == "C" ? dewp : dewp * 9 / 5 + 32, 5, 1, dew);
   char dt[10];
   dtostrf(float(TX_INTERVAL), 4, 0, dt);
   char vol[10];
   dtostrf(voltage, 5, 1, vol);
   char tmp2[10];
-  dtostrf(temp1wire, 5, 1, tmp2);
+  if (isfinite(temp1wire)) {
+    dtostrf(String(actconf.tempUnit) == "C" ? temp1wire : temp1wire * 9 / 5 + 32, 5, 1, tmp2);
+  } else {
+    strcpy(tmp2, "--");
+  }
   char lat[10];
   dtostrf(latitude, 5, 3, lat);
   char lon[10];

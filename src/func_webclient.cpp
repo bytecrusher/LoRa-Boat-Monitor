@@ -657,15 +657,14 @@ void addMdsSensorRecord(JsonArray &sensors, int enabledMarker, const char *senso
     return;
   }
 
+  if (!isfinite(value1) || !isfinite(value2) || !isfinite(value3) || !isfinite(value4)) {
+    return;
+  }
   JsonObject sensor = sensors.add<JsonObject>();
   sensor["sensorType"] = sensorType;
-  sensor["type"] = sensorType;
-
-  if (metadataReady) {
-    sensor["sensorAddress"] = buildMdsSensorAddress(sensorKey);
-  } else if (sensorName != nullptr && sensorName[0] != '\0') {
+  sensor["sensorAddress"] = buildMdsSensorAddress(sensorKey);
+  if (!metadataReady && sensorName != nullptr && sensorName[0] != '\0') {
     sensor["sensorName"] = sensorName;
-    sensor["name"] = sensorName;
   }
 
   sensor["value1"] = value1;
@@ -1431,7 +1430,10 @@ bool sendToMDS(configData &actconf)
   if (String(actconf.tempSensorType) == "DS18B20") {
     addMdsSensorRecord(sensors, actconf.MdsSensorIdTemperature, "temp", "DS18B20", actconf.MdsSensorNameTemperature, metadataReady, mdsDate, mdsTime, transmissionPath, temp1wire, 0, 0, 0);
   }
-  addMdsSensorRecord(sensors, actconf.MdsSensorIdGps, "gps", "GPS", actconf.MdsSensorNameGps, metadataReady, mdsDate, mdsTime, transmissionPath, latitude, longitude, gpsspeed, course);
+  if (gpsStatus == "A" && isfinite(latitude) && isfinite(longitude)
+      && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180) {
+    addMdsSensorRecord(sensors, actconf.MdsSensorIdGps, "gps", "GPS", actconf.MdsSensorNameGps, metadataReady, mdsDate, mdsTime, transmissionPath, latitude, longitude, gpsspeed, course);
+  }
 
   if (String(actconf.envSensor) == "BME280") {
     addMdsSensorRecord(sensors, actconf.MdsSensorIdEnv, "env", "BME280", actconf.MdsSensorNameEnv, metadataReady, mdsDate, mdsTime, transmissionPath, temperature, humidity, pressure, altitude);

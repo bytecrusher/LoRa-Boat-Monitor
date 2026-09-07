@@ -38,7 +38,7 @@ String sendXDR2(int sendmode){
   // Create NMEA string $IIXDR,a,x.x,a,c--c, ..... *hh<CR><LF>
   NMEAXdr2 = "IIXDR,";
   NMEAXdr2 = NMEAXdr2 + "V," + String(voltage) + ",V,BVolt,";
-  NMEAXdr2 = NMEAXdr2 + "C," + String(temp1wire) + ",C,BTemp,";
+  if (isfinite(temp1wire)) NMEAXdr2 = NMEAXdr2 + "C," + String(temp1wire) + ",C,BTemp,";
   if (String(actconf.envSensor) == "VEdirect-Read") {
     NMEAXdr2 = NMEAXdr2 + "I," + String(vedirectCurrent) + ",A,BCur,";
     NMEAXdr2 = NMEAXdr2 + "P," + String(vedirectPower) + ",W,BPow,";

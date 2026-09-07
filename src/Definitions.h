@@ -49,8 +49,7 @@ uint16_t tank2adc;                        // Tank 1 level [V]
 
 int mainPowerOn;                    // 12 V at GPIO39: main battery switch on / always-on mode
 int relaytimer = 0;                 // Relay timer for ontime n x 5min
-float temp1wire = 0.0;              // Temperature 1Wire in [°C]
-float temp1wireold = 0.0;           // Old temperature 1Wire in [°C]
+float temp1wire = NAN;             // Celsius; unavailable readings must never become fresh zeroes.
 float latitude = 0.0;               // Latutude in decimal notation
 float longitude = 0.0;              // Longitude in decimal notation
 float altitude;                     // Altitude [m]
@@ -155,7 +154,7 @@ const lmic_pinmap lmic_pins = {
 // FPort 1 schema 3. The exact 51-byte layout is documented in
 // docs/LORAWAN_PAYLOADS.md and intentionally fills the EU868 DR2 limit.
 static uint8_t mydata[51];
-static_assert(sizeof(mydata) == 51, "FPort 1 schema 3 must remain exactly 51 bytes");
+static_assert(sizeof(mydata) == 51, "LoRa measurement payload buffer must remain 51 bytes");
 
 // Schedule TX every this many seconds (might become longer due to duty
 // cycle limitations).

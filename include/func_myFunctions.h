@@ -52,7 +52,6 @@ extern int mainPowerInputPin;
 //#define OneWIRE_PIN 23
 extern OneWire DS18B20;
 extern DallasTemperature sensors;
-extern float temp1wireold;
 extern unsigned TX_INTERVAL;
 extern float latitude;
 extern float longitude;

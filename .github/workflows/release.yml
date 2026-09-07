@@ -34,6 +34,8 @@ jobs:
         run: |
           sh scripts/test_version_comparator.sh
           node tests/payload_decoders_test.js
+          c++ -std=c++11 -Wall -Wextra -Werror tests/telemetry_payload_test.cpp -o /tmp/telemetry-payload-test
+          node tests/compact_payload_test.js /tmp/telemetry-payload-test
           for file in data/*.js src/Payload_Formats_*.js; do node --check "$file"; done
           ./scripts/build_release_artifacts.sh
           python3 scripts/validate_project.py

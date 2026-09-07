@@ -714,7 +714,22 @@ Das Dashboard rendert nur numerische Kanaele sinnvoll. Fuer den aktuellen Stand 
 - bei Produktionsfehlern immer zuerst die Projekt-Logs und danach die Webserver-/Passenger-Logs pruefen
 
 
-## LoRaWAN payload schema 3
+## LoRaWAN payload schema 4 (ab V1.16l)
+
+Neue Firmware sendet kompakte Messwerte auf FPort 3, mit `payloadSchema=4`
+und MAC-Adresse in jedem Paket. Nur gueltige, vorhandene Sensorbloecke werden
+uebertragen. Fehlende Bloecke duerfen weder Nullwerte erzeugen noch den
+Aktualitaetszeitpunkt des Sensors erneuern. Temperaturen sind immer Celsius;
+GPS wird nur mit gueltigem Fix uebertragen.
+
+Die vollstaendige Bytebelegung, Presence-Maske, Wiederholungsstrategie und
+ACK-Einschraenkungen stehen in `docs/LORAWAN_PAYLOADS.md` im Firmware-Repository.
+Rollout-Reihenfolge: MDS deployen, TTN-Formatter aktualisieren (Device-Overrides
+ebenfalls pruefen), dann Firmware installieren. Eigene Portfilter fuer FPort 3
+oeffnen. FPort 1/2 bleiben rueckwaertskompatibel. Die MAC ersetzt keine
+Authentifizierung und ist kein Secret.
+
+## LoRaWAN payload schema 3 (bisherige Firmware)
 
 Die Firmware trennt LoRaWAN-Uplinks nach Inhalt:
 

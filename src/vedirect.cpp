@@ -91,8 +91,10 @@ void sendVEdirect(){
   vedirectOutput += "PID\t0xA381\r\n";                // Device Type ID
   sendvoltage = voltage * 1000.0;
   vedirectOutput += "V\t" + String(sendvoltage) + "\r\n";// Battery volatge
-  sendtemp = int(temp1wire);                          // Use 1Wire temperature sensor
-  vedirectOutput += "T\t" + String(sendtemp) + "\r\n";// Actual battery temperature
+  if (isfinite(temp1wire)) {
+    sendtemp = int(temp1wire);
+    vedirectOutput += "T\t" + String(sendtemp) + "\r\n";
+  }
   vedirectOutput += "I\t0\r\n";                       // Acual current outwards
   vedirectOutput += "P\t0\r\n";                       // Actual current
   vedirectOutput += "CE\t0\r\n";                      // Actual consumed ampere hours
@@ -391,8 +393,10 @@ void sendVEdirectBinary(){
   Serial1.print(":7820300FFFFCB\n");
   delay(15);
 //  Serial1.print(":7ECED00FFFF77\n");                  // Actual battery temperature (v, -1) in K 1823
-  int tempOut = int((temp1wire + 273.15) * 100.0);
-  sendBinaryValue(":7ECED00", tempOut); // Send binary data
+  if (isfinite(temp1wire)) {
+    int tempOut = int((temp1wire + 273.15) * 100.0);
+    sendBinaryValue(":7ECED00", tempOut);
+  }
   delay(15);
 //  Serial1.print(":78DED000B05C4\n");                  // Voltage service battery (v, 1291)
   int voltageOut = int(voltage * 100.0);

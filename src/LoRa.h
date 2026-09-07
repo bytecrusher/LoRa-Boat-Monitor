@@ -404,12 +404,20 @@ void setSF(int tslot, int spreadingfactor, int dynamicsf){
   }
 }
 
+#include "TelemetryPayload.h"
+#include "TelemetryValidity.h"
+
 namespace {
-constexpr uint8_t LORA_DYNAMIC_PORT = 1;
+constexpr uint8_t LORA_DYNAMIC_PORT = 3;
+size_t currentLoraPayloadLength = 0;
+RTC_DATA_ATTR uint8_t optionalTelemetryRotation = 0;
+RTC_DATA_ATTR time_t lastConfirmedLoraRequest = 0;
+RTC_DATA_ATTR bool confirmedWithoutClock = false;
 constexpr uint8_t LORA_STATIC_PORT = 2;
 constexpr uint8_t LORA_STATIC_SCHEMA_VERSION = 1;
 constexpr size_t LORA_STATIC_PAYLOAD_SIZE = 34;
 RTC_DATA_ATTR uint32_t lastStaticLoraPayloadHash = 0;
+RTC_DATA_ATTR time_t lastStaticLoraTransmission = 0;
 uint32_t queuedStaticLoraPayloadHash = 0;
 bool currentLoraPacketIsStatic = false;
 bool allowStaticPacketAfterCurrentTx = false;
@@ -492,16 +500,16 @@ void buildDynamicLoraPayload() {
   memset(mydata, 0, sizeof(mydata));
   mydata[0] = 3;
   putUint16Le(mydata, 1, static_cast<uint16_t>(LMIC.seqnoUp & 0xFFFF));
-  putInt16Le(mydata, 3, clampInt16Value(lroundf(temperature * 10.0f)));
-  putUint16Le(mydata, 5, clampUint16Value(lroundf(pressure * 10.0f)));
-  mydata[7] = static_cast<uint8_t>(constrain(lroundf(humidity), 0L, 100L));
-  putInt16Le(mydata, 8, clampInt16Value(lroundf(dewp * 10.0f)));
-  putUint16Le(mydata, 10, clampUint16Value(lroundf(voltage * 1000.0f)));
-  putInt16Le(mydata, 12, clampInt16Value(lroundf(temp1wire * 10.0f)));
-  putInt32Le(mydata, 14, static_cast<int32_t>(lroundf(longitude * 1000000.0f)));
-  putInt32Le(mydata, 18, static_cast<int32_t>(lroundf(latitude * 1000000.0f)));
-  mydata[22] = static_cast<uint8_t>(constrain(lroundf(tank1p), 0L, 100L));
-  mydata[23] = static_cast<uint8_t>(constrain(lroundf(tank2p), 0L, 100L));
+  putInt16Le(mydata, 3, clampInt16Value(telemetryRound(temperature * 10.0f)));
+  putUint16Le(mydata, 5, clampUint16Value(telemetryRound(pressure * 10.0f)));
+  mydata[7] = static_cast<uint8_t>(constrain(telemetryRound(humidity), 0L, 100L));
+  putInt16Le(mydata, 8, clampInt16Value(telemetryRound(dewp * 10.0f)));
+  putUint16Le(mydata, 10, clampUint16Value(telemetryRound(voltage * 1000.0f)));
+  putInt16Le(mydata, 12, validTemperatureC(temp1wire) ? clampInt16Value(telemetryRound(temp1wire * 10.0f)) : 0);
+  putInt32Le(mydata, 14, static_cast<int32_t>(telemetryRound(longitude * 1000000.0f)));
+  putInt32Le(mydata, 18, static_cast<int32_t>(telemetryRound(latitude * 1000000.0f)));
+  mydata[22] = static_cast<uint8_t>(constrain(telemetryRound(tank1p), 0L, 100L));
+  mydata[23] = static_cast<uint8_t>(constrain(telemetryRound(tank2p), 0L, 100L));
 
   uint8_t status = ((actconf.relay & 0x03) << 4) | (mainPowerOn & 0x01);
   if (strcmp(actconf.envSensor, "BME280") == 0) status |= 0x04;
@@ -522,22 +530,37 @@ void buildDynamicLoraPayload() {
   if (currentLoraPacketIncludedDeviceEvent) status |= 0x80;
   mydata[24] = status;
 
-  mydata[25] = static_cast<uint8_t>(constrain(lroundf(capacity), 0L, 100L));
+  mydata[25] = static_cast<uint8_t>(constrain(telemetryRound(capacity), 0L, 100L));
   putUint16Le(mydata, 26, tank1adc);
   putUint16Le(mydata, 28, tank2adc);
-  putUint16Le(mydata, 30, clampUint16Value(lroundf(gpsspeed * 100.0f)));
-  putUint16Le(mydata, 32, clampUint16Value(lroundf(course * 100.0f)));
-  putInt16Le(mydata, 34, clampInt16Value(lroundf(altitude * 10.0f)));
-  putUint16Le(mydata, 36, clampUint16Value(lroundf(vedirectVoltage * 100.0f)));
-  putInt16Le(mydata, 38, clampInt16Value(lroundf(vedirectCurrent * 100.0f)));
-  putInt16Le(mydata, 40, clampInt16Value(lroundf(vedirectTemp * 100.0f)));
+  putUint16Le(mydata, 30, clampUint16Value(telemetryRound(gpsspeed * 100.0f)));
+  putUint16Le(mydata, 32, clampUint16Value(telemetryRound(course * 100.0f)));
+  putInt16Le(mydata, 34, clampInt16Value(telemetryRound(altitude * 10.0f)));
+  putUint16Le(mydata, 36, clampUint16Value(telemetryRound(vedirectVoltage * 100.0f)));
+  putInt16Le(mydata, 38, clampInt16Value(telemetryRound(vedirectCurrent * 100.0f)));
+  putInt16Le(mydata, 40, clampInt16Value(telemetryRound(vedirectTemp * 100.0f)));
   putUint32Le(mydata, 42, currentLoraPacketIncludedDeviceEvent ? static_cast<uint32_t>(standbyEpoch) : 0);
   putUint32Le(mydata, 46, currentLoraPacketIncludedDeviceEvent ? static_cast<uint32_t>(wakeupEpoch) : 0);
   mydata[50] = (encodeWakeupCause(wakeupCause) << 4) | encodeStandbyCause(standbyCause);
 
-  if (currentLoraPacketIncludedDeviceEvent) {
-    DebugPrintln(3, "FPort 1 includes WakeupLog timestamps and causes");
-  }
+  uint8_t mask = 0;
+  if (isfinite(voltage) && isfinite(capacity)) mask |= 64;
+  if (strcmp(actconf.tempSensorType, "DS18B20") == 0 && validTemperatureC(temp1wire)) mask |= 1;
+  if (isfinite(tank1p) && isfinite(tank2p)) mask |= 16;
+  if (currentLoraPacketIncludedDeviceEvent) mask |= 32;
+  if (strcmp(actconf.envSensor, "BME280") == 0 && isfinite(temperature)
+      && isfinite(pressure) && isfinite(humidity) && isfinite(dewp)) mask |= 2;
+  if (gpsStatus == "A" && isfinite(latitude) && isfinite(longitude)
+      && fabs(latitude) <= 90 && fabs(longitude) <= 180
+      && isfinite(gpsspeed) && isfinite(course) && isfinite(altitude)) mask |= 4;
+  if (strcmp(actconf.envSensor, "VEdirect-Read") == 0 && isfinite(vedirectVoltage)
+      && isfinite(vedirectCurrent) && isfinite(vedirectTemp)) mask |= 8;
+  mask = fitTelemetryMask(mask, optionalTelemetryRotation);
+  uint8_t source[51];
+  memcpy(source, mydata, sizeof(source));
+  uint8_t mac[6];
+  for (size_t i = 0; i < 6; ++i) mac[i] = (macAddress >> (8 * i)) & 0xff;
+  currentLoraPayloadLength = compactTelemetry(source, mac, mask, mydata, sizeof(mydata));
 }
 
 uint32_t buildStaticLoraPayload(uint8_t (&payload)[LORA_STATIC_PAYLOAD_SIZE]) {
@@ -577,7 +600,10 @@ uint32_t buildStaticLoraPayload(uint8_t (&payload)[LORA_STATIC_PAYLOAD_SIZE]) {
 bool queueStaticLoraPayloadIfChanged() {
   uint8_t payload[LORA_STATIC_PAYLOAD_SIZE];
   const uint32_t payloadHash = buildStaticLoraPayload(payload);
-  if (payloadHash == lastStaticLoraPayloadHash) return false;
+  const time_t now = time(nullptr);
+  const bool refreshDue = now > 1700000000 && now >= lastStaticLoraTransmission
+    && now - lastStaticLoraTransmission >= 24 * 60 * 60;
+  if (payloadHash == lastStaticLoraPayloadHash && !refreshDue) return false;
   if (!ensureLoraFrameCounterReservation()) return false;
 
   lastLoraQueueResult = LMIC_setTxData2(LORA_STATIC_PORT, payload, sizeof(payload), 0);
@@ -669,14 +695,29 @@ void do_send(osjob_t *j)
       strcmp(actconf.transmitPriority, "LoRaFirst") == 0 &&
       strcmp(actconf.SendDataViaWifi, "Yes") == 0;
     // WakeupLog entries must survive radio transmission without a network ACK.
-    const bool confirmedUplink = manualUplink || currentLoraPacketUsesWifiFallback || currentLoraPacketIncludedDeviceEvent;
+    const time_t confirmationTime = time(nullptr);
+    const bool validClock = confirmationTime > 1700000000;
+    // Limit requests, not delivery retries (which are controlled by LMIC).
+    const bool confirmationAllowed = loraConfirmationAllowed(confirmationTime,
+      lastConfirmedLoraRequest, confirmedWithoutClock);
+    const bool confirmedUplink = confirmationAllowed &&
+      (manualUplink || currentLoraPacketUsesWifiFallback || currentLoraPacketIncludedDeviceEvent);
+    if (validClock && confirmedWithoutClock) {
+      // Start the cooldown when time first becomes available; don't immediately request another ACK.
+      lastConfirmedLoraRequest = confirmationTime;
+      confirmedWithoutClock = false;
+    }
     lastLoraQueueResult = LMIC_setTxData2(
       LORA_DYNAMIC_PORT,
       mydata,
-      sizeof(mydata),
+      currentLoraPayloadLength,
       confirmedUplink ? 1 : 0
     );
     if (lastLoraQueueResult == LMIC_ERROR_SUCCESS) {
+      if (confirmedUplink) {
+        if (validClock) lastConfirmedLoraRequest = confirmationTime;
+        else confirmedWithoutClock = true;
+      }
       loraPacketQueuedMillis = millis();
       DebugPrintln(3, confirmedUplink ? "Confirmed packet queued" : "Packet queued");
     } else {
@@ -868,10 +909,11 @@ void onEvent(ev_t ev) {
         currentLoraPacketIncludedDeviceEvent = false;
         currentLoraPacketStandbyEpoch = 0;
         currentLoraPacketWakeupEpoch = 0;
-        DebugPrintln(3, "LoRa WakeupLog event acknowledged after TX complete");
+        DebugPrintln(3, "LoRa WakeupLog network ACK received (not an MDS storage acknowledgement)");
       }
       if (currentLoraPacketIsStatic) {
         lastStaticLoraPayloadHash = queuedStaticLoraPayloadHash;
+        lastStaticLoraTransmission = time(nullptr);
         currentLoraPacketIsStatic = false;
       } else {
         if (currentLoraPacketUsesWifiFallback) {

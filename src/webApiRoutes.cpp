@@ -200,7 +200,7 @@ void registerApiRoutes() {
     json_Device["Device"]["SensorNames"]["Dewpoint"] = String(actconf.MdsSensorNameDewpoint);
     json_Device["Device"]["SensorNames"]["Vedirect"] = String(actconf.MdsSensorNameVedirect);
 
-    json_Device["Device"]["MeasuringValues"]["AirTemperature"]["Value"] = String(temperature, 1);
+    json_Device["Device"]["MeasuringValues"]["AirTemperature"]["Value"] = String(String(actconf.tempUnit) == "C" ? temperature : temperature * 9 / 5 + 32, 1);
     json_Device["Device"]["MeasuringValues"]["AirTemperature"]["Unit"] = String(actconf.tempUnit);  // TODO: bring into staticdata.json
 
     json_Device["Device"]["MeasuringValues"]["AirPressure"]["Value"] = String(pressure, 0);
@@ -209,10 +209,11 @@ void registerApiRoutes() {
     json_Device["Device"]["MeasuringValues"]["AirHumidity"]["Value"] = String(humidity, 0);
     json_Device["Device"]["MeasuringValues"]["AirHumidity"]["Unit"] = "%";  // TODO: bring into staticdata.json
 
-    json_Device["Device"]["MeasuringValues"]["Dewpoint"]["Value"] = String(dewp, 1);
+    json_Device["Device"]["MeasuringValues"]["Dewpoint"]["Value"] = String(String(actconf.tempUnit) == "C" ? dewp : dewp * 9 / 5 + 32, 1);
     json_Device["Device"]["MeasuringValues"]["Dewpoint"]["Unit"] = String(actconf.tempUnit);  // TODO: bring into staticdata.json
 
-    json_Device["Device"]["MeasuringValues"]["Temp1Wire"]["Value"] = String(temp1wire, 1);
+    json_Device["Device"]["MeasuringValues"]["Temp1Wire"]["Value"] = isfinite(temp1wire)
+      ? String(String(actconf.tempUnit) == "C" ? temp1wire : temp1wire * 9 / 5 + 32, 1) : "--";
     json_Device["Device"]["MeasuringValues"]["Temp1Wire"]["Unit"] = String(actconf.tempUnit);  // TODO: bring into staticdata.json
 
     json_Device["Device"]["MeasuringValues"]["BatteryVoltage"]["Value"] = String(voltage, 3);
